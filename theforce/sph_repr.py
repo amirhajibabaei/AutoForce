@@ -108,6 +108,48 @@ class sph_repr:
             Y[ self.J[m], self.I[m] ] *= s
         return r, sin_theta, cos_theta, sin_phi, cos_phi, Y
 
+    
+    def ylm_rl( self, x, y, z ):
+        """ 
+        Returns: r, sin_theta, cos_theta, sin_phi, cos_phi, Y
+        Y: r**l * Y_l^m( \theta, \phi )
+        ---------------------------------------------------------
+        All same as sph_repr.ylm, only with a r^l multiplied 
+        to spherical harmonics.
+        
+        r**l * Y_l^m becomes  (m>0): Y[l,l-m] + 1.0j*Y[l-m,l] 
+                              (m=0): Y[l,l]
+        """
+        r, sin_theta, cos_theta, sin_phi, cos_phi = self.cart_to_sph( x, y, z )
+        # r^l preparation
+        # aside from the following three lines, the only diff from ylm code
+        # is addition of a r2 multiplier in one line: "+ r2 * self.alp_bl[l]"
+        sin_theta *= r
+        cos_theta *= r
+        r2 = r * r
+        # alp
+        Y = np.empty( shape = (self.lmax_p,self.lmax_p,*sin_theta.shape), 
+                                dtype = sin_theta.dtype )
+        Y[0,0] = np.full_like( sin_theta, self.Yoo )
+        Y[1,1] = self.alp_cl[1] * cos_theta * Y[0,0]
+        Y[1,0] = self.alp_dl[1] * sin_theta * Y[0,0]
+        Y[0,1] = Y[1,0]
+        for l in range(2,self.lmax_p):
+            Y[l,2:l+1] = self.alp_al[l] * ( cos_theta * Y[l-1,1:l]
+                                        + r2 * self.alp_bl[l] * Y[l-2,:l-1] )
+            Y[l,1] = self.alp_cl[l] * cos_theta * Y[l-1,0]
+            Y[l,0] = self.alp_dl[l] * sin_theta * Y[l-1,0]
+            Y[:l,l] = Y[l,:l]
+        # ylm
+        c = cos_phi
+        s = sin_phi
+        Y[ self.I[1], self.J[1] ] *=  c
+        Y[ self.J[1], self.I[1] ] *=  s
+        for m in range(2,self.lmax_p):
+            c, s = cos_phi * c - sin_phi * s, sin_phi * c + cos_phi * s
+            Y[ self.I[m], self.J[m] ] *= c
+            Y[ self.J[m], self.I[m] ] *= s
+        return r, sin_theta, cos_theta, sin_phi, cos_phi, Y    
 
 # test routines ----------------------------------------------------------
 def test_sph_repr( n = 1000 ):
@@ -119,11 +161,16 @@ def test_sph_repr( n = 1000 ):
     z = np.random.uniform(-1.0,1.0,size=n)
     r, theta, phi = sph.cart_to_angles( x, y, z )
     r, _,_,_,_, Y = sph.ylm( x, y, z )
+    r, _,_,_,_, Y_rl = sph.ylm_rl( x, y, z )
     errors = []
     for l in range(lmax+1):
-        errors += [ Y[l,l] - sph_harm( 0, l, phi, theta ) ]
+        rl = r**l
+        tmp = sph_harm( 0, l, phi, theta )
+        errors += [ Y[l,l] - tmp, Y_rl[l,l] - rl*tmp ]
         for m in range(1,l+1):
-            errors += [ Y[l,l-m] + 1.0j*Y[l-m,l] - sph_harm( m, l, phi, theta ) ]
+            tmp = sph_harm( m, l, phi, theta )
+            errors += [ Y[l,l-m] + 1.0j*Y[l-m,l] - tmp,
+                       Y_rl[l,l-m] + 1.0j*Y_rl[l-m,l] - rl*tmp ]
     errors = abs( np.array(errors).reshape(-1) )
     print( """
     comparison with scipy.sph_harm: 
