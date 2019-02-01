@@ -32,6 +32,22 @@ class sph_repr:
         # indices: for traversing diagonals
         self.I = [[ l+k for l in range(lmax-k+1)] for k in range(lmax+1) ] 
         self.J = [[ l   for l in range(lmax-k+1)] for k in range(lmax+1) ] 
+        
+        # l,m tables
+        self.l = np.array( [ [l for m in range(l)] + 
+                             [m for m in range(l,self.lmax+1)] 
+                                for l in range(self.lmax+1)] )[:,:,np.newaxis]
+        self.m = np.empty_like(self.l)
+        for m in range(self.lmax+1):
+            self.m[ self.I[m], self.J[m] ] = m
+            self.m[ self.J[m], self.I[m] ] = m
+        
+        # lower triangle indices
+        self.tril_indices = np.tril_indices( self.lmax+1, k = -1 )
+        
+        # l,m related coeffs
+        self.coef = np.sqrt( (self.l-self.m) * (self.l+self.m) 
+                            * (2*self.l+1) / (2*self.l-1.) )[1:,1:]
 
         
         
@@ -150,6 +166,27 @@ class sph_repr:
             Y[ self.I[m], self.J[m] ] *= c
             Y[ self.J[m], self.I[m] ] *= s
         return r, sin_theta, cos_theta, sin_phi, cos_phi, Y    
+    
+    
+    def ylm_partials( self, sin_theta, cos_theta, Y ):
+        """
+        Return: Y_theta, Y_phi
+        i.e. partial derivatives of spherical harmonics wrt theta, phi
+        --------------------------------------------------------------
+        see ylm for the array storage convention
+        """
+        # paritial theta
+        cot_theta = cos_theta / sin_theta
+        Y_theta = cot_theta * self.l * Y
+        Y_theta[1:,1:] -= Y[:-1,:-1] * self.coef / sin_theta
+        # partial phi
+        axes = list( range(len(Y.shape)) )
+        axes[0], axes[1] = 1, 0
+        Y_phi = np.transpose( Y, axes=axes ).copy()
+        Y_phi[ self.tril_indices ] *= -1
+        Y_phi *= self.m
+        return Y_theta, Y_phi
+    
 
 # test routines ----------------------------------------------------------
 def test_sph_repr( n = 1000 ):
@@ -160,24 +197,37 @@ def test_sph_repr( n = 1000 ):
     y = np.random.uniform(-1.0,1.0,size=n)
     z = np.random.uniform(-1.0,1.0,size=n)
     r, theta, phi = sph.cart_to_angles( x, y, z )
-    r, _,_,_,_, Y = sph.ylm( x, y, z )
+    r, st, ct, sp, cp, Y = sph.ylm( x, y, z )
     r, _,_,_,_, Y_rl = sph.ylm_rl( x, y, z )
+    Y_theta, Y_phi = sph.ylm_partials( st, ct, Y )
+    cott = ct / st
     errors = []
     for l in range(lmax+1):
+        # m = 0
         rl = r**l
         tmp = sph_harm( 0, l, phi, theta )
         errors += [ Y[l,l] - tmp, Y_rl[l,l] - rl*tmp ]
+        if l>0:
+            tmp = np.sqrt(l*(l+1.)) * np.exp(
+                -1.0j * phi ) * sph_harm( 1, l, phi, theta )
+            errors += [ Y_theta[l,l] - tmp ]
+        # m > 0
         for m in range(1,l+1):
             tmp = sph_harm( m, l, phi, theta )
             errors += [ Y[l,l-m] + 1.0j*Y[l-m,l] - tmp,
                        Y_rl[l,l-m] + 1.0j*Y_rl[l-m,l] - rl*tmp ]
+            errors += [ Y_phi[l,l-m] + 1.0j*Y_phi[l-m,l] - 1.0j*m*tmp ]
+            tmp2 = m * cott * tmp 
+            if m < l: tmp2 += np.sqrt((l-m)*(l+m+1.)) * np.exp( 
+                -1.0j * phi ) * sph_harm( m+1, l, phi, theta )
+            errors += [ Y_theta[l,l-m] + 1.0j*Y_theta[l-m,l] - tmp2 ]
     errors = abs( np.array(errors).reshape(-1) )
     print( """
     comparison with scipy.sph_harm: 
+    tests included: ylm, ylm_rl, ylm_partials
     all diffs close to zero: {} 
     max difference: {}
     """.format( np.allclose(errors,0.0), errors.max() ) )
-                
 
 
 if __name__=='__main__':
