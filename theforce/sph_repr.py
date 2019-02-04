@@ -138,23 +138,21 @@ class sph_repr:
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi = self.cart_to_sph( x, y, z )
         # r^l preparation
-        # aside from the following three lines, the only diff from ylm code
-        # is addition of a r2 multiplier in one line: "+ r2 * self.alp_bl[l]"
-        sin_theta *= r
-        cos_theta *= r
+        r_sin_theta = r * sin_theta
+        r_cos_theta = r * cos_theta
         r2 = r * r
         # alp
         Y = np.empty( shape = (self.lmax_p,self.lmax_p,*sin_theta.shape), 
                                 dtype = sin_theta.dtype )
-        Y[0,0] = np.full_like( sin_theta, self.Yoo )
-        Y[1,1] = self.alp_cl[1] * cos_theta * Y[0,0]
-        Y[1,0] = self.alp_dl[1] * sin_theta * Y[0,0]
+        Y[0,0] = np.full_like( r_sin_theta, self.Yoo )
+        Y[1,1] = self.alp_cl[1] * r_cos_theta * Y[0,0]
+        Y[1,0] = self.alp_dl[1] * r_sin_theta * Y[0,0]
         Y[0,1] = Y[1,0]
         for l in range(2,self.lmax_p):
-            Y[l,2:l+1] = self.alp_al[l] * ( cos_theta * Y[l-1,1:l]
+            Y[l,2:l+1] = self.alp_al[l] * ( r_cos_theta * Y[l-1,1:l]
                                         + r2 * self.alp_bl[l] * Y[l-2,:l-1] )
-            Y[l,1] = self.alp_cl[l] * cos_theta * Y[l-1,0]
-            Y[l,0] = self.alp_dl[l] * sin_theta * Y[l-1,0]
+            Y[l,1] = self.alp_cl[l] * r_cos_theta * Y[l-1,0]
+            Y[l,0] = self.alp_dl[l] * r_sin_theta * Y[l-1,0]
             Y[:l,l] = Y[l,:l]
         # ylm
         c = cos_phi
