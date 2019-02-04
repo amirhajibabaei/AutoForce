@@ -168,17 +168,24 @@ class sph_repr:
         return r, sin_theta, cos_theta, sin_phi, cos_phi, Y    
     
     
-    def ylm_partials( self, sin_theta, cos_theta, Y ):
+    def ylm_partials( self, sin_theta, cos_theta, Y, with_r=None ):
         """
         Return: Y_theta, Y_phi
         i.e. partial derivatives of spherical harmonics wrt theta, phi
+        with_r:
+        if r^l is multiplied to spherical harmonics (see sph_repr.ylm_rl), 
+        then "with_r = r" is required for the correct evaluation of 
+        the partial deriavitives.
         --------------------------------------------------------------
         see ylm for the array storage convention
         """
         # paritial theta
         cot_theta = cos_theta / sin_theta
         Y_theta = cot_theta * self.l * Y
-        Y_theta[1:,1:] -= Y[:-1,:-1] * self.coef / sin_theta
+        if with_r is None:
+            Y_theta[1:,1:] -= Y[:-1,:-1] * self.coef / sin_theta
+        else:
+            Y_theta[1:,1:] -= with_r * Y[:-1,:-1] * self.coef / sin_theta
         # partial phi
         axes = list( range(len(Y.shape)) )
         axes[0], axes[1] = 1, 0
@@ -200,6 +207,7 @@ def test_sph_repr( n = 1000 ):
     r, st, ct, sp, cp, Y = sph.ylm( x, y, z )
     r, _,_,_,_, Y_rl = sph.ylm_rl( x, y, z )
     Y_theta, Y_phi = sph.ylm_partials( st, ct, Y )
+    Y_theta_rl, Y_phi_rl = sph.ylm_partials( st, ct, Y_rl, with_r=r )
     cott = ct / st
     errors = []
     for l in range(lmax+1):
@@ -211,20 +219,26 @@ def test_sph_repr( n = 1000 ):
             tmp = np.sqrt(l*(l+1.)) * np.exp(
                 -1.0j * phi ) * sph_harm( 1, l, phi, theta )
             errors += [ Y_theta[l,l] - tmp ]
+            errors += [ Y_theta_rl[l,l] - rl*tmp ]
         # m > 0
         for m in range(1,l+1):
             tmp = sph_harm( m, l, phi, theta )
             errors += [ Y[l,l-m] + 1.0j*Y[l-m,l] - tmp,
                        Y_rl[l,l-m] + 1.0j*Y_rl[l-m,l] - rl*tmp ]
+            # partial wrt phi
             errors += [ Y_phi[l,l-m] + 1.0j*Y_phi[l-m,l] - 1.0j*m*tmp ]
+            errors += [ Y_phi_rl[l,l-m] + 1.0j*Y_phi_rl[l-m,l] - 1.0j*rl*m*tmp ]
+            # partial wrt theta
             tmp2 = m * cott * tmp 
             if m < l: tmp2 += np.sqrt((l-m)*(l+m+1.)) * np.exp( 
                 -1.0j * phi ) * sph_harm( m+1, l, phi, theta )
             errors += [ Y_theta[l,l-m] + 1.0j*Y_theta[l-m,l] - tmp2 ]
+            errors += [ Y_theta_rl[l,l-m] + 1.0j*Y_theta_rl[l-m,l] - rl*tmp2 ]
+
     errors = abs( np.array(errors).reshape(-1) )
     print( """
     comparison with scipy.sph_harm: 
-    tests included: ylm, ylm_rl, ylm_partials
+    tests included: ylm, ylm_rl, ylm_partials (with_r= None and r)
     all diffs close to zero: {} 
     max difference: {}
     """.format( np.allclose(errors,0.0), errors.max() ) )
