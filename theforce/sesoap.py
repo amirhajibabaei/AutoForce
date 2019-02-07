@@ -6,6 +6,7 @@
 
 import numpy as np
 from theforce.sph_repr import sph_repr
+from math import factorial as fac
 
 
 
@@ -38,7 +39,7 @@ class quadratic_cutoff:
     
     
 #                              --- bare soap ---
-class sesoap_abs:
+class sesoap:
     
     def __init__( self, lmax, nmax, radial ):
         """
@@ -58,6 +59,34 @@ class sesoap_abs:
                   [ m for m in range(0,l+1) ] + [ l for m in range(0,l) ] )  
                    for l in range(0,lmax+1) ]
         
+        # l,n,n'-dependent constant 
+        a_ln = np.array( [ [ 1. / ( (2*l+1) * 2**(2*n+l) * fac(n) * fac(n+l) ) 
+                            for n in range(nmax+1) ] for l in range(lmax+1) ] )
+        self.lnnp_cost = np.sqrt( np.einsum('ln,lm->lnm',a_ln,a_ln) )
+        
+        
+        
+        
+    def get_alpha_as_tensor( self, alpha ):
+        """
+        returns alpha^(l+n+n') as an array 
+        with shape (lmax+1,nmax+1,nmax+1) 
+        """
+        n = max(self.nmax,self.lmax)
+        t = [ alpha**k for k in range(n+1) ]
+        return np.einsum('i,j,k->ijk',t[:self.lmax+1],
+                         t[:self.nmax+1],t[:self.nmax+1])
+    
+    
+    def create_alpha_tensor( self, alpha ):
+        """
+        creates an "alpha" attribute which contains
+        alpha^(l+n+n') as an array with shape 
+        (lmax+1,nmax+1,nmax+1)
+        """
+        self.alpha = self.get_alpha_as_tensor( alpha )
+        
+        
 
     def soap0( self, x, y, z ):
         """
@@ -75,7 +104,8 @@ class sesoap_abs:
         K = np.einsum( 'ilm,jlm->ijlm', K, K )
         p = np.array( [ 2*K[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
              - K[:,:,l,l] for l in range(self.lmax+1) ] )
-        return p
+        p *= self.lnnp_cost
+        return p 
     
     
     
@@ -129,7 +159,10 @@ class sesoap_abs:
                  - c_theta[:,:,l,l] for l in range(self.lmax+1) ] )
         p_phi   = np.array( [ 2*c_phi[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
                  - c_phi[:,:,l,l] for l in range(self.lmax+1) ] )
-        return p, p_r, p_theta, p_phi
+        # apply l,n,n'-dependent coef
+        p *= self.lnnp_cost
+        q = np.array([p_r, p_theta, p_phi]) * self.lnnp_cost
+        return p, q
     
     
     
@@ -137,14 +170,14 @@ class sesoap_abs:
     
 # tests ------------------------------------------------------------------------------
     
-def test_sesoap_abs():
+def test_sesoap():
     """ trying to regenerate numbers obtained by symbolic calculations using sympy """
     x = np.array( [0.175, 0.884, -0.87, 0.354, -0.082] )
     y = np.array( [-0.791, 0.116, 0.19, -0.832, 0.184] )
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )
-    env = sesoap_abs( 2, 2, quadratic_cutoff(3.0) )
+    env = sesoap( 2, 2, quadratic_cutoff(3.0) )
     p_ = env.soap0( x, y, z )
-    q_ = env.soap0del( x, y, z )
+    p_d, q_d = env.soap0del( x, y, z )
     ref_p = [          np.array([[[0.36174603, 0.39013356, 0.43448023],
                                  [0.39013356, 0.42074877, 0.46857549],
                                  [0.43448023, 0.46857549, 0.5218387 ]],
@@ -189,17 +222,19 @@ def test_sesoap_abs():
                                 [[ 0.02103876,  0.00576316, -0.01632531],
                                  [ 0.00576316, -0.01022614, -0.03301236],
                                  [-0.01632531, -0.03301236, -0.0564123 ]]])]
+    ref_p *= env.lnnp_cost
 
-    print( "\nTesting sesoap_abs ...")
+    print( "\nTesting sesoap ...")
     print( np.allclose( p_-ref_p[0], 0.0 ) ) 
-    for k in range(4):
-        print( np.allclose( q_[k]-ref_p[k], 0.0 ) )
+    print( np.allclose( p_d-ref_p[0], 0.0 ) ) 
+    for k in range(3):
+        print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
 
         
         
-def test_sesoap_abs_performance( n=30, N=100 ):
+def test_sesoap_performance( n=30, N=100 ):
     import time
-    print("\nTesting speed of sesoap_abs ...")
+    print("\nTesting speed of sesoap ...")
     
     start = time.time()
     for _ in range(N):
@@ -209,11 +244,11 @@ def test_sesoap_abs_performance( n=30, N=100 ):
     print( "t1: {} Sec per random xyz[{},3]".format( delta1, n ) )
     
     
-    env = sesoap_abs( 6, 6, quadratic_cutoff(3.0) )
+    env = sesoap( 6, 6, quadratic_cutoff(3.0) )
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p = env.soap0del( x, y, z )
+        p, q = env.soap0del( x, y, z )
     finish = time.time()
     delta2 = (finish-start)/N
     print( "t2: {} Sec per soap of xyz[{},3]".format( delta2, n ) )
@@ -223,9 +258,9 @@ def test_sesoap_abs_performance( n=30, N=100 ):
         
 if __name__=='__main__':
     
-    test_sesoap_abs()
+    test_sesoap()
     
-    test_sesoap_abs_performance()
+    test_sesoap_performance()
     
     
 
