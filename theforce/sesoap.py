@@ -64,25 +64,30 @@ class sesoap:
                             for n in range(nmax+1) ] for l in range(lmax+1) ] )
         self.lnnp_cost = np.sqrt( np.einsum('ln,lm->lnm',a_ln,a_ln) )
         
+        # lower triangle indices
+        self.In, self.Jn = np.tril_indices(nmax+1)
+
+        
         
         
         
     def get_alpha_as_tensor( self, alpha ):
         """
-        returns alpha^(l+n+n') as an array 
-        with shape (lmax+1,nmax+1,nmax+1) 
+        powers of alpha^(l+n+n') (3d) array
+        which is symmetric wrt n,n' axis.
+        thus the lower triangle reshaped into a 
+        vector is returned
         """
         n = max(self.nmax,self.lmax)
         t = [ alpha**k for k in range(n+1) ]
-        return np.einsum('i,j,k->ijk',t[:self.lmax+1],
-                         t[:self.nmax+1],t[:self.nmax+1])
+        a = np.einsum('i,j,k->ijk',t[:self.lmax+1],
+                      t[:self.nmax+1],t[:self.nmax+1])
+        return self.compress(a)
     
     
     def create_alpha_tensor( self, alpha ):
         """
-        creates an "alpha" attribute which contains
-        alpha^(l+n+n') as an array with shape 
-        (lmax+1,nmax+1,nmax+1)
+        creates an "alpha" attribute 
         """
         self.alpha = self.get_alpha_as_tensor( alpha )
         
@@ -91,7 +96,7 @@ class sesoap:
     def soap0( self, x, y, z ):
         """
         Inputs: x,y,z -> Cartesian coordinates
-        Returns: p -> array with shape (lmax+1,nmax+1,nmax+1)
+        Returns: p -> compressed (1d) descriptor
         """
         r, _,_,_,_, Y = self.sph.ylm_rl(x,y,z)
         R, _ = self.radial.radial( r )
@@ -105,15 +110,15 @@ class sesoap:
         p = np.array( [ 2*K[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
              - K[:,:,l,l] for l in range(self.lmax+1) ] )
         p *= self.lnnp_cost
-        return p 
+        return self.compress(p)
     
     
     
     def soap0del( self, x, y, z ):
         """
         Inputs: x,y,z -> Cartesian coordinates
-        Returns: p, p_r, p_theta, p_phi -> 
-                arrays with shape (lmax+1,nmax+1,nmax+1)
+        Returns: p, p_r, p_theta, p_phi -> compressed (1d)
+                  descriptor and its gradient
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
         Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
@@ -162,7 +167,32 @@ class sesoap:
         # apply l,n,n'-dependent coef
         p *= self.lnnp_cost
         q = np.array([p_r, p_theta, p_phi]) * self.lnnp_cost
-        return p, q
+        return self.compress(p), self.compress(q)
+    
+    
+    
+    #                        --- compress --- decompress ---
+    def compress( self, a ):
+        d = len( a.shape )
+        if d==3: 
+            return a[:,self.In,self.Jn].reshape(-1)
+        elif d==4:
+            return a[:,:,self.In,self.Jn].reshape((3,-1))
+
+    
+    def decompress( self, v, n=None, l=None ):
+        if n is None: n = self.nmax
+        if l is None: l = self.lmax
+        d = len( v.shape )
+        if d==1:
+            a = np.empty(shape=(l+1,n+1,n+1),dtype=v.dtype)
+            a[:,self.In,self.Jn] = v.reshape((l+1, (n+1)*(n+2)//2))
+            a[:,self.Jn,self.In] = a[:,self.In,self.Jn]
+        elif d==2:
+            a = np.empty(shape=(3,l+1,n+1,n+1),dtype=v.dtype)
+            a[:,:,self.In,self.Jn] = v.reshape((3,l+1, (n+1)*(n+2)//2))
+            a[:,:,self.Jn,self.In] = a[:,:,self.In,self.Jn]
+        return a
     
     
     
@@ -178,6 +208,9 @@ def test_sesoap():
     env = sesoap( 2, 2, quadratic_cutoff(3.0) )
     p_ = env.soap0( x, y, z )
     p_d, q_d = env.soap0del( x, y, z )
+    p_ = env.decompress( p_ )
+    p_d = env.decompress( p_d )
+    q_d = env.decompress( q_d )
     ref_p = [          np.array([[[0.36174603, 0.39013356, 0.43448023],
                                  [0.39013356, 0.42074877, 0.46857549],
                                  [0.43448023, 0.46857549, 0.5218387 ]],
@@ -229,6 +262,7 @@ def test_sesoap():
     print( np.allclose( p_d-ref_p[0], 0.0 ) ) 
     for k in range(3):
         print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
+    env.create_alpha_tensor(1.0)
 
         
         
