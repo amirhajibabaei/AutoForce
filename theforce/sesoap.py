@@ -11,11 +11,11 @@ from math import factorial as fac
 
 
 #                           --- radial functions ---
-class exponential:
+class gaussian:
     
-    def __init__( self, alpha ):
-        """ exp( -alpha r^2 / 2 ) """
-        self.alpha = alpha
+    def __init__( self, sigma ):
+        """ exp( - r^2 / 2 sigma^2 ) """
+        self.alpha = 1. / (sigma*sigma)
     
     def radial( self, r ):
         x = -self.alpha * r
@@ -35,6 +35,19 @@ class quadratic_cutoff:
         return x*x, -2*x/self.rc
     
 
+class poly_cutoff:
+    
+    def __init__( self, rc, n ):
+        """ ( 1 - r / r_c )^n """
+        self.rc = rc
+        self.n  = n
+        self.n_ = n - 1 
+    
+    def radial( self, r ):
+        x = 1. - r/self.rc
+        x[ np.where(x<0.0) ] = 0.0
+        y = x**(self.n_)
+        return x*y, -self.n*y/self.rc
 
     
     
@@ -43,9 +56,9 @@ class sesoap:
     
     def __init__( self, lmax, nmax, radial ):
         """
-        lmax: maximum l index in spherical harmonics Ylm
-        nmax: maximum n power in r^(2n) 
-        radial: e.g. exponential or quadratic_cutoff
+        lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
+        nmax: maximum n in r^(2n) terms
+        radial: radial function e.g. gaussian (original) or quadratic_cutoff
         """
         self.lmax = lmax
         self.nmax = nmax
@@ -59,41 +72,18 @@ class sesoap:
                   [ m for m in range(0,l+1) ] + [ l for m in range(0,l) ] )  
                    for l in range(0,lmax+1) ]
         
-        # l,n,n'-dependent constant 
-        a_ln = np.array( [ [ 1. / ( (2*l+1) * 2**(2*n+l) * fac(n) * fac(n+l) ) 
-                            for n in range(nmax+1) ] for l in range(lmax+1) ] )
-        self.lnnp_cost = np.sqrt( np.einsum('ln,lm->lnm',a_ln,a_ln) )
-        self.lnnp_cost_extra = self.lnnp_cost[:,:,:,np.newaxis]
-        
         # lower triangle indices
         self.In, self.Jn = np.tril_indices(nmax+1)
 
+        # l,n,n'-dependent constant 
+        a_ln = np.array( [ [ 1. / ( (2*l+1) * 2**(2*n+l) * fac(n) * fac(n+l) ) 
+                            for n in range(nmax+1) ] for l in range(lmax+1) ] )
+        self.lnnp_cost = self.compress( np.sqrt( 
+                           np.einsum('ln,lm->lnm',a_ln,a_ln) ), 'lnn' )
+        self.lnnp_cost_extra = self.lnnp_cost[:,np.newaxis]        
         
         
         
-        
-    def get_alpha_as_tensor( self, alpha ):
-        """
-        powers of alpha^(l+n+n') (3d) array
-        which is symmetric wrt n,n' axis.
-        thus the lower triangle reshaped into a 
-        vector is returned
-        """
-        n = max(self.nmax,self.lmax)
-        t = [ alpha**k for k in range(n+1) ]
-        a = np.einsum('i,j,k->ijk',t[:self.lmax+1],
-                      t[:self.nmax+1],t[:self.nmax+1])
-        return self.compress(a,'lnn')
-    
-    
-    def create_alpha_tensor( self, alpha ):
-        """
-        creates an "alpha" attribute 
-        """
-        self.alpha = self.get_alpha_as_tensor( alpha )
-        
-        
-
     def descriptor( self, x, y, z ):
         """
         Inputs: x,y,z -> Cartesian coordinates
@@ -110,16 +100,18 @@ class sesoap:
         K = np.einsum( 'ilm,jlm->ijlm', K, K )
         p = np.array( [ 2*K[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
              - K[:,:,l,l] for l in range(self.lmax+1) ] )
-        p *= self.lnnp_cost
-        return self.compress(p,'lnn')
+        p = self.compress(p,'lnn') * self.lnnp_cost
+        return p
     
     
     
     def desc_and_grad( self, x, y, z ):
         """
         Inputs: x,y,z -> Cartesian coordinates
-        Returns: p, [dp_dr, dp_dtheta, dp_dphi] -> compressed (1d)
-                  descriptor and its gradient
+        Returns: p, q
+        p -> compressed (1d) descriptor
+        q -> [dp_dr, dp_dtheta, dp_dphi] sum of gradients of 
+                p wrt all particles in env
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
         Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
@@ -166,17 +158,19 @@ class sesoap:
         p_phi   = np.array( [ 2*c_phi[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
                  - c_phi[:,:,l,l] for l in range(self.lmax+1) ] )
         # apply l,n,n'-dependent coef
-        p *= self.lnnp_cost
-        q = np.array([p_r, p_theta, p_phi]) * self.lnnp_cost
-        return self.compress(p,'lnn'), self.compress(q,'3lnn')
+        p = self.compress(p,'lnn') * self.lnnp_cost
+        q = self.compress( np.array([p_r, p_theta, p_phi]), '3lnn' ) * self.lnnp_cost
+        return p, q
     
     
     
     def desc_all_grad( self, x, y, z ):
         """
         Inputs: x,y,z -> Cartesian coordinates
-        Returns: p, [dp_dr, dp_dtheta, dp_dphi] -> compressed (1d)
-                  descriptor and its gradient wrt all particles in env
+        Returns: p, q, sphrepr
+        p -> compressed (1d) descriptor
+        q -> [dp_dr, dp_dtheta, dp_dphi] gradient of p wrt all particles in env
+        sphrepr -> (r, sin_theta, cos_theta, sin_phi, cos_phi)
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
         Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
@@ -223,9 +217,9 @@ class sesoap:
         p_phi   = np.array( [ 2*c_phi[:,:,self._m[l][0],self._m[l][1],:].sum(axis=-2) 
                  - c_phi[:,:,l,l,:] for l in range(self.lmax+1) ] )
         # apply l,n,n'-dependent coef
-        p *= self.lnnp_cost
-        q = np.array([p_r, p_theta, p_phi]) * self.lnnp_cost_extra
-        return self.compress(p,'lnn'), self.compress(q,'3lnnj')
+        p = self.compress(p,'lnn') * self.lnnp_cost
+        q = self.compress( np.array([p_r, p_theta, p_phi]), '3lnnj' ) * self.lnnp_cost_extra
+        return p, q, (r, sin_theta, cos_theta, sin_phi, cos_phi)
     
     
     
@@ -321,7 +315,7 @@ def test_sesoap():
                                 [[ 0.02103876,  0.00576316, -0.01632531],
                                  [ 0.00576316, -0.01022614, -0.03301236],
                                  [-0.01632531, -0.03301236, -0.0564123 ]]])]
-    ref_p *= env.lnnp_cost
+    ref_p *= env.decompress( env.lnnp_cost, 'lnn' )
 
     print( "\nTesting validity of sesoap ...")
     print( np.allclose( p_-ref_p[0], 0.0 ) ) 
@@ -329,9 +323,8 @@ def test_sesoap():
     for k in range(3):
         print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
         
-    env.create_alpha_tensor(1.0)
     
-    pj, qj = env.desc_all_grad(x,y,z)
+    pj, qj, _ = env.desc_all_grad(x,y,z)
     pj_ = env.decompress( pj, 'lnn' )
     qj_ = env.decompress( qj, '3lnnj' )
     print( np.allclose( qj_.sum(axis=-1)-q_d, 0.0 ) )
@@ -353,7 +346,7 @@ def test_sesoap_performance( n=30, N=100 ):
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q = env.desc_all_grad( x, y, z )
+        p, q, _ = env.desc_all_grad( x, y, z )
     finish = time.time()
     delta2 = (finish-start)/N
     print( "t2: {} Sec per soap of xyz[{},3]".format( delta2, n ) )
