@@ -212,9 +212,11 @@ class sph_repr:
         # second order wrt theta
         Y_theta_2 = ( d_cot_theta * Y + cot_theta * Y_theta ) * self.l 
         if with_r is None:
-            Y_theta_2[1:,1:] -= ( Y_theta[:-1,:-1] / sin_theta +                                      Y[:-1,:-1] * d_i_sin_theta ) * self.coef
+            Y_theta_2[1:,1:] -= ( Y_theta[:-1,:-1] / sin_theta + \
+                    Y[:-1,:-1] * d_i_sin_theta ) * self.coef
         else:
-            Y_theta_2[1:,1:] -= with_r * ( Y_theta[:-1,:-1] / sin_theta +                                      Y[:-1,:-1] * d_i_sin_theta ) * self.coef
+            Y_theta_2[1:,1:] -= with_r * ( Y_theta[:-1,:-1] / sin_theta + \
+                    Y[:-1,:-1] * d_i_sin_theta ) * self.coef
         # second order wrt phi
         Y_phi_2 = - Y * self.m2
         # wrt theta wrt phi
@@ -281,14 +283,13 @@ def test_sph_repr( n = 1000 ):
     
     
 
-def test_hessian_ylm( lmax=5, N=3 ):
+def test_hessian_ylm( lmax=4, N=3 ):
     from sympy import symbols, Ynm, Derivative
-    #from theforce.sph_repr import sph_repr
     from theforce.sphcart import cart_to_angles
     r_s, theta_s, phi_s = symbols('r theta phi')
     l_s = symbols('l', integer=True, nonnegative=True )
     m_s = symbols('m', integer=True)
-    f = Ynm(l_s,m_s,theta_s,phi_s) #r_s**l_s 
+    f = Ynm(l_s,m_s,theta_s,phi_s) * r_s**l_s 
     # symbolic derivatives
     wrt_theta = Derivative(f,theta_s,2).doit()
     wrt_cross = Derivative(f,theta_s,phi_s).doit()
@@ -302,8 +303,7 @@ def test_hessian_ylm( lmax=5, N=3 ):
         r, theta, phi = cart_to_angles(x,y,z)
         subs = {r_s:r, theta_s:theta, phi_s:phi}
         # numeric derivatives
-        r, sin_theta, cos_theta, sin_phi, cos_phi, Y = sph.ylm(x,y,z)
-        r = None
+        r, sin_theta, cos_theta, sin_phi, cos_phi, Y = sph.ylm_rl(x,y,z)
         Y_theta, Y_phi = sph.ylm_partials( sin_theta, cos_theta, Y, with_r = r )
         Y_theta_2, Y_phi_2, Y_cross = sph.ylm_hessian( sin_theta, cos_theta, 
                                                     Y, Y_theta, Y_phi, with_r = r )
