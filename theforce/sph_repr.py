@@ -41,6 +41,7 @@ class sph_repr:
         for m in range(self.lmax+1):
             self.m[ self.I[m], self.J[m] ] = m
             self.m[ self.J[m], self.I[m] ] = m
+        self.m2 = self.m**2
         
         # lower triangle indices
         self.tril_indices = np.tril_indices( self.lmax+1, k = -1 )
@@ -192,6 +193,40 @@ class sph_repr:
         Y_phi *= self.m
         return Y_theta, Y_phi
     
+    
+    def ylm_hessian( self, sin_theta, cos_theta, Y, Y_theta, Y_phi, with_r=None ):
+        """
+        Return: Y_theta_2, Y_phi_2, Y_theta_phi
+        i.e. second order partial derivatives of spherical harmonics wrt theta, phi
+        with_r:
+        if r^l is multiplied to spherical harmonics (see sph_repr.ylm_rl), 
+        then "with_r = r" is required for the correct evaluation of 
+        the partial deriavitives.
+        --------------------------------------------------------------
+        see ylm for the array storage convention
+        """
+        # paritial theta
+        cot_theta = cos_theta / sin_theta
+        d_cot_theta = -( 1. + cot_theta * cot_theta )
+        d_i_sin_theta = - cot_theta / sin_theta
+        # second order wrt theta
+        Y_theta_2 = ( d_cot_theta * Y + cot_theta * Y_theta ) * self.l 
+        if with_r is None:
+            Y_theta_2[1:,1:] -= ( Y_theta[:-1,:-1] / sin_theta +                                      Y[:-1,:-1] * d_i_sin_theta ) * self.coef
+        else:
+            Y_theta_2[1:,1:] -= with_r * ( Y_theta[:-1,:-1] / sin_theta +                                      Y[:-1,:-1] * d_i_sin_theta ) * self.coef
+        # second order wrt phi
+        Y_phi_2 = - Y * self.m2
+        # wrt theta wrt phi
+        axes = list( range(len(Y.shape)) )
+        axes[0], axes[1] = 1, 0
+        Y_theta_phi = np.transpose( Y_theta, axes=axes ).copy()
+        Y_theta_phi[ self.tril_indices ] *= -1
+        Y_theta_phi *= self.m
+        return Y_theta_2, Y_phi_2, Y_theta_phi
+    
+    
+    
 
 # test routines ----------------------------------------------------------
 def test_sph_repr( n = 1000 ):
@@ -234,15 +269,65 @@ def test_sph_repr( n = 1000 ):
             errors += [ Y_theta_rl[l,l-m] + 1.0j*Y_theta_rl[l-m,l] - rl*tmp2 ]
 
     errors = abs( np.array(errors).reshape(-1) )
+    test_result = np.allclose(errors,0.0)
     print( """
     comparison with scipy.sph_harm: 
     tests included: ylm, ylm_rl, ylm_partials (with_r= None and r)
     all diffs close to zero: {} 
     max difference: {}
-    """.format( np.allclose(errors,0.0), errors.max() ) )
+    """.format( test_result , errors.max() ) )
+    return test_result
+    
+    
+    
+
+def test_hessian_ylm( lmax=5, N=3 ):
+    from sympy import symbols, Ynm, Derivative
+    #from theforce.sph_repr import sph_repr
+    from theforce.sphcart import cart_to_angles
+    r_s, theta_s, phi_s = symbols('r theta phi')
+    l_s = symbols('l', integer=True, nonnegative=True )
+    m_s = symbols('m', integer=True)
+    f = Ynm(l_s,m_s,theta_s,phi_s) #r_s**l_s 
+    # symbolic derivatives
+    wrt_theta = Derivative(f,theta_s,2).doit()
+    wrt_cross = Derivative(f,theta_s,phi_s).doit()
+    wrt_phi = Derivative(f,phi_s,2).doit()
+    #
+    sph = sph_repr(lmax)
+    zeros = []
+    # random x,y,z
+    for _ in range(N):
+        x, y, z = np.random.uniform(-1.,1.,size=3)
+        r, theta, phi = cart_to_angles(x,y,z)
+        subs = {r_s:r, theta_s:theta, phi_s:phi}
+        # numeric derivatives
+        r, sin_theta, cos_theta, sin_phi, cos_phi, Y = sph.ylm(x,y,z)
+        r = None
+        Y_theta, Y_phi = sph.ylm_partials( sin_theta, cos_theta, Y, with_r = r )
+        Y_theta_2, Y_phi_2, Y_cross = sph.ylm_hessian( sin_theta, cos_theta, 
+                                                    Y, Y_theta, Y_phi, with_r = r )
+        get = lambda Y,l,m: Y[l,l] if m==0 else Y[l,l-m]+1.0j*Y[l-m,l] 
+        for l in range(lmax+1):
+            subs[l_s] = l
+            for m in range(l+1):
+                subs[m_s] = m
+                zeros.append( get(Y_theta_2,l,m) - complex( wrt_theta.subs(subs).evalf() ) )
+                zeros.append( get(Y_phi_2,l,m) - complex( wrt_phi.subs(subs).evalf() ) )
+                zeros.append( get(Y_cross,l,m) - complex( wrt_cross.subs(subs).evalf() ) )
+    zeros = np.array(zeros)
+    test_result = np.allclose(zeros,0.0)
+    maxdiff = max([abs(zeros.min()),abs(zeros.max())])
+    print("""
+    hessian of ylm (through sympy) eqv to sph_repr.ylm_hessian = {} 
+    maxdiff approx: {}\n""".format( test_result, maxdiff) )
+    return test_result
+
 
 
 if __name__=='__main__':
 
     test_sph_repr()
+    
+    test_hessian_ylm()
 
