@@ -17,7 +17,7 @@ class gaussian:
         """ exp( - r^2 / 2 sigma^2 ) """
         self.alpha = 1. / (sigma*sigma)
     
-    def radial( self, r ):
+    def radial_first( self, r ):
         x = -self.alpha * r
         y = np.exp(x*r/2)
         return y, x*y
@@ -28,13 +28,25 @@ class quadratic_cutoff:
     def __init__( self, rc ):
         """ ( 1 - r / r_c )^2 """
         self.rc = rc
-    
+        self.sec = 2./rc**2
+        
     def radial( self, r ):
+        x = 1. - r/self.rc
+        x[ np.where(x<0.0) ] = 0.0
+        return x*x
+    
+    def radial_first( self, r ):
         x = 1. - r/self.rc
         x[ np.where(x<0.0) ] = 0.0
         return x*x, -2*x/self.rc
     
+    def radial_second( self, r ):
+        x = 1. - r/self.rc
+        x[ np.where(x<0.0) ] = 0.0
+        return x*x, -2*x/self.rc, self.sec
+    
 
+    
 class poly_cutoff:
     
     def __init__( self, rc, n ):
@@ -43,7 +55,7 @@ class poly_cutoff:
         self.n  = n
         self.n_ = n - 1 
     
-    def radial( self, r ):
+    def radial_first( self, r ):
         x = 1. - r/self.rc
         x[ np.where(x<0.0) ] = 0.0
         y = x**(self.n_)
@@ -51,7 +63,7 @@ class poly_cutoff:
 
     
     
-#                              --- raw soap ---
+#                              --- soap descriptor ---
 class sesoap:
     
     def __init__( self, lmax, nmax, radial ):
@@ -67,7 +79,6 @@ class sesoap:
         self.sph = sph_repr( lmax )
         
         # prepare some stuff
-        self.L = self.sph.l[:,:,0]
         self._m = [ ( [ l for m in range(0,l+1) ] + [ m for m in range(0,l) ],
                   [ m for m in range(0,l+1) ] + [ l for m in range(0,l) ] )  
                    for l in range(0,lmax+1) ]
@@ -82,158 +93,97 @@ class sesoap:
                            np.einsum('ln,lm->lnm',a_ln,a_ln) ), 'lnn' )
         self.lnnp_cost_extra = self.lnnp_cost[:,np.newaxis]        
         
+        # prepare for broadcasting
+        self.rns = 2 * np.arange(self.nmax+1).reshape(nmax+1,1,1,1)
+
         
         
     def descriptor( self, x, y, z ):
         """
-        Inputs: x,y,z -> Cartesian coordinates
-        Returns: p -> compressed (1d) descriptor
+        Inputs:   x,y,z -> Cartesian coordinates
+        Returns:  p -> compressed (1d) descriptor
         """
         r, _,_,_,_, Y = self.sph.ylm_rl(x,y,z)
-        R, _ = self.radial.radial( r )
-        k  = R * Y
-        K  = [ k.sum(axis=-1) ]
-        r2 = r*r
-        for n in range(1,self.nmax+1):
-            k *= r2
-            K += [ k.sum(axis=-1) ]
-        K = np.einsum( 'ilm,jlm->ijlm', K, K )
-        p = np.array( [ 2*K[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
-             - K[:,:,l,l] for l in range(self.lmax+1) ] )
-        p = self.compress(p,'lnn') * self.lnnp_cost
-        return p
+        R = self.radial.radial( r )
+        s = ( R * r**self.rns * Y ).sum(axis=-1)
+        return self.soap_dot(s)
     
     
-    
-    def desc_and_grad( self, x, y, z ):
+    def gradient( self, x, y, z, sumj=True ):
         """
-        Inputs: x,y,z -> Cartesian coordinates
-        Returns: p, q
-        p -> compressed (1d) descriptor
-        q -> [dp_dr, dp_dtheta, dp_dphi] sum of gradients of 
-                p wrt all particles in env
+        Inputs:   x,y,z -> Cartesian coordinates
+        Returns:  p, q, sph
+        sumj:     perform the summation over atoms
+        ---------------------------------------
+        p:        compressed (1d) descriptor
+        q:        [dp_dr,  dp_dtheta / r,  dp_dphi / r * sin_theta] 
+        sph:      (r, sin_theta, cos_theta, sin_phi, cos_phi)
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
         Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
-        R, dR = self.radial.radial( r )
-        # n=0 terms
-        k     = R * Y
-        R1    = dR * Y 
-        R2    = ( R / r ) * Y
-        Theta = R * Y_theta / r
-        Phi   = R * Y_phi / (r*sin_theta)
-        # sum over j
-        scalar     = [ k.sum(axis=-1) ]
-        grad_r     = [ R1.sum(axis=-1) + R2.sum(axis=-1) * self.L ]
-        grad_theta = [ Theta.sum(axis=-1) ]
-        grad_phi   = [ Phi.sum(axis=-1) ]
-        # r^2n multipliers
-        r2 = r*r
-        for n in range(1,self.nmax+1):
-            k     *= r2
-            R1    *= r2
-            R2    *= r2
-            Theta *= r2
-            Phi   *= r2
-            # ---
-            scalar     += [ k.sum(axis=-1) ]
-            grad_r     += [ R1.sum(axis=-1) + R2.sum(axis=-1) * (2*n+self.L) ]
-            grad_theta += [ Theta.sum(axis=-1) ]
-            grad_phi   += [ Phi.sum(axis=-1) ]
-        # n, n' coupling 
-        c       = np.einsum( 'nlm,klm->nklm', scalar, scalar )
-        c_r     = np.einsum( 'nlm,klm->nklm', scalar, grad_r ) + \
-                  np.einsum( 'nlm,klm->nklm', grad_r, scalar )
-        c_theta = np.einsum( 'nlm,klm->nklm', scalar, grad_theta ) + \
-                  np.einsum( 'nlm,klm->nklm', grad_theta, scalar )
-        c_phi   = np.einsum( 'nlm,klm->nklm', scalar, grad_phi ) + \
-                  np.einsum( 'nlm,klm->nklm', grad_phi, scalar )
-        # sum over m
-        p       = np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
-                 - c[:,:,l,l] for l in range(self.lmax+1) ] )
-        p_r     = np.array( [ 2*c_r[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
-                 - c_r[:,:,l,l] for l in range(self.lmax+1) ] )
-        p_theta = np.array( [ 2*c_theta[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
-                 - c_theta[:,:,l,l] for l in range(self.lmax+1) ] )
-        p_phi   = np.array( [ 2*c_phi[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
-                 - c_phi[:,:,l,l] for l in range(self.lmax+1) ] )
-        # apply l,n,n'-dependent coef
-        p = self.compress(p,'lnn') * self.lnnp_cost
-        q = self.compress( np.array([p_r, p_theta, p_phi]), '3lnn' ) * self.lnnp_cost
-        return p, q
+        R, dR = self.radial.radial_first( r ) 
+        rns = r**self.rns
+        R_rns = R * rns
+        # descriptor
+        s = ( R_rns * Y ).sum(axis=-1)
+        p = self.soap_dot(s)
+        # basic gradients
+        rns_plus_l = self.rns + self.sph.l
+        if sumj:
+            qr = self.soap_dot( s, partial=(( dR * rns + R_rns * rns_plus_l / r ) * Y).sum(axis=-1)  )
+            qt = self.soap_dot( s, partial=(R_rns * Y_theta / r ).sum(axis=-1)  )
+            qp = self.soap_dot( s, partial=(R_rns * Y_phi / (r*sin_theta)).sum(axis=-1)  )
+        else:
+            qr = self.soap_dot( s, partial=(( dR * rns + R_rns * rns_plus_l / r ) * Y)  )
+            qt = self.soap_dot( s, partial=(R_rns * Y_theta / r )  )
+            qp = self.soap_dot( s, partial=(R_rns * Y_phi / (r*sin_theta))  )
+        return p, np.array([qr, qt, qp]) , (r, sin_theta, cos_theta, sin_phi, cos_phi)
+
+
+    #                        --- convenience functions ---
+    
+    def sum_all_m( self, c ):
+        rank = len(c.shape)
+        if rank==4:
+            result = np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
+                    - c[:,:,l,l] for l in range(self.lmax+1) ] )
+        elif rank==5:
+            result = np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1],:].sum(axis=-2) 
+                    - c[:,:,l,l,:] for l in range(self.lmax+1) ] )
+        return result
     
     
-    
-    def desc_all_grad( self, x, y, z ):
-        """
-        Inputs: x,y,z -> Cartesian coordinates
-        Returns: p, q, sphrepr
-        p -> compressed (1d) descriptor
-        q -> [dp_dr, dp_dtheta, dp_dphi] gradient of p wrt all particles in env
-        sphrepr -> (r, sin_theta, cos_theta, sin_phi, cos_phi)
-        """
-        r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
-        Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
-        R, dR = self.radial.radial( r )
-        # n=0 terms
-        k     = R * Y
-        R1    = dR * Y 
-        R2    = ( R / r ) * Y
-        Theta = R * Y_theta / r
-        Phi   = R * Y_phi / (r*sin_theta)
-        # sum over j
-        scalar     = [ k.sum(axis=-1) ]
-        grad_r     = [ R1 + R2 * self.sph.l ]
-        grad_theta = [ Theta.copy() ]
-        grad_phi   = [ Phi.copy() ]
-        # r^2n multipliers
-        r2 = r*r
-        for n in range(1,self.nmax+1):
-            k     *= r2
-            R1    *= r2
-            R2    *= r2
-            Theta *= r2
-            Phi   *= r2
-            # ---
-            scalar     += [ k.sum(axis=-1) ]
-            grad_r     += [ R1 + R2 * (2*n+self.sph.l) ]
-            grad_theta += [ Theta.copy() ]
-            grad_phi   += [ Phi.copy() ]
-        # n, n' coupling 
-        c       = np.einsum( 'nlm,klm->nklm', scalar, scalar )
-        c_r     = np.einsum( 'nlm,klmj->nklmj', scalar, grad_r ) + \
-                  np.einsum( 'nlmj,klm->nklmj', grad_r, scalar )
-        c_theta = np.einsum( 'nlm,klmj->nklmj', scalar, grad_theta ) + \
-                  np.einsum( 'nlmj,klm->nklmj', grad_theta, scalar )
-        c_phi   = np.einsum( 'nlm,klmj->nklmj', scalar, grad_phi ) + \
-                  np.einsum( 'nlmj,klm->nklmj', grad_phi, scalar )
-        # sum over m
-        p       = np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
-                 - c[:,:,l,l] for l in range(self.lmax+1) ] )
-        p_r     = np.array( [ 2*c_r[:,:,self._m[l][0],self._m[l][1],:].sum(axis=-2) 
-                 - c_r[:,:,l,l,:] for l in range(self.lmax+1) ] )
-        p_theta = np.array( [ 2*c_theta[:,:,self._m[l][0],self._m[l][1],:].sum(axis=-2) 
-                 - c_theta[:,:,l,l,:] for l in range(self.lmax+1) ] )
-        p_phi   = np.array( [ 2*c_phi[:,:,self._m[l][0],self._m[l][1],:].sum(axis=-2) 
-                 - c_phi[:,:,l,l,:] for l in range(self.lmax+1) ] )
-        # apply l,n,n'-dependent coef
-        p = self.compress(p,'lnn') * self.lnnp_cost
-        q = self.compress( np.array([p_r, p_theta, p_phi]), '3lnnj' ) * self.lnnp_cost_extra
-        return p, q, (r, sin_theta, cos_theta, sin_phi, cos_phi)
+    def soap_dot( self, s, partial=None ):
+        if partial is None:
+            c = np.einsum( 'nlm,klm->nklm', s, s )
+            type = 'lnn'
+        else:
+            rank = len(partial.shape)
+            if rank==3:
+                type = 'lnn'
+                c = np.einsum( 'nlm,klm->nklm', s, partial ) + np.einsum( 'nlm,klm->nklm', partial, s ) 
+            elif rank==4:
+                type='lnnj'
+                c = np.einsum( 'nlm,klmj->nklmj', s, partial ) + np.einsum( 'nlmj,klm->nklmj', partial, s ) 
+        if type=='lnn':
+            result = self.compress( self.sum_all_m(c), type ) * self.lnnp_cost
+        elif type=='lnnj':
+            result = self.compress( self.sum_all_m(c), type ) * self.lnnp_cost_extra
+        return result
     
     
-    
-    #                        --- compress --- decompress ---
     def compress( self, a, type ):
         if type=='lnn': 
             return a[:,self.In,self.Jn].reshape(-1)
+        elif type=='lnnj': 
+            j = a.shape[-1]
+            return a[:,self.In,self.Jn].reshape(-1,j)
         elif type=='3lnn':
             return a[:,:,self.In,self.Jn].reshape((3,-1))
         elif type=='3lnnj':
             j = a.shape[-1]
             return a[:,:,self.In,self.Jn,:].reshape((3,-1,j))
         
-
     
     def decompress( self, v, type, n=None, l=None ):
         if n is None: n = self.nmax
@@ -243,6 +193,11 @@ class sesoap:
             a = np.empty(shape=(l+1,n+1,n+1),dtype=v.dtype)
             a[:,self.In,self.Jn] = v.reshape((l+1, (n+1)*(n+2)//2))
             a[:,self.Jn,self.In] = a[:,self.In,self.Jn]
+        elif type=='lnnj':
+            j = v.shape[-1]
+            a = np.empty(shape=(l+1,n+1,n+1,j),dtype=v.dtype)
+            a[:,self.In,self.Jn,:] = v.reshape((l+1, (n+1)*(n+2)//2,j))
+            a[:,self.Jn,self.In,:] = a[:,self.In,self.Jn,:]
         elif type=='3lnn':
             a = np.empty(shape=(3,l+1,n+1,n+1),dtype=v.dtype)
             a[:,:,self.In,self.Jn] = v.reshape((3,l+1, (n+1)*(n+2)//2))
@@ -253,9 +208,7 @@ class sesoap:
             a[:,:,self.In,self.Jn,:] = v.reshape((3,l+1, (n+1)*(n+2)//2,j))
             a[:,:,self.Jn,self.In,:] = a[:,:,self.In,self.Jn,:]
         return a
-    
-    
-    
+
     
     
 # tests ------------------------------------------------------------------------------
@@ -267,7 +220,7 @@ def test_sesoap():
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )
     env = sesoap( 2, 2, quadratic_cutoff(3.0) )
     p_ = env.descriptor( x, y, z )
-    p_dc, q_dc = env.desc_and_grad( x, y, z )
+    p_dc, q_dc, _ = env.gradient( x, y, z )
     p_ = env.decompress( p_, 'lnn' )
     p_d = env.decompress( p_dc, 'lnn' )
     q_d = env.decompress( q_dc, '3lnn' )
@@ -324,7 +277,7 @@ def test_sesoap():
         print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
         
     
-    pj, qj, _ = env.desc_all_grad(x,y,z)
+    pj, qj, _ = env.gradient(x,y,z,sumj=False)
     pj_ = env.decompress( pj, 'lnn' )
     qj_ = env.decompress( qj, '3lnnj' )
     print( np.allclose( qj_.sum(axis=-1)-q_d, 0.0 ) )
@@ -346,7 +299,7 @@ def test_sesoap_performance( n=30, N=100 ):
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q, _ = env.desc_all_grad( x, y, z )
+        p, q, _ = env.gradient( x, y, z, sumj=False )
     finish = time.time()
     delta2 = (finish-start)/N
     print( "t2: {} Sec per soap of xyz[{},3]".format( delta2, n ) )
