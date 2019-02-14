@@ -109,7 +109,7 @@ class sesoap:
         return self.soap_dot(s)
     
     
-    def gradient( self, x, y, z, sumj=True ):
+    def derivatives( self, x, y, z, sumj=True, grad=True ):
         """
         Inputs:   x,y,z -> Cartesian coordinates
         Returns:  p, q, sph
@@ -129,15 +129,18 @@ class sesoap:
         p = self.soap_dot(s)
         # basic gradients
         rns_plus_l = self.rns + self.sph.l
+        a = r
+        b = r * sin_theta
+        if not grad: a,b = 1, 1
         if sumj:
             qr = self.soap_dot( s, partial=(( dR * rns + R_rns * rns_plus_l / r ) * Y).sum(axis=-1)  )
-            qt = self.soap_dot( s, partial=(R_rns * Y_theta / r ).sum(axis=-1)  )
-            qp = self.soap_dot( s, partial=(R_rns * Y_phi / (r*sin_theta)).sum(axis=-1)  )
+            qt = self.soap_dot( s, partial=(R_rns * Y_theta / a ).sum(axis=-1)  )
+            qp = self.soap_dot( s, partial=(R_rns * Y_phi / b ).sum(axis=-1)  )
         else:
             qr = self.soap_dot( s, partial=(( dR * rns + R_rns * rns_plus_l / r ) * Y)  )
-            qt = self.soap_dot( s, partial=(R_rns * Y_theta / r )  )
-            qp = self.soap_dot( s, partial=(R_rns * Y_phi / (r*sin_theta))  )
-        return p, np.array([qr, qt, qp]) , (r, sin_theta, cos_theta, sin_phi, cos_phi)
+            qt = self.soap_dot( s, partial=(R_rns * Y_theta / a )  )
+            qp = self.soap_dot( s, partial=(R_rns * Y_phi / b )  )
+        return p, np.array([qr, qt, qp]), (r, sin_theta, cos_theta, sin_phi, cos_phi)
 
 
     #                        --- convenience functions ---
@@ -220,7 +223,7 @@ def test_sesoap():
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )
     env = sesoap( 2, 2, quadratic_cutoff(3.0) )
     p_ = env.descriptor( x, y, z )
-    p_dc, q_dc, _ = env.gradient( x, y, z )
+    p_dc, q_dc, _ = env.derivatives( x, y, z )
     p_ = env.decompress( p_, 'lnn' )
     p_d = env.decompress( p_dc, 'lnn' )
     q_d = env.decompress( q_dc, '3lnn' )
@@ -277,7 +280,7 @@ def test_sesoap():
         print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
         
     
-    pj, qj, _ = env.gradient(x,y,z,sumj=False)
+    pj, qj, _ = env.derivatives(x,y,z,sumj=False)
     pj_ = env.decompress( pj, 'lnn' )
     qj_ = env.decompress( qj, '3lnnj' )
     print( np.allclose( qj_.sum(axis=-1)-q_d, 0.0 ) )
@@ -299,7 +302,7 @@ def test_sesoap_performance( n=30, N=100 ):
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q, _ = env.gradient( x, y, z, sumj=False )
+        p, q, _ = env.derivatives( x, y, z, sumj=False )
     finish = time.time()
     delta2 = (finish-start)/N
     print( "t2: {} Sec per soap of xyz[{},3]".format( delta2, n ) )
