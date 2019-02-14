@@ -89,9 +89,8 @@ class sesoap:
         # l,n,n'-dependent constant 
         a_ln = np.array( [ [ 1. / ( (2*l+1) * 2**(2*n+l) * fac(n) * fac(n+l) ) 
                             for n in range(nmax+1) ] for l in range(lmax+1) ] )
-        self.lnnp_cost = self.compress( np.sqrt( 
-                           np.einsum('ln,lm->lnm',a_ln,a_ln) ), 'lnn' )
-        self.lnnp_cost_extra = self.lnnp_cost[:,np.newaxis]        
+        tmp = self.compress( np.sqrt(np.einsum('ln,lm->lnm',a_ln,a_ln) ), 'lnn' )
+        self.lnnp_c = [ tmp, tmp[:,np.newaxis], tmp[:,np.newaxis,np.newaxis] ]
         
         # prepare for broadcasting
         self.rns = 2 * np.arange(self.nmax+1).reshape(nmax+1,1,1,1)
@@ -106,18 +105,20 @@ class sesoap:
         r, _,_,_,_, Y = self.sph.ylm_rl(x,y,z)
         R = self.radial.radial( r )
         s = ( R * r**self.rns * Y ).sum(axis=-1)
-        return self.soap_dot(s)
+        return self.soap_dot(s,s,reverse=False)
     
     
-    def derivatives( self, x, y, z, sumj=True, grad=True ):
+    def derivatives( self, x, y, z, sumj=True, grad=False ):
         """
         Inputs:   x,y,z -> Cartesian coordinates
         Returns:  p, q, sph
         sumj:     perform the summation over atoms
+        grad:     if True transform partials to gradient
         ---------------------------------------
         p:        compressed (1d) descriptor
-        q:        [dp_dr,  dp_dtheta / r,  dp_dphi / r * sin_theta] 
+        q:        [dp_dr,  dp_dtheta / a,  dp_dphi / b] 
         sph:      (r, sin_theta, cos_theta, sin_phi, cos_phi)
+        a,b:      default=1, if grad=True a,b = r,r*sin_theta
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
         Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
@@ -126,66 +127,129 @@ class sesoap:
         R_rns = R * rns
         # descriptor
         s = ( R_rns * Y ).sum(axis=-1)
-        p = self.soap_dot(s)
+        p = self.soap_dot(s,s,reverse=False)
         # basic gradients
         rns_plus_l = self.rns + self.sph.l
-        a = r
-        b = r * sin_theta
-        if not grad: a,b = 1, 1
+        if grad:
+            Y_theta /= r
+            Y_phi   /= r * sin_theta
         if sumj:
-            qr = self.soap_dot( s, partial=(( dR * rns + R_rns * rns_plus_l / r ) * Y).sum(axis=-1)  )
-            qt = self.soap_dot( s, partial=(R_rns * Y_theta / a ).sum(axis=-1)  )
-            qp = self.soap_dot( s, partial=(R_rns * Y_phi / b ).sum(axis=-1)  )
+            qr = self.soap_dot( s, ((dR * rns + R_rns * rns_plus_l / r) * Y).sum(axis=-1)  )
+            qt = self.soap_dot( s, (R_rns * Y_theta).sum(axis=-1)  )
+            qp = self.soap_dot( s, (R_rns * Y_phi).sum(axis=-1)  )
         else:
-            qr = self.soap_dot( s, partial=(( dR * rns + R_rns * rns_plus_l / r ) * Y)  )
-            qt = self.soap_dot( s, partial=(R_rns * Y_theta / a )  )
-            qp = self.soap_dot( s, partial=(R_rns * Y_phi / b )  )
+            qr = self.soap_dot( s, ((dR * rns + R_rns * rns_plus_l / r ) * Y), jb='j'  )
+            qt = self.soap_dot( s, (R_rns * Y_theta), jb='j'  )
+            qp = self.soap_dot( s, (R_rns * Y_phi), jb='j'  )
         return p, np.array([qr, qt, qp]), (r, sin_theta, cos_theta, sin_phi, cos_phi)
 
+    
+    def hessian( self, x, y, z ):
+        """
+        Inputs:   x,y,z -> Cartesian coordinates
+        Returns:  p, q, h, sph
+        ---------------------------------------
+        p:        compressed (1d) descriptor
+        q:        [dp_dr, dp_dtheta, dp_dphi] 
+        h:        hessian d2p/(da_j^2 db_k^2)
+        sph:      (r, sin_theta, cos_theta, sin_phi, cos_phi)
+        da, db:   [dr, dtheta, dphi]
+        j, k:     particles indices
+        """
+        r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
+        Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
+        Y_theta2, Y_phi2, Y_cross = self.sph.ylm_hessian( sin_theta, cos_theta, Y, 
+                                                          Y_theta, Y_phi, with_r=r )
 
-    #                        --- convenience functions ---
+        R, dR, dR2 = self.radial.radial_second( r ) 
+        rns = r**self.rns
+        R_rns = R * rns
+        # descriptor
+        s = ( R_rns * Y ).sum(axis=-1)
+        p = self.soap_dot(s,s,reverse=False)
+        # radial derivatives
+        rns_plus_l = self.rns + self.sph.l
+        tmp = R_rns * rns_plus_l
+        _dr  = dR * rns + tmp / r
+        _dr2 = dR2 * rns + 2 * dR * rns * rns_plus_l / r + tmp * (rns_plus_l-1) / (r*r)
+        # first order partial derivatives
+        ds_dr = _dr * Y
+        ds_dt = R_rns * Y_theta 
+        ds_dp = R_rns * Y_phi 
+        # second order partial derivatives
+        ds_dr_dr = _dr2 * Y
+        ds_dr_dt = _dr * Y_theta
+        ds_dr_dp = _dr * Y_phi
+        ds_dt_dt = R_rns * Y_theta2
+        ds_dt_dp = R_rns * Y_cross
+        ds_dp_dp = R_rns * Y_phi2
+        # firs order
+        ja, jb = 'j', 'k'
+        qr = self.soap_dot( s, ds_dr, jb=jb )
+        qt = self.soap_dot( s, ds_dt, jb=jb )
+        qp = self.soap_dot( s, ds_dp, jb=jb )
+        # hessian j1,j2
+        qrr = self.soap_dot( ds_dr, ds_dr, ja=ja, jb=jb )
+        qrt = self.soap_dot( ds_dr, ds_dt, ja=ja, jb=jb )
+        qrp = self.soap_dot( ds_dr, ds_dp, ja=ja, jb=jb )
+        qtt = self.soap_dot( ds_dt, ds_dt, ja=ja, jb=jb )
+        qtp = self.soap_dot( ds_dt, ds_dp, ja=ja, jb=jb )
+        qpp = self.soap_dot( ds_dp, ds_dp, ja=ja, jb=jb )
+        # hessian j1=j2
+        nj = qrr.shape[-1]
+        d1, d2 = np.diag_indices(nj)
+        qrr[:,d1,d2] += self.soap_dot( s, ds_dr_dr, jb=jb ) 
+        qrt[:,d1,d2] += self.soap_dot( s, ds_dr_dt, jb=jb ) 
+        qrp[:,d1,d2] += self.soap_dot( s, ds_dr_dp, jb=jb ) 
+        qtt[:,d1,d2] += self.soap_dot( s, ds_dt_dt, jb=jb ) 
+        qtp[:,d1,d2] += self.soap_dot( s, ds_dt_dp, jb=jb ) 
+        qpp[:,d1,d2] += self.soap_dot( s, ds_dp_dp, jb=jb ) 
+        return p, np.array([qr, qt, qp]), np.array( [qrr,qrt,qrp, 
+                        qtt,qtp,qpp] ), (r, sin_theta, cos_theta, sin_phi, cos_phi)
+    
+    
+    # ------------------- convenience functions -------------------------------------------------
+
+    def soap_dot( self, a, b, ja='', jb='', reverse=True ):
+        jc = ja
+        if   ja==jb: 
+            jd = ja; jr = ja
+        elif ja!=jb: 
+            jd = ja+jb; jr = jb+ja
+        c = np.einsum('n...'+ja+',m...'+jb+'->nm...'+jd,a,b)
+        if reverse: c += np.einsum('n...'+jb+',m...'+ja+'->nm...'+jr,b,a)
+        return self.compress( self.sum_all_m(c), 'lnn'+jd ) * self.lnnp_c[len(jd)]
+        
     
     def sum_all_m( self, c ):
         rank = len(c.shape)
-        if rank==4:
-            result = np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
-                    - c[:,:,l,l] for l in range(self.lmax+1) ] )
+        if rank==6:
+            return np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1],:,:].sum(axis=-3) 
+                    - c[:,:,l,l,:,:] for l in range(self.lmax+1) ] )
         elif rank==5:
-            result = np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1],:].sum(axis=-2) 
+            return np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1],:].sum(axis=-2) 
                     - c[:,:,l,l,:] for l in range(self.lmax+1) ] )
-        return result
-    
-    
-    def soap_dot( self, s, partial=None ):
-        if partial is None:
-            c = np.einsum( 'nlm,klm->nklm', s, s )
-            type = 'lnn'
-        else:
-            rank = len(partial.shape)
-            if rank==3:
-                type = 'lnn'
-                c = np.einsum( 'nlm,klm->nklm', s, partial ) + np.einsum( 'nlm,klm->nklm', partial, s ) 
-            elif rank==4:
-                type='lnnj'
-                c = np.einsum( 'nlm,klmj->nklmj', s, partial ) + np.einsum( 'nlmj,klm->nklmj', partial, s ) 
-        if type=='lnn':
-            result = self.compress( self.sum_all_m(c), type ) * self.lnnp_cost
-        elif type=='lnnj':
-            result = self.compress( self.sum_all_m(c), type ) * self.lnnp_cost_extra
-        return result
+        elif rank==4:
+            return np.array( [ 2*c[:,:,self._m[l][0],self._m[l][1]].sum(axis=-1) 
+                    - c[:,:,l,l] for l in range(self.lmax+1) ] )
     
     
     def compress( self, a, type ):
         if type=='lnn': 
             return a[:,self.In,self.Jn].reshape(-1)
-        elif type=='lnnj': 
+        elif type=='lnnj' or type=='lnnk': 
             j = a.shape[-1]
             return a[:,self.In,self.Jn].reshape(-1,j)
         elif type=='3lnn':
             return a[:,:,self.In,self.Jn].reshape((3,-1))
-        elif type=='3lnnj':
+        elif type=='3lnnj' or type=='3lnnk':
             j = a.shape[-1]
             return a[:,:,self.In,self.Jn,:].reshape((3,-1,j))
+        elif type=='lnnjk' or type=='lnnkj': 
+            j = a.shape[-1]
+            return a[:,self.In,self.Jn].reshape(-1,j,j)
+        else:
+            print("type {} not defined yet, for matrix with shape {}".format(type,a.shape))
         
     
     def decompress( self, v, type, n=None, l=None ):
@@ -196,7 +260,7 @@ class sesoap:
             a = np.empty(shape=(l+1,n+1,n+1),dtype=v.dtype)
             a[:,self.In,self.Jn] = v.reshape((l+1, (n+1)*(n+2)//2))
             a[:,self.Jn,self.In] = a[:,self.In,self.Jn]
-        elif type=='lnnj':
+        elif type=='lnnj' or type=='lnnk':
             j = v.shape[-1]
             a = np.empty(shape=(l+1,n+1,n+1,j),dtype=v.dtype)
             a[:,self.In,self.Jn,:] = v.reshape((l+1, (n+1)*(n+2)//2,j))
@@ -205,16 +269,25 @@ class sesoap:
             a = np.empty(shape=(3,l+1,n+1,n+1),dtype=v.dtype)
             a[:,:,self.In,self.Jn] = v.reshape((3,l+1, (n+1)*(n+2)//2))
             a[:,:,self.Jn,self.In] = a[:,:,self.In,self.Jn]
-        elif type=='3lnnj':
+        elif type=='3lnnj' or type=='3lnnk':
             j = v.shape[-1]
             a = np.empty(shape=(3,l+1,n+1,n+1,j),dtype=v.dtype)
             a[:,:,self.In,self.Jn,:] = v.reshape((3,l+1, (n+1)*(n+2)//2,j))
             a[:,:,self.Jn,self.In,:] = a[:,:,self.In,self.Jn,:]
+        elif type=='lnnjk' or type=='lnnkj':
+            j = v.shape[-1]
+            a = np.empty(shape=(l+1,n+1,n+1,j,j),dtype=v.dtype)
+            a[:,self.In,self.Jn,:] = v.reshape((l+1, (n+1)*(n+2)//2,j,j))
+            a[:,self.Jn,self.In,:] = a[:,self.In,self.Jn,:,:]
+        else:
+            print("type {} not defined yet, for matrix with shape {}".format(type,a.shape))
         return a
 
     
     
-# tests ------------------------------------------------------------------------------
+    
+    
+# tests ----------------------------------------------------------------------------------
     
 def test_sesoap():
     """ trying to regenerate numbers obtained by symbolic calculations using sympy """
@@ -223,7 +296,7 @@ def test_sesoap():
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )
     env = sesoap( 2, 2, quadratic_cutoff(3.0) )
     p_ = env.descriptor( x, y, z )
-    p_dc, q_dc, _ = env.derivatives( x, y, z )
+    p_dc, q_dc, _ = env.derivatives( x, y, z, grad=True )
     p_ = env.decompress( p_, 'lnn' )
     p_d = env.decompress( p_dc, 'lnn' )
     q_d = env.decompress( q_dc, '3lnn' )
@@ -271,7 +344,7 @@ def test_sesoap():
                                 [[ 0.02103876,  0.00576316, -0.01632531],
                                  [ 0.00576316, -0.01022614, -0.03301236],
                                  [-0.01632531, -0.03301236, -0.0564123 ]]])]
-    ref_p *= env.decompress( env.lnnp_cost, 'lnn' )
+    ref_p *= env.decompress( env.lnnp_c[0], 'lnn' )
 
     print( "\nTesting validity of sesoap ...")
     print( np.allclose( p_-ref_p[0], 0.0 ) ) 
@@ -280,32 +353,60 @@ def test_sesoap():
         print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
         
     
-    pj, qj, _ = env.derivatives(x,y,z,sumj=False)
+    pj, qj, _ = env.derivatives(x,y,z,sumj=False,grad=True)
     pj_ = env.decompress( pj, 'lnn' )
     qj_ = env.decompress( qj, '3lnnj' )
     print( np.allclose( qj_.sum(axis=-1)-q_d, 0.0 ) )
         
         
+        
+        
 def test_sesoap_performance( n=30, N=100 ):
     import time
-    print("\nTesting speed of sesoap ...")
+    print("\nTesting speed of sesoap with random xyz[{},3]".format(n))
     
+    # np.random
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
     finish = time.time()
     delta1 = (finish-start)/N
-    print( "t1: {} Sec per random xyz[{},3]".format( delta1, n ) )
+    print( "t1: {} Sec per np.random.uniform(shape=({},3))".format( delta1, n ) )
     
-    
-    env = sesoap( 6, 6, quadratic_cutoff(3.0) )
+    env = sesoap( 5, 5, quadratic_cutoff(3.0) )
+
+    # descriptor
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q, _ = env.derivatives( x, y, z, sumj=False )
+        p = env.descriptor( x, y, z )
     finish = time.time()
     delta2 = (finish-start)/N
-    print( "t2: {} Sec per soap of xyz[{},3]".format( delta2, n ) )
+    print( "t2: {} Sec per descriptor".format( delta2 ) )
+    # derivatives
+    start = time.time()
+    for _ in range(N):
+        x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
+        p, q, sph = env.derivatives( x, y, z )
+    finish = time.time()
+    delta3 = (finish-start)/N
+    print( "t3: {} Sec per derivatives (j-reduced)".format( delta3 ) )
+
+    start = time.time()
+    for _ in range(N):
+        x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
+        p, q, sph = env.derivatives( x, y, z, sumj=False )
+    finish = time.time()
+    delta4 = (finish-start)/N
+    print( "t4: {} Sec per full derivatives".format( delta4 ) )
+    
+    start = time.time()
+    for _ in range(N):
+        x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
+        p, q, h, sph = env.hessian( x, y, z )
+    finish = time.time()
+    delta5 = (finish-start)/N
+    print( "t5: {} Sec per full hessian".format( delta5 ) )
     
     print( "performance measure t2/t1: {}\n".format(delta2/delta1) )
         
