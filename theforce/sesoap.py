@@ -144,70 +144,6 @@ class sesoap:
         return p, np.array([qr, qt, qp]), (r, sin_theta, cos_theta, sin_phi, cos_phi)
 
     
-    def hessian( self, x, y, z ):
-        """
-        Inputs:   x,y,z -> Cartesian coordinates
-        Returns:  p, q, h, sph
-        ---------------------------------------
-        p:        compressed (1d) descriptor
-        q:        [dp_dr, dp_dtheta, dp_dphi] 
-        h:        hessian d2p/(da_j^2 db_k^2)
-        sph:      (r, sin_theta, cos_theta, sin_phi, cos_phi)
-        da, db:   [dr, dtheta, dphi]
-        j, k:     particles indices
-        """
-        r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
-        Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
-        Y_theta2, Y_phi2, Y_cross = self.sph.ylm_hessian( sin_theta, cos_theta, Y, 
-                                                          Y_theta, Y_phi, with_r=r )
-
-        R, dR, dR2 = self.radial.radial_second( r ) 
-        rns = r**self.rns
-        R_rns = R * rns
-        # descriptor
-        s = ( R_rns * Y ).sum(axis=-1)
-        p = self.soap_dot(s,s,reverse=False)
-        # radial derivatives
-        rns_plus_l = self.rns + self.sph.l
-        tmp = R_rns * rns_plus_l
-        _dr  = dR * rns + tmp / r
-        _dr2 = dR2 * rns + 2 * dR * rns * rns_plus_l / r + tmp * (rns_plus_l-1) / (r*r)
-        # first order partial derivatives
-        ds_dr = _dr * Y
-        ds_dt = R_rns * Y_theta 
-        ds_dp = R_rns * Y_phi 
-        # second order partial derivatives
-        ds_dr_dr = _dr2 * Y
-        ds_dr_dt = _dr * Y_theta
-        ds_dr_dp = _dr * Y_phi
-        ds_dt_dt = R_rns * Y_theta2
-        ds_dt_dp = R_rns * Y_cross
-        ds_dp_dp = R_rns * Y_phi2
-        # firs order
-        ja, jb = 'j', 'k'
-        qr = self.soap_dot( s, ds_dr, jb=jb )
-        qt = self.soap_dot( s, ds_dt, jb=jb )
-        qp = self.soap_dot( s, ds_dp, jb=jb )
-        # hessian j1,j2
-        qrr = self.soap_dot( ds_dr, ds_dr, ja=ja, jb=jb )
-        qrt = self.soap_dot( ds_dr, ds_dt, ja=ja, jb=jb )
-        qrp = self.soap_dot( ds_dr, ds_dp, ja=ja, jb=jb )
-        qtt = self.soap_dot( ds_dt, ds_dt, ja=ja, jb=jb )
-        qtp = self.soap_dot( ds_dt, ds_dp, ja=ja, jb=jb )
-        qpp = self.soap_dot( ds_dp, ds_dp, ja=ja, jb=jb )
-        # hessian j1=j2
-        nj = qrr.shape[-1]
-        d1, d2 = np.diag_indices(nj)
-        qrr[:,d1,d2] += self.soap_dot( s, ds_dr_dr, jb=jb ) 
-        qrt[:,d1,d2] += self.soap_dot( s, ds_dr_dt, jb=jb ) 
-        qrp[:,d1,d2] += self.soap_dot( s, ds_dr_dp, jb=jb ) 
-        qtt[:,d1,d2] += self.soap_dot( s, ds_dt_dt, jb=jb ) 
-        qtp[:,d1,d2] += self.soap_dot( s, ds_dt_dp, jb=jb ) 
-        qpp[:,d1,d2] += self.soap_dot( s, ds_dp_dp, jb=jb ) 
-        return p, np.array([qr, qt, qp]), np.array( [qrr,qrt,qrp, 
-                        qtt,qtp,qpp] ), (r, sin_theta, cos_theta, sin_phi, cos_phi)
-    
-    
     # ------------------- convenience functions -------------------------------------------------
 
     def soap_dot( self, a, b, ja='', jb='', reverse=True ):
@@ -399,14 +335,6 @@ def test_sesoap_performance( n=30, N=100 ):
     finish = time.time()
     delta4 = (finish-start)/N
     print( "t4: {} Sec per full derivatives".format( delta4 ) )
-    
-    start = time.time()
-    for _ in range(N):
-        x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q, h, sph = env.hessian( x, y, z )
-    finish = time.time()
-    delta5 = (finish-start)/N
-    print( "t5: {} Sec per full hessian".format( delta5 ) )
     
     print( "performance measure t2/t1: {}\n".format(delta2/delta1) )
         
