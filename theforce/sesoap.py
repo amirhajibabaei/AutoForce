@@ -15,10 +15,10 @@ class gaussian:
     
     def __init__( self, sigma ):
         """ exp( - r^2 / 2 sigma^2 ) """
-        self.alpha = 1. / (sigma*sigma)
+        self.alpha = -1. / (sigma*sigma)
     
     def radial( self, r ):
-        x = -self.alpha * r
+        x = self.alpha * r
         y = np.exp(x*r/2)
         return y, x*y
 
@@ -28,7 +28,6 @@ class quadratic_cutoff:
     def __init__( self, rc ):
         """ ( 1 - r / r_c )^2 """
         self.rc = rc
-        self.sec = 2./rc**2
     
     def radial( self, r ):
         x = 1. - r/self.rc
@@ -210,8 +209,8 @@ class sesoap:
 # tests ----------------------------------------------------------------------------------
     
 def test_sesoap():
-    from theforce.sphcart import cart_vec_to_sph, rotate
     """ trying to regenerate numbers obtained by symbolic calculations using sympy """
+    from theforce.sphcart import cart_vec_to_sph, rotate
     x = np.array( [0.175, 0.884, -0.87, 0.354, -0.082] )
     y = np.array( [-0.791, 0.116, 0.19, -0.832, 0.184] )
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )

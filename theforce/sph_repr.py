@@ -6,14 +6,13 @@
 
 import numpy as np
 from numpy import pi
-
+from theforce.sphcart import cart_coord_to_trig
 
 class sph_repr:
     
-    def __init__( self, lmax, tiny=1.0e-16 ):
+    def __init__( self, lmax ):
         
         self.lmax = lmax
-        self.tiny = tiny
         self.lmax_p = lmax+1
 
         # pre-calculate 
@@ -50,29 +49,6 @@ class sph_repr:
         self.coef = np.sqrt( (self.l-self.m) * (self.l+self.m) 
                             * (2*self.l+1) / (2*self.l-1.) )[1:,1:]
 
-        
-        
-    def cart_to_angles( self, x, y, z ):
-        rxy_sq = x*x + y*y
-        r      = np.sqrt( rxy_sq + z*z )
-        theta  = np.arctan2( np.sqrt(rxy_sq), z )
-        phi    = np.arctan2( y, x )
-        return r, theta, phi
-    
-    
-    
-    def cart_to_sph( self, x, y, z ):
-        rxy_sq    = np.atleast_1d( x*x + y*y )
-        rxy       = np.sqrt( rxy_sq ) + self.tiny
-        r_sq      = rxy_sq + z*z
-        r         = np.sqrt( r_sq )
-        sin_theta = rxy/r
-        cos_theta = z/r
-        sin_phi   = y/rxy
-        cos_phi   = x/rxy
-        return r, sin_theta, cos_theta, sin_phi, cos_phi
-
-
     
     def ylm( self, x, y, z ):
         """ 
@@ -100,7 +76,7 @@ class sph_repr:
         the full harmonic with l, m (m>0): Y[l,l-m] + 1.0j*Y[l-m,l] 
                                     (m=0): Y[l,l]
         """
-        r, sin_theta, cos_theta, sin_phi, cos_phi = self.cart_to_sph( x, y, z )
+        r, sin_theta, cos_theta, sin_phi, cos_phi = cart_coord_to_trig( x, y, z )
         # alp
         Y = np.empty( shape = (self.lmax_p,self.lmax_p,*sin_theta.shape), 
                                 dtype = sin_theta.dtype )
@@ -137,7 +113,7 @@ class sph_repr:
         r**l * Y_l^m becomes  (m>0): Y[l,l-m] + 1.0j*Y[l-m,l] 
                               (m=0): Y[l,l]
         """
-        r, sin_theta, cos_theta, sin_phi, cos_phi = self.cart_to_sph( x, y, z )
+        r, sin_theta, cos_theta, sin_phi, cos_phi = cart_coord_to_trig( x, y, z )
         # r^l preparation
         r_sin_theta = r * sin_theta
         r_cos_theta = r * cos_theta
@@ -212,11 +188,9 @@ class sph_repr:
         # second order wrt theta
         Y_theta_2 = ( d_cot_theta * Y + cot_theta * Y_theta ) * self.l 
         if with_r is None:
-            Y_theta_2[1:,1:] -= ( Y_theta[:-1,:-1] / sin_theta + \
-                    Y[:-1,:-1] * d_i_sin_theta ) * self.coef
+            Y_theta_2[1:,1:] -= ( Y_theta[:-1,:-1] / sin_theta +                                      Y[:-1,:-1] * d_i_sin_theta ) * self.coef
         else:
-            Y_theta_2[1:,1:] -= with_r * ( Y_theta[:-1,:-1] / sin_theta + \
-                    Y[:-1,:-1] * d_i_sin_theta ) * self.coef
+            Y_theta_2[1:,1:] -= with_r * ( Y_theta[:-1,:-1] / sin_theta +                                      Y[:-1,:-1] * d_i_sin_theta ) * self.coef
         # second order wrt phi
         Y_phi_2 = - Y * self.m2
         # wrt theta wrt phi
@@ -233,12 +207,13 @@ class sph_repr:
 # test routines ----------------------------------------------------------
 def test_sph_repr( n = 1000 ):
     from scipy.special import sph_harm
+    from theforce.sphcart import cart_coord_to_sph
     lmax = 8
     sph = sph_repr( lmax )
     x = np.random.uniform(-1.0,1.0,size=n)
     y = np.random.uniform(-1.0,1.0,size=n)
     z = np.random.uniform(-1.0,1.0,size=n)
-    r, theta, phi = sph.cart_to_angles( x, y, z )
+    r, theta, phi = cart_coord_to_sph( x, y, z )
     r, st, ct, sp, cp, Y = sph.ylm( x, y, z )
     r, _,_,_,_, Y_rl = sph.ylm_rl( x, y, z )
     Y_theta, Y_phi = sph.ylm_partials( st, ct, Y )
@@ -285,7 +260,7 @@ def test_sph_repr( n = 1000 ):
 
 def test_hessian_ylm( lmax=4, N=3 ):
     from sympy import symbols, Ynm, Derivative
-    from theforce.sphcart import cart_to_angles
+    from theforce.sphcart import cart_coord_to_sph
     r_s, theta_s, phi_s = symbols('r theta phi')
     l_s = symbols('l', integer=True, nonnegative=True )
     m_s = symbols('m', integer=True)
@@ -300,7 +275,7 @@ def test_hessian_ylm( lmax=4, N=3 ):
     # random x,y,z
     for _ in range(N):
         x, y, z = np.random.uniform(-1.,1.,size=3)
-        r, theta, phi = cart_to_angles(x,y,z)
+        r, theta, phi = cart_coord_to_sph(x,y,z)
         subs = {r_s:r, theta_s:theta, phi_s:phi}
         # numeric derivatives
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = sph.ylm_rl(x,y,z)

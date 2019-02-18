@@ -12,7 +12,7 @@ tiny = 1.0e-16
 
 # ---------------------------------------------------- conversions
 def cart_coord_to_sph( x, y, z ):
-    rxy_sq = x*x + y*y
+    rxy_sq = np.atleast_1d( x*x + y*y )
     r      = np.sqrt( rxy_sq + z*z )
     theta  = np.arctan2( np.sqrt(rxy_sq), z )
     phi    = np.arctan2( y, x )
@@ -27,7 +27,7 @@ def sph_coord_to_cart( r, theta, phi ):
 
 
 def cart_vec_to_sph( x, y, z, Fx, Fy, Fz ):
-    rxy_sq    = x*x + y*y 
+    rxy_sq    = np.atleast_1d( x*x + y*y )
     rxy       = np.sqrt( rxy_sq ) + tiny
     r_sq      = rxy_sq + z*z
     r         = np.sqrt( r_sq )
@@ -45,7 +45,7 @@ def sph_vec_to_cart( sin_theta, cos_theta, sin_phi, cos_phi, F_r, F_theta, F_phi
 
 
 def cart_coord_to_trig( x, y, z ):
-    rxy_sq    = x*x + y*y 
+    rxy_sq    = np.atleast_1d( x*x + y*y )
     rxy       = np.sqrt( rxy_sq ) + tiny
     r_sq      = rxy_sq + z*z
     r         = np.sqrt( r_sq )
