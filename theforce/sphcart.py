@@ -44,7 +44,7 @@ def sph_vec_to_cart( sin_theta, cos_theta, sin_phi, cos_phi, F_r, F_theta, F_phi
     return F_x, F_y, F_z
 
 
-def cart_coor_to_trig( x, y, z ):
+def cart_coord_to_trig( x, y, z ):
     rxy_sq    = x*x + y*y 
     rxy       = np.sqrt( rxy_sq ) + tiny
     r_sq      = rxy_sq + z*z
