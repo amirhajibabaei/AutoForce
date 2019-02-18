@@ -7,7 +7,7 @@
 import numpy as np
 from theforce.sph_repr import sph_repr
 from math import factorial as fac
-
+from theforce.sphcart import sph_vec_to_cart
 
 
 #                           --- radial functions ---
@@ -17,7 +17,7 @@ class gaussian:
         """ exp( - r^2 / 2 sigma^2 ) """
         self.alpha = 1. / (sigma*sigma)
     
-    def radial_first( self, r ):
+    def radial( self, r ):
         x = -self.alpha * r
         y = np.exp(x*r/2)
         return y, x*y
@@ -29,22 +29,11 @@ class quadratic_cutoff:
         """ ( 1 - r / r_c )^2 """
         self.rc = rc
         self.sec = 2./rc**2
-        
+    
     def radial( self, r ):
         x = 1. - r/self.rc
         x[ np.where(x<0.0) ] = 0.0
-        return x*x
-    
-    def radial_first( self, r ):
-        x = 1. - r/self.rc
-        x[ np.where(x<0.0) ] = 0.0
         return x*x, -2*x/self.rc
-    
-    def radial_second( self, r ):
-        x = 1. - r/self.rc
-        x[ np.where(x<0.0) ] = 0.0
-        return x*x, -2*x/self.rc, self.sec
-    
 
     
 class poly_cutoff:
@@ -55,7 +44,7 @@ class poly_cutoff:
         self.n  = n
         self.n_ = n - 1 
     
-    def radial_first( self, r ):
+    def radial( self, r ):
         x = 1. - r/self.rc
         x[ np.where(x<0.0) ] = 0.0
         y = x**(self.n_)
@@ -103,45 +92,42 @@ class sesoap:
         Returns:  p -> compressed (1d) descriptor
         """
         r, _,_,_,_, Y = self.sph.ylm_rl(x,y,z)
-        R = self.radial.radial( r )
+        R, _ = self.radial.radial( r )
         s = ( R * r**self.rns * Y ).sum(axis=-1)
         return self.soap_dot(s,s,reverse=False)
     
     
-    def derivatives( self, x, y, z, sumj=True, grad=False ):
+    def derivatives( self, x, y, z, sumj=True, cart=True ):
         """
         Inputs:   x,y,z -> Cartesian coordinates
-        Returns:  p, q, sph
+        Returns:  p, q
         sumj:     perform the summation over atoms
-        grad:     if True transform partials to gradient
         ---------------------------------------
         p:        compressed (1d) descriptor
-        q:        [dp_dr,  dp_dtheta / a,  dp_dphi / b] 
-        sph:      (r, sin_theta, cos_theta, sin_phi, cos_phi)
-        a,b:      default=1, if grad=True a,b = r,r*sin_theta
+        q:        [dp_dx, dp_dy, dp_dz] 
+                  (or gradient in sph coords if cart=False)
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
         Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
-        R, dR = self.radial.radial_first( r ) 
+        R, dR = self.radial.radial( r ) 
         rns = r**self.rns
         R_rns = R * rns
         # descriptor
         s = ( R_rns * Y ).sum(axis=-1)
         p = self.soap_dot(s,s,reverse=False)
-        # basic gradients
+        # gradients
         rns_plus_l = self.rns + self.sph.l
-        if grad:
-            Y_theta /= r
-            Y_phi   /= r * sin_theta
+        Y_theta   /= r
+        Y_phi     /= r*sin_theta
+        q1 = self.soap_dot( s, ((dR * rns + R_rns * rns_plus_l / r) * Y), jb='j'  )
+        q2 = self.soap_dot( s, (R_rns * Y_theta), jb='j'  )
+        q3 = self.soap_dot( s, (R_rns * Y_phi), jb='j'  )
+        if cart: 
+            q1, q2, q3 = sph_vec_to_cart( sin_theta, cos_theta, sin_phi, cos_phi, q1,q2,q3 )
         if sumj:
-            qr = self.soap_dot( s, ((dR * rns + R_rns * rns_plus_l / r) * Y).sum(axis=-1)  )
-            qt = self.soap_dot( s, (R_rns * Y_theta).sum(axis=-1)  )
-            qp = self.soap_dot( s, (R_rns * Y_phi).sum(axis=-1)  )
+            return p, np.array([q1, q2, q3]).sum(axis=-1)            
         else:
-            qr = self.soap_dot( s, ((dR * rns + R_rns * rns_plus_l / r ) * Y), jb='j'  )
-            qt = self.soap_dot( s, (R_rns * Y_theta), jb='j'  )
-            qp = self.soap_dot( s, (R_rns * Y_phi), jb='j'  )
-        return p, np.array([qr, qt, qp]), (r, sin_theta, cos_theta, sin_phi, cos_phi)
+            return p, np.array([q1, q2, q3]) 
 
     
     # ------------------- convenience functions -------------------------------------------------
@@ -221,18 +207,17 @@ class sesoap:
 
     
     
-    
-    
 # tests ----------------------------------------------------------------------------------
     
 def test_sesoap():
+    from theforce.sphcart import cart_vec_to_sph, rotate
     """ trying to regenerate numbers obtained by symbolic calculations using sympy """
     x = np.array( [0.175, 0.884, -0.87, 0.354, -0.082] )
     y = np.array( [-0.791, 0.116, 0.19, -0.832, 0.184] )
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )
     env = sesoap( 2, 2, quadratic_cutoff(3.0) )
     p_ = env.descriptor( x, y, z )
-    p_dc, q_dc, _ = env.derivatives( x, y, z, grad=True )
+    p_dc, q_dc = env.derivatives( x, y, z, cart=False )
     p_ = env.decompress( p_, 'lnn' )
     p_d = env.decompress( p_dc, 'lnn' )
     q_d = env.decompress( q_dc, '3lnn' )
@@ -282,6 +267,7 @@ def test_sesoap():
                                  [-0.01632531, -0.03301236, -0.0564123 ]]])]
     ref_p *= env.decompress( env.lnnp_c[0], 'lnn' )
 
+
     print( "\nTesting validity of sesoap ...")
     print( np.allclose( p_-ref_p[0], 0.0 ) ) 
     print( np.allclose( p_d-ref_p[0], 0.0 ) ) 
@@ -289,12 +275,26 @@ def test_sesoap():
         print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
         
     
-    pj, qj, _ = env.derivatives(x,y,z,sumj=False,grad=True)
+    pj, qj = env.derivatives(x,y,z,sumj=False, cart=True)
     pj_ = env.decompress( pj, 'lnn' )
     qj_ = env.decompress( qj, '3lnnj' )
-    print( np.allclose( qj_.sum(axis=-1)-q_d, 0.0 ) )
+    h = np.array( cart_vec_to_sph(x,y,z,qj_[0],qj_[1],qj_[2]) )
+    print( np.allclose( h.sum(axis=-1)-ref_p[1:], 0.0 ) )
+    
+    
+    pj, qj = env.derivatives(x,y,z,sumj=True, cart=True)
+    pj_ = env.decompress( pj, 'lnn' )
+    qj__ = env.decompress( qj, '3lnn' )
+    print( np.allclose( qj_.sum(axis=-1)-qj__, 0.0 ) )
         
-        
+    # test rotations
+    axis = np.random.uniform(size=3)
+    beta = np.random.uniform(0,2*np.pi)
+    xx,yy,zz = rotate(x,y,z,axis,beta)
+    p, q = env.derivatives( x, y, z, sumj=False, cart=True )
+    pp, qq = env.derivatives( xx, yy, zz, sumj=False, cart=True )
+    rot = np.array( rotate(q[0],q[1],q[2],axis,beta) )
+    print( np.allclose(rot-qq,0.0) )
         
         
 def test_sesoap_performance( n=30, N=100 ):
@@ -323,7 +323,7 @@ def test_sesoap_performance( n=30, N=100 ):
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q, sph = env.derivatives( x, y, z )
+        p, q = env.derivatives( x, y, z )
     finish = time.time()
     delta3 = (finish-start)/N
     print( "t3: {} Sec per derivatives (j-reduced)".format( delta3 ) )
@@ -331,7 +331,7 @@ def test_sesoap_performance( n=30, N=100 ):
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q, sph = env.derivatives( x, y, z, sumj=False )
+        p, q = env.derivatives( x, y, z, sumj=False, cart=True )
     finish = time.time()
     delta4 = (finish-start)/N
     print( "t4: {} Sec per full derivatives".format( delta4 ) )
