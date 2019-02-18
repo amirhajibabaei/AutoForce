@@ -76,7 +76,10 @@ def rotate( a, b, c, axis, beta, angles=False ):
     else:
         x,y,z = a,b,c
     rmat = rotation( axis, beta )
-    c = np.matmul( rmat, np.asarray([x,y,z]) )
+    # c = np.matmul( rmat, np.asarray([x,y,z]) )
+    c =[ rmat[0,0]*x+rmat[0,1]*y+rmat[0,2]*z,
+         rmat[1,0]*x+rmat[1,1]*y+rmat[1,2]*z,
+         rmat[2,0]*x+rmat[2,1]*y+rmat[2,2]*z ]
     if angles:
         return cart_to_angles( c[0],c[1],c[2] )
     else:
