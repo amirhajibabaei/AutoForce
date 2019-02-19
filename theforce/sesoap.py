@@ -85,7 +85,7 @@ class sesoap:
 
         
         
-    def descriptor( self, x, y, z ):
+    def descriptor( self, x, y, z, normalize=True ):
         """
         Inputs:   x,y,z -> Cartesian coordinates
         Returns:  p -> compressed (1d) descriptor
@@ -93,10 +93,14 @@ class sesoap:
         r, _,_,_,_, Y = self.sph.ylm_rl(x,y,z)
         R, _ = self.radial.radial( r )
         s = ( R * r**self.rns * Y ).sum(axis=-1)
-        return self.soap_dot(s,s,reverse=False)
+        p = self.soap_dot(s,s,reverse=False)
+        if normalize:
+            norm = np.linalg.norm(p)
+            p /= norm
+        return p
     
     
-    def derivatives( self, x, y, z, sumj=True, cart=True ):
+    def derivatives( self, x, y, z, normalize=True, sumj=True, cart=True ):
         """
         Inputs:   x,y,z -> Cartesian coordinates
         Returns:  p, q
@@ -123,10 +127,15 @@ class sesoap:
         q3 = self.soap_dot( s, (R_rns * Y_phi), jb='j'  )
         if cart: 
             q1, q2, q3 = sph_vec_to_cart( sin_theta, cos_theta, sin_phi, cos_phi, q1,q2,q3 )
+        q = np.array([q1, q2, q3])
+        if normalize:
+            norm = np.linalg.norm(p)
+            p /= norm
+            q /= norm
         if sumj:
-            return p, np.array([q1, q2, q3]).sum(axis=-1)            
+            return p, q.sum(axis=-1)            
         else:
-            return p, np.array([q1, q2, q3]) 
+            return p, q
 
     
     # ------------------- convenience functions -------------------------------------------------
@@ -215,8 +224,8 @@ def test_sesoap():
     y = np.array( [-0.791, 0.116, 0.19, -0.832, 0.184] )
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )
     env = sesoap( 2, 2, quadratic_cutoff(3.0) )
-    p_ = env.descriptor( x, y, z )
-    p_dc, q_dc = env.derivatives( x, y, z, cart=False )
+    p_ = env.descriptor( x, y, z, normalize=False )
+    p_dc, q_dc = env.derivatives( x, y, z, normalize=False, cart=False )
     p_ = env.decompress( p_, 'lnn' )
     p_d = env.decompress( p_dc, 'lnn' )
     q_d = env.decompress( q_dc, '3lnn' )
@@ -274,14 +283,14 @@ def test_sesoap():
         print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
         
     
-    pj, qj = env.derivatives(x,y,z,sumj=False, cart=True)
+    pj, qj = env.derivatives(x,y,z,sumj=False, cart=True, normalize=False)
     pj_ = env.decompress( pj, 'lnn' )
     qj_ = env.decompress( qj, '3lnnj' )
     h = np.array( cart_vec_to_sph(x,y,z,qj_[0],qj_[1],qj_[2]) )
     print( np.allclose( h.sum(axis=-1)-ref_p[1:], 0.0 ) )
     
     
-    pj, qj = env.derivatives(x,y,z,sumj=True, cart=True)
+    pj, qj = env.derivatives(x,y,z,sumj=True, cart=True, normalize=False )
     pj_ = env.decompress( pj, 'lnn' )
     qj__ = env.decompress( qj, '3lnn' )
     print( np.allclose( qj_.sum(axis=-1)-qj__, 0.0 ) )
@@ -290,8 +299,8 @@ def test_sesoap():
     axis = np.random.uniform(size=3)
     beta = np.random.uniform(0,2*np.pi)
     xx,yy,zz = rotate(x,y,z,axis,beta)
-    p, q = env.derivatives( x, y, z, sumj=False, cart=True )
-    pp, qq = env.derivatives( xx, yy, zz, sumj=False, cart=True )
+    p, q = env.derivatives( x, y, z, sumj=False, cart=True, normalize=True )
+    pp, qq = env.derivatives( xx, yy, zz, sumj=False, cart=True, normalize=True )
     rot = np.array( rotate(q[0],q[1],q[2],axis,beta) )
     print( np.allclose(rot-qq,0.0) )
         
