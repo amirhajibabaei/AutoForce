@@ -82,15 +82,22 @@ class sesoap:
         
         # prepare for broadcasting
         self.rns = 2 * np.arange(self.nmax+1).reshape(nmax+1,1,1,1)
-
+        
+    
+    
+    def parse_xyz( self, xyz ):
+        if isinstance(xyz,list) or isinstance(xyz,tuple):
+            return ( np.atleast_1d(a) for a in xyz )
+        elif isinstance(xyz,np.ndarray):
+            return ( a[:,0] for a in np.hsplit(xyz,3) )
         
         
-    def descriptor( self, x, y, z, normalize=True ):
+    def descriptor( self, xyz, normalize=True ):
         """
-        Inputs:   x,y,z -> Cartesian coordinates
+        Inputs:   xyz -> Cartesian coordinates, sequence of x,y,z or [:,3] shaped ndarray  
         Returns:  p -> compressed (1d) descriptor
         """
-        r, _,_,_,_, Y = self.sph.ylm_rl(x,y,z)
+        r, _,_,_,_, Y = self.sph.ylm_rl( *self.parse_xyz(xyz) )
         R, _ = self.radial.radial( r )
         s = ( R * r**self.rns * Y ).sum(axis=-1)
         p = self.soap_dot(s,s,reverse=False)
@@ -100,9 +107,9 @@ class sesoap:
         return p
     
     
-    def derivatives( self, x, y, z, normalize=True, sumj=True, cart=True ):
+    def derivatives( self, xyz, normalize=True, sumj=True, cart=True ):
         """
-        Inputs:   x,y,z -> Cartesian coordinates
+        Inputs:   xyz -> Cartesian coordinates, sequence of x,y,z or [:,3] shaped ndarray  
         Returns:  p, q
         sumj:     perform the summation over atoms
         ---------------------------------------
@@ -110,7 +117,7 @@ class sesoap:
         q:        [dp_dx, dp_dy, dp_dz] 
                   (or gradient in sph coords if cart=False)
         """
-        r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(x,y,z)
+        r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl( *self.parse_xyz(xyz) )
         Y_theta, Y_phi = self.sph.ylm_partials( sin_theta, cos_theta, Y, with_r=r )
         R, dR = self.radial.radial( r ) 
         rns = r**self.rns
@@ -224,8 +231,8 @@ def test_sesoap():
     y = np.array( [-0.791, 0.116, 0.19, -0.832, 0.184] )
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )
     env = sesoap( 2, 2, quadratic_cutoff(3.0) )
-    p_ = env.descriptor( x, y, z, normalize=False )
-    p_dc, q_dc = env.derivatives( x, y, z, normalize=False, cart=False )
+    p_ = env.descriptor( [x, y, z], normalize=False )
+    p_dc, q_dc = env.derivatives( [x, y, z], normalize=False, cart=False )
     p_ = env.decompress( p_, 'lnn' )
     p_d = env.decompress( p_dc, 'lnn' )
     q_d = env.decompress( q_dc, '3lnn' )
@@ -283,14 +290,14 @@ def test_sesoap():
         print( np.allclose( q_d[k]-ref_p[k+1], 0.0 ) )
         
     
-    pj, qj = env.derivatives(x,y,z,sumj=False, cart=True, normalize=False)
+    pj, qj = env.derivatives( (x,y,z),sumj=False, cart=True, normalize=False)
     pj_ = env.decompress( pj, 'lnn' )
     qj_ = env.decompress( qj, '3lnnj' )
     h = np.array( cart_vec_to_sph(x,y,z,qj_[0],qj_[1],qj_[2]) )
     print( np.allclose( h.sum(axis=-1)-ref_p[1:], 0.0 ) )
     
     
-    pj, qj = env.derivatives(x,y,z,sumj=True, cart=True, normalize=False )
+    pj, qj = env.derivatives( (x,y,z),sumj=True, cart=True, normalize=False )
     pj_ = env.decompress( pj, 'lnn' )
     qj__ = env.decompress( qj, '3lnn' )
     print( np.allclose( qj_.sum(axis=-1)-qj__, 0.0 ) )
@@ -299,8 +306,8 @@ def test_sesoap():
     axis = np.random.uniform(size=3)
     beta = np.random.uniform(0,2*np.pi)
     xx,yy,zz = rotate(x,y,z,axis,beta)
-    p, q = env.derivatives( x, y, z, sumj=False, cart=True, normalize=True )
-    pp, qq = env.derivatives( xx, yy, zz, sumj=False, cart=True, normalize=True )
+    p, q = env.derivatives( [x, y, z], sumj=False, cart=True, normalize=True )
+    pp, qq = env.derivatives( (xx, yy, zz), sumj=False, cart=True, normalize=True )
     rot = np.array( rotate(q[0],q[1],q[2],axis,beta) )
     print( np.allclose(rot-qq,0.0) )
         
@@ -323,7 +330,7 @@ def test_sesoap_performance( n=30, N=100 ):
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p = env.descriptor( x, y, z )
+        p = env.descriptor( (x, y, z) )
     finish = time.time()
     delta2 = (finish-start)/N
     print( "t2: {} Sec per descriptor".format( delta2 ) )
@@ -331,21 +338,23 @@ def test_sesoap_performance( n=30, N=100 ):
     start = time.time()
     for _ in range(N):
         x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q = env.derivatives( x, y, z )
+        p, q = env.derivatives( [x, y, z] )
     finish = time.time()
     delta3 = (finish-start)/N
     print( "t3: {} Sec per derivatives (j-reduced)".format( delta3 ) )
 
     start = time.time()
     for _ in range(N):
-        x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
-        p, q = env.derivatives( x, y, z, sumj=False, cart=True )
+        #x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
+        xyz = np.random.uniform(-1.,1.,size=(n,3))
+        p, q = env.derivatives( xyz, sumj=False, cart=True )
     finish = time.time()
     delta4 = (finish-start)/N
     print( "t4: {} Sec per full derivatives".format( delta4 ) )
     
     print( "performance measure t2/t1: {}\n".format(delta2/delta1) )
-        
+    
+
         
 if __name__=='__main__':
     
