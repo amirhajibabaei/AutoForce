@@ -13,12 +13,12 @@ from theforce.sphcart import sph_vec_to_cart
 #                           --- radial functions ---
 class gaussian:
     
-    def __init__( self, sigma ):
-        """ exp( - r^2 / 2 sigma^2 ) """
-        self.alpha = -1. / (sigma*sigma)
+    def __init__( self, rc ):
+        """ exp( - r^2 / 2 rc^2 ) """
+        self.rc = rc
     
     def radial( self, r ):
-        x = self.alpha * r
+        x = -r / self.rc**2
         y = np.exp(x*r/2)
         return y, x*y
 
@@ -54,11 +54,17 @@ class poly_cutoff:
 #                              --- soap descriptor ---
 class sesoap:
     
-    def __init__( self, lmax, nmax, radial ):
+    def __init__( self, lmax, nmax, radial, magnification=1. ):
         """
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
         radial: radial function e.g. gaussian (original) or quadratic_cutoff
+        magnification: either None or a float close to 1.
+        --------------------------------------------------------------------
+        about magnification: radial.rc is utilized for length scale estimation
+        if ==1.: all terms in the descriptor will generally be of the same order
+        if  >1.: coefs for larger l,n will decay expontially 
+        if  <1.: coefs for larger l,n will grow expontially
         """
         self.lmax = lmax
         self.nmax = nmax
@@ -82,14 +88,21 @@ class sesoap:
         
         # prepare for broadcasting
         self.rns = 2 * np.arange(self.nmax+1).reshape(nmax+1,1,1,1)
-        
     
+        # length scale regularization
+        if magnification is None:
+            self.rs = None
+        else:
+            self.rs = magnification * self.radial.rc * min( self.lnnp_c[0] )**( 1./(2*nmax+lmax+2) )
+            self.radial.rc /= self.rs
+
+        
     
     def parse_xyz( self, xyz ):
         if isinstance(xyz,list) or isinstance(xyz,tuple):
-            return ( np.atleast_1d(a) for a in xyz )
+            return ( np.atleast_1d(a) if self.rs==None else np.atleast_1d(a)/self.rs for a in xyz )
         elif isinstance(xyz,np.ndarray):
-            return ( a[:,0] for a in np.hsplit(xyz,3) )
+            return ( a[:,0] if self.rs==None else a[:,0]/self.rs for a in np.hsplit(xyz,3) )
         
         
     def descriptor( self, xyz, normalize=True ):
@@ -230,7 +243,7 @@ def test_sesoap():
     x = np.array( [0.175, 0.884, -0.87, 0.354, -0.082] )
     y = np.array( [-0.791, 0.116, 0.19, -0.832, 0.184] )
     z = np.array( [0.387, 0.761, 0.655, -0.528, 0.973] )
-    env = sesoap( 2, 2, quadratic_cutoff(3.0) )
+    env = sesoap( 2, 2, quadratic_cutoff(3.0), magnification=None )
     p_ = env.descriptor( [x, y, z], normalize=False )
     p_dc, q_dc = env.derivatives( [x, y, z], normalize=False, cart=False )
     p_ = env.decompress( p_, 'lnn' )
@@ -354,6 +367,15 @@ def test_sesoap_performance( n=30, N=100 ):
     
     print( "performance measure t2/t1: {}\n".format(delta2/delta1) )
     
+    
+def test_length_scale( n=30 ):
+    a = 10.
+    rc = 3 * a
+    xyz = np.random.uniform(-a,a,size=(n,3))
+    env = sesoap( 6, 6, quadratic_cutoff(rc), magnification=1.0 )
+    p, q = env.derivatives( xyz, normalize=False )
+    #np.set_printoptions(formatter={'float_kind': lambda a: '{:10.3f}'.format(a)})
+    #print(q)
 
         
 if __name__=='__main__':
@@ -361,6 +383,8 @@ if __name__=='__main__':
     test_sesoap()
     
     test_sesoap_performance()
+
+    test_length_scale()
     
     
 
