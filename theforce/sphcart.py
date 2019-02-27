@@ -11,57 +11,57 @@ tiny = 1.0e-16
 
 
 # ---------------------------------------------------- conversions
-def cart_coord_to_sph( x, y, z ):
-    rxy_sq = np.atleast_1d( x*x + y*y )
-    r      = np.sqrt( rxy_sq + z*z )
-    theta  = np.arctan2( np.sqrt(rxy_sq), z )
-    phi    = np.arctan2( y, x )
+def cart_coord_to_sph(x, y, z):
+    rxy_sq = np.atleast_1d(x*x + y*y)
+    r = np.sqrt(rxy_sq + z*z)
+    theta = np.arctan2(np.sqrt(rxy_sq), z)
+    phi = np.arctan2(y, x)
     return r, theta, phi
 
 
-def sph_coord_to_cart( r, theta, phi ):
-    x = r * np.sin( theta ) * np.cos( phi )
-    y = r * np.sin( theta ) * np.sin( phi )
-    z = r * np.cos( theta )
-    return x, y ,z
+def sph_coord_to_cart(r, theta, phi):
+    x = r * np.sin(theta) * np.cos(phi)
+    y = r * np.sin(theta) * np.sin(phi)
+    z = r * np.cos(theta)
+    return x, y, z
 
 
-def cart_vec_to_sph( x, y, z, Fx, Fy, Fz ):
-    rxy_sq    = np.atleast_1d( x*x + y*y )
-    rxy       = np.sqrt( rxy_sq ) + tiny
-    r_sq      = rxy_sq + z*z
-    r         = np.sqrt( r_sq )
-    F_r       = ( x*Fx + y*Fy + z*Fz ) / r
-    F_theta   = ( ( x*Fx + y*Fy ) * z - rxy_sq * Fz ) / (r * rxy)
-    F_phi     = ( -y*Fx + x*Fy ) / rxy
+def cart_vec_to_sph(x, y, z, Fx, Fy, Fz):
+    rxy_sq = np.atleast_1d(x*x + y*y)
+    rxy = np.sqrt(rxy_sq) + tiny
+    r_sq = rxy_sq + z*z
+    r = np.sqrt(r_sq)
+    F_r = (x*Fx + y*Fy + z*Fz) / r
+    F_theta = ((x*Fx + y*Fy) * z - rxy_sq * Fz) / (r * rxy)
+    F_phi = (-y*Fx + x*Fy) / rxy
     return F_r, F_theta, F_phi
 
 
-def sph_vec_to_cart( sin_theta, cos_theta, sin_phi, cos_phi, F_r, F_theta, F_phi ):
+def sph_vec_to_cart(sin_theta, cos_theta, sin_phi, cos_phi, F_r, F_theta, F_phi):
     F_x = sin_theta * cos_phi * F_r + cos_theta * cos_phi * F_theta - sin_phi * F_phi
     F_y = sin_theta * sin_phi * F_r + cos_theta * sin_phi * F_theta + cos_phi * F_phi
     F_z = cos_theta * F_r - sin_theta * F_theta
     return F_x, F_y, F_z
 
 
-def cart_coord_to_trig( x, y, z ):
-    rxy_sq    = np.atleast_1d( x*x + y*y )
-    rxy       = np.sqrt( rxy_sq ) + tiny
-    r_sq      = rxy_sq + z*z
-    r         = np.sqrt( r_sq )
+def cart_coord_to_trig(x, y, z):
+    rxy_sq = np.atleast_1d(x*x + y*y)
+    rxy = np.sqrt(rxy_sq) + tiny
+    r_sq = rxy_sq + z*z
+    r = np.sqrt(r_sq)
     sin_theta = rxy/r
     cos_theta = z/r
-    sin_phi   = y/rxy
-    cos_phi   = x/rxy
+    sin_phi = y/rxy
+    cos_phi = x/rxy
     return r, sin_theta, cos_theta, sin_phi, cos_phi
 
 
-def angles_to_trig( theta, phi ):
+def angles_to_trig(theta, phi):
     return np.sin(theta), np.cos(theta), np.sin(phi), np.cos(phi)
 
 
 # ------------------------------------------------------- rotations
-def rotation( axis, theta ):
+def rotation(axis, theta):
     axis = np.asarray(axis)
     axis = axis / np.sqrt(np.dot(axis, axis))
     a = np.cos(theta / 2.0)
@@ -73,100 +73,98 @@ def rotation( axis, theta ):
                      [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
 
 
-def euler_rotation( alpha, beta, gamma ):
-    yhat = np.asarray([0,1.,0])
-    zhat = np.asarray([0,0,1.])
-    R1 = rotation( zhat, gamma )
-    R2 = rotation( yhat, beta  )
-    R3 = rotation( zhat, alpha )
-    return np.dot( R3, np.dot( R2, R1 ) )
+def euler_rotation(alpha, beta, gamma):
+    yhat = np.asarray([0, 1., 0])
+    zhat = np.asarray([0, 0, 1.])
+    R1 = rotation(zhat, gamma)
+    R2 = rotation(yhat, beta)
+    R3 = rotation(zhat, alpha)
+    return np.dot(R3, np.dot(R2, R1))
 
 
-def rotate( a, b, c, axis, beta, spherical=False ):
+def rotate(a, b, c, axis, beta, spherical=False):
     """ a,b,c =  x,y,z   or   r, theta, phi """
     if spherical:
-        x,y,z = sph_coord_to_cart(a,b,c)
+        x, y, z = sph_coord_to_cart(a, b, c)
     else:
-        x,y,z = a,b,c
-    rmat = rotation( axis, beta )
+        x, y, z = a, b, c
+    rmat = rotation(axis, beta)
     # c = np.matmul( rmat, np.asarray([x,y,z]) )
-    c =[ rmat[0,0]*x+rmat[0,1]*y+rmat[0,2]*z,
-         rmat[1,0]*x+rmat[1,1]*y+rmat[1,2]*z,
-         rmat[2,0]*x+rmat[2,1]*y+rmat[2,2]*z ]
+    c = [rmat[0, 0]*x+rmat[0, 1]*y+rmat[0, 2]*z,
+         rmat[1, 0]*x+rmat[1, 1]*y+rmat[1, 2]*z,
+         rmat[2, 0]*x+rmat[2, 1]*y+rmat[2, 2]*z]
     if spherical:
-        return cart_coord_to_sph( c[0],c[1],c[2] )
+        return cart_coord_to_sph(c[0], c[1], c[2])
     else:
-        return c[0],c[1],c[2]
-
-
+        return c[0], c[1], c[2]
 
 
 # ----------------------------------------------------------- tests
-def rand_cart_coord( N, d=1.0 ):
-    x, y, z = ( np.random.uniform(-d,d,size=N) for _ in range(3) )
+def rand_cart_coord(N, d=1.0):
+    x, y, z = (np.random.uniform(-d, d, size=N) for _ in range(3))
     return x, y, z
 
-def rand_sph_coord( N, R=1.0 ):
-    r = np.random.uniform(0,R,size=N)
-    t = np.random.uniform(0,np.pi,size=N)
-    p = np.random.uniform(0,2*np.pi,size=N)
+
+def rand_sph_coord(N, R=1.0):
+    r = np.random.uniform(0, R, size=N)
+    t = np.random.uniform(0, np.pi, size=N)
+    p = np.random.uniform(0, 2*np.pi, size=N)
     return r, t, p
 
 
-
-def test_coord_transforms( N=1000 ):
-    r, t, p = rand_sph_coord( N )
-    x, y, z = sph_coord_to_cart( r, t, p )
-    r2, t2, p2 = cart_coord_to_sph( x, y, z )
-    p2 = p2%(2*np.pi)
-    test1 =  np.allclose( [r-r2, t-t2, p-p2], 0.0 ) 
-    x, y, z = rand_cart_coord( N )
-    r, t, p = cart_coord_to_sph( x, y, z )
-    x2, y2, z2 = sph_coord_to_cart( r, t, p )
-    test2 = np.allclose( [x-x2, y-y2, z-z2], 0.0)
+def test_coord_transforms(N=1000):
+    r, t, p = rand_sph_coord(N)
+    x, y, z = sph_coord_to_cart(r, t, p)
+    r2, t2, p2 = cart_coord_to_sph(x, y, z)
+    p2 = p2 % (2*np.pi)
+    test1 = np.allclose([r-r2, t-t2, p-p2], 0.0)
+    x, y, z = rand_cart_coord(N)
+    r, t, p = cart_coord_to_sph(x, y, z)
+    x2, y2, z2 = sph_coord_to_cart(r, t, p)
+    test2 = np.allclose([x-x2, y-y2, z-z2], 0.0)
     if test1 and test2:
-        print( 'trans coords: test passed' )
+        print('trans coords: test passed')
     else:
-        print( 'trans coords: test failed' )
+        print('trans coords: test failed')
 
 
-def test_vec_transforms( N=1000 ):
-    r, t, p = rand_sph_coord( N )
-    x, y, z = sph_coord_to_cart( r, t, p )
-    Fx, Fy, Fz = rand_cart_coord( N )
-    Fr, Ft, Fp = cart_vec_to_sph( x, y, z, Fx, Fy, Fz )
-    trig = angles_to_trig(t,p)
+def test_vec_transforms(N=1000):
+    r, t, p = rand_sph_coord(N)
+    x, y, z = sph_coord_to_cart(r, t, p)
+    Fx, Fy, Fz = rand_cart_coord(N)
+    Fr, Ft, Fp = cart_vec_to_sph(x, y, z, Fx, Fy, Fz)
+    trig = angles_to_trig(t, p)
     _x, _y, _z = sph_vec_to_cart(*trig, Fr, Ft, Fp)
-    test =  np.allclose( [Fx-_x, Fy-_y, Fz-_z], 0.0 ) 
+    test = np.allclose([Fx-_x, Fy-_y, Fz-_z], 0.0)
     if test:
-        print( 'trans vec: test passed' )
+        print('trans vec: test passed')
     else:
-        print( 'trans vec:test failed' )
-        
-        
-def test_rotate( N=1000 ):
+        print('trans vec:test failed')
+
+
+def test_rotate(N=1000):
     for _ in range(N):
         axis = np.random.uniform(size=3)
-        theta1 = np.random.uniform(0,2*np.pi)
-        theta2 = np.random.uniform(0,2*np.pi)
+        theta1 = np.random.uniform(0, 2*np.pi)
+        theta2 = np.random.uniform(0, 2*np.pi)
         theta = theta1 + theta2
-        r, t, p = rand_sph_coord(17,R=10.)
-        r1, t1, p1 = rotate( r, t, p, axis, theta1, spherical=True )
-        r2, t2, p2 = rotate( r1, t1, p1, axis, theta2, spherical=True  )
-        r3, t3, p3  = rotate( r, t, p, axis, theta, spherical=True  )
-        test = np.allclose( [r3-r2,t3-t2,p3-p2], 0.0)
-        if not test: break
+        r, t, p = rand_sph_coord(17, R=10.)
+        r1, t1, p1 = rotate(r, t, p, axis, theta1, spherical=True)
+        r2, t2, p2 = rotate(r1, t1, p1, axis, theta2, spherical=True)
+        r3, t3, p3 = rotate(r, t, p, axis, theta, spherical=True)
+        test = np.allclose([r3-r2, t3-t2, p3-p2], 0.0)
+        if not test:
+            break
     if test:
-        print( 'rot test passed' )
+        print('rot test passed')
     else:
-        print( 'rot test failed' )
+        print('rot test failed')
 
 
+if __name__ == '__main__':
 
-if __name__=='__main__':
-    
     test_coord_transforms()
-    
+
     test_vec_transforms()
 
     test_rotate()
