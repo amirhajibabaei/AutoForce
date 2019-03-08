@@ -4,13 +4,22 @@
 # In[ ]:
 
 
+from math import factorial as fac
 import numpy as np
 from theforce.sph_repr import sph_repr
-from math import factorial as fac
-from theforce.sphcart import sph_vec_to_cart
 
 
 #                           --- radial functions ---
+class constant:
+
+    def __init__(self, rc):
+        """ rc """
+        self.rc = rc
+
+    def radial(self, r):
+        return self.rc, 0
+
+
 class gaussian:
 
     def __init__(self, rc):
@@ -31,7 +40,7 @@ class quadratic_cutoff:
 
     def radial(self, r):
         x = 1. - r/self.rc
-        x[np.where(x < 0.0)] = 0.0
+        x[x < 0.0] = 0.0
         return x*x, -2*x/self.rc
 
 
@@ -45,7 +54,7 @@ class poly_cutoff:
 
     def radial(self, r):
         x = 1. - r/self.rc
-        x[np.where(x < 0.0)] = 0.0
+        x[x < 0.0] = 0.0
         y = x**(self.n_)
         return x*y, -self.n*y/self.rc
 
@@ -53,17 +62,20 @@ class poly_cutoff:
 #                              --- soap descriptor ---
 class sesoap:
 
-    def __init__(self, lmax, nmax, radial, magnification=1.):
+    def __init__(self, lmax, nmax, radial, dot_size=1.):
         """
+        sesoap(self, lmax, nmax, radial, dot_size=1.):
+        ----------------------------------------------------
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
-        radial: radial function e.g. gaussian (original) or quadratic_cutoff
-        magnification: either None or a float close to 1.
+        radial: radial function e.g. quadratic_cutoff, gaussian, etc.
+        dot_size: control over the resolution of descriptor
         --------------------------------------------------------------------
-        about magnification: radial.rc is utilized for length scale estimation
-        if ==1.: all terms in the descriptor will generally be of the same order
-        if  >1.: coefs for larger l,n will decay expontially 
-        if  <1.: coefs for larger l,n will grow expontially
+        Smaller dot size results in higher resolution but it also may lead 
+        to numerical unstability. 
+        The code uses a internal unit such that for dot-size=1 all 
+        the terms in descriptor will be of the same order.
+        Use negative values (in units of rc) for setting of dot_size directly.
         """
         self.lmax = lmax
         self.nmax = nmax
@@ -87,30 +99,44 @@ class sesoap:
         self.lnnp_c = [tmp, tmp[:, np.newaxis], tmp[:, np.newaxis, np.newaxis]]
 
         # dim of descriptor after compression
-        self.cdim = (lmax+1)*((nmax+1)*(nmax+2)//2)
+        self.dim = (lmax+1)*((nmax+1)*(nmax+2)//2)
 
         # prepare for broadcasting
         self.rns = 2 * np.arange(self.nmax+1).reshape(nmax+1, 1, 1, 1)
 
-        # length scale regularization
-        if magnification is None:
-            self.rs = None
+        # configuring resolution
+        self._dot_size = min(self.lnnp_c[0])**(1./(2*nmax+lmax+2))
+        if dot_size < 0:
+            rs = abs(dot_size)
         else:
-            self.rs = magnification * self.radial.rc *                 min(self.lnnp_c[0])**(1./(2*nmax+lmax+2))
-            self.radial.rc /= self.rs
+            rs = self._dot_size * dot_size
+        self.rs = self.radial.rc * rs
+        self.radial.rc /= self.rs
 
-    def parse_xyz(self, xyz):
-        if isinstance(xyz, list) or isinstance(xyz, tuple):
-            return (np.atleast_1d(a) if self.rs == None else np.atleast_1d(a)/self.rs for a in xyz)
-        elif isinstance(xyz, np.ndarray):
-            return (a[:, 0] if self.rs == None else a[:, 0]/self.rs for a in np.hsplit(xyz, 3))
+        # input preprocessing function
+        self.scaling = lambda a: a / self.rs
 
-    def descriptor(self, xyz, normalize=True):
+    def parse_xyz(self, xyz, order=0):
         """
-        Inputs:   xyz -> Cartesian coordinates, sequence of x,y,z or [:,3] shaped ndarray  
+        order:  order of elements in memory -> invariat wrt any reshaping
+                0 for xyz, xyz, xyz, xyz, ...
+                1 for xxx..., yyy..., zzz...
+        ------------------------------------------------------------------
+        it will transform to 0-order before preprocessing inputs
+        """
+        if order == 0:
+            a = self.scaling(np.asarray(xyz).reshape(-1, 3))
+        elif order == 1:
+            a = self.scaling(np.asarray(xyz).reshape(3, -1).T)
+        return (b[:, 0] for b in np.hsplit(a, 3))
+
+    def descriptor(self, xyz, order=0, normalize=True):
+        """
+        Inputs:   xyz -> Cartesian coordinates, see parse_xyz
+        order:    0 or 1, see parse_xyz
         Returns:  p -> compressed (1d) descriptor
         """
-        r, _, _, _, _, Y = self.sph.ylm_rl(*self.parse_xyz(xyz))
+        r, _, _, _, _, Y = self.sph.ylm_rl(*self.parse_xyz(xyz, order=order))
         R, _ = self.radial.radial(r)
         s = (R * r**self.rns * Y).sum(axis=-1)
         p = self.soap_dot(s, s, reverse=False)
@@ -119,18 +145,20 @@ class sesoap:
             p /= norm
         return p
 
-    def derivatives(self, xyz, normalize=True, sumj=True, cart=True):
+    def derivatives(self, xyz, order=0, normalize=True, sumj=True, cart=True):
         """
-        Inputs:   xyz -> Cartesian coordinates, sequence of x,y,z or [:,3] shaped ndarray  
+        Inputs:   xyz -> Cartesian coordinates, see parse_xyz
+        order:    0 or 1, see parse_xyz
         Returns:  p, q
         sumj:     perform the summation over atoms
         ---------------------------------------
         p:        compressed (1d) descriptor
-        q:        [dp_dx, dp_dy, dp_dz] 
+        q:        [dp_dx, dp_dy, dp_dz]
                   (or gradient in sph coords if cart=False)
+                  the order will be consistent with input order
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(
-            *self.parse_xyz(xyz))
+            *self.parse_xyz(xyz, order=order))
         Y_theta, Y_phi = self.sph.ylm_partials(
             sin_theta, cos_theta, Y, with_r=r)
         R, dR = self.radial.radial(r)
@@ -148,19 +176,26 @@ class sesoap:
         q2 = self.soap_dot(s, (R_rns * Y_theta), jb='j')
         q3 = self.soap_dot(s, (R_rns * Y_phi), jb='j')
         if cart:
-            q1, q2, q3 = sph_vec_to_cart(
+            q1, q2, q3 = self.sph_vec_to_cart(
                 sin_theta, cos_theta, sin_phi, cos_phi, q1, q2, q3)
-        q = np.array([q1, q2, q3])
+        q = np.stack([q1, q2, q3], axis=2-order)
         if normalize:
             norm = np.linalg.norm(p)
             p /= norm
             q /= norm
+            q -= p[:, None, None] * (p[:, None, None] * q).sum(axis=0)
         if sumj:
-            return p, q.sum(axis=-1)
+            return p, self.scaling(q.sum(axis=order+1))
         else:
-            return p, q
+            return p, self.scaling(q)
 
     # ------------------- convenience functions -------------------------------------------------
+    @staticmethod
+    def sph_vec_to_cart(sin_theta, cos_theta, sin_phi, cos_phi, F_r, F_theta, F_phi):
+        F_x = sin_theta * cos_phi * F_r + cos_theta * cos_phi * F_theta - sin_phi * F_phi
+        F_y = sin_theta * sin_phi * F_r + cos_theta * sin_phi * F_theta + cos_phi * F_phi
+        F_z = cos_theta * F_r - sin_theta * F_theta
+        return F_x, F_y, F_z
 
     def soap_dot(self, a, b, ja='', jb='', reverse=True):
         jc = ja
@@ -242,16 +277,17 @@ class sesoap:
 
 
 # tests ----------------------------------------------------------------------------------
-
 def test_sesoap():
     """ trying to regenerate numbers obtained by symbolic calculations using sympy """
     from theforce.sphcart import cart_vec_to_sph, rotate
-    x = np.array([0.175, 0.884, -0.87, 0.354, -0.082])
-    y = np.array([-0.791, 0.116, 0.19, -0.832, 0.184])
-    z = np.array([0.387, 0.761, 0.655, -0.528, 0.973])
-    env = sesoap(2, 2, quadratic_cutoff(3.0), magnification=None)
-    p_ = env.descriptor([x, y, z], normalize=False)
-    p_dc, q_dc = env.derivatives([x, y, z], normalize=False, cart=False)
+    x = np.array([0.175, 0.884, -0.87, 0.354, -0.082] + [3.1])  # one outlier
+    y = np.array([-0.791, 0.116, 0.19, -0.832, 0.184] + [0.0])
+    z = np.array([0.387, 0.761, 0.655, -0.528, 0.973] + [0.0])
+    env = sesoap(2, 2, quadratic_cutoff(3.0), dot_size=-1./3)
+    p_ = env.descriptor([x, y, z], order=1, normalize=False)
+    p_dc, q_dc = env.derivatives(
+        [x, y, z], order=1, normalize=False, cart=False)
+    q_dc = q_dc.T                                              # order stuff
     p_ = env.decompress(p_, 'lnn')
     p_d = env.decompress(p_dc, 'lnn')
     q_d = env.decompress(q_dc, '3lnn')
@@ -307,13 +343,19 @@ def test_sesoap():
     for k in range(3):
         print(np.allclose(q_d[k]-ref_p[k+1], 0.0))
 
-    pj, qj = env.derivatives((x, y, z), sumj=False, cart=True, normalize=False)
+    pj, qj = env.derivatives(
+        (x, y, z), order=1, sumj=False, cart=True, normalize=False)
+    # order stuff
+    qj = np.transpose(qj, axes=(1, 0, 2))
     pj_ = env.decompress(pj, 'lnn')
     qj_ = env.decompress(qj, '3lnnj')
     h = np.array(cart_vec_to_sph(x, y, z, qj_[0], qj_[1], qj_[2]))
     print(np.allclose(h.sum(axis=-1)-ref_p[1:], 0.0))
 
-    pj, qj = env.derivatives((x, y, z), sumj=True, cart=True, normalize=False)
+    pj, qj = env.derivatives(
+        (x, y, z), order=1, sumj=True, cart=True, normalize=False)
+    qj = qj.T                                                       # order stuff
+
     pj_ = env.decompress(pj, 'lnn')
     qj__ = env.decompress(qj, '3lnn')
     print(np.allclose(qj_.sum(axis=-1)-qj__, 0.0))
@@ -322,11 +364,15 @@ def test_sesoap():
     axis = np.random.uniform(size=3)
     beta = np.random.uniform(0, 2*np.pi)
     xx, yy, zz = rotate(x, y, z, axis, beta)
-    p, q = env.derivatives([x, y, z], sumj=False, cart=True, normalize=True)
-    pp, qq = env.derivatives((xx, yy, zz), sumj=False,
+    p, q = env.derivatives([x, y, z], order=1, sumj=False,
+                           cart=True, normalize=True)
+    pp, qq = env.derivatives((xx, yy, zz), order=1, sumj=False,
                              cart=True, normalize=True)
+    q, qq = (np.transpose(a, axes=(1, 0, 2))
+             for a in [q, qq])          # order stuff
     rot = np.array(rotate(q[0], q[1], q[2], axis, beta))
     print(np.allclose(rot-qq, 0.0))
+    print(63*'-'+' done\n')
 
 
 def test_sesoap_performance(n=30, N=100):
@@ -347,7 +393,7 @@ def test_sesoap_performance(n=30, N=100):
     start = time.time()
     for _ in range(N):
         x, y, z = (np.random.uniform(-1., 1., size=n) for _ in range(3))
-        p = env.descriptor((x, y, z))
+        p = env.descriptor((x, y, z), order=1)
     finish = time.time()
     delta2 = (finish-start)/N
     print("t2: {} Sec per descriptor".format(delta2))
@@ -355,40 +401,100 @@ def test_sesoap_performance(n=30, N=100):
     start = time.time()
     for _ in range(N):
         x, y, z = (np.random.uniform(-1., 1., size=n) for _ in range(3))
-        p, q = env.derivatives([x, y, z])
+        p, q = env.derivatives([x, y, z], order=1)
     finish = time.time()
     delta3 = (finish-start)/N
     print("t3: {} Sec per derivatives (j-reduced)".format(delta3))
 
     start = time.time()
     for _ in range(N):
-        #x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
+        # x, y, z = ( np.random.uniform(-1.,1.,size=n) for _ in range(3) )
         xyz = np.random.uniform(-1., 1., size=(n, 3))
         p, q = env.derivatives(xyz, sumj=False, cart=True)
     finish = time.time()
     delta4 = (finish-start)/N
     print("t4: {} Sec per full derivatives".format(delta4))
 
-    print("performance measure t2/t1: {}\n".format(delta2/delta1))
+    print("performance measure t2/t1: {}".format(delta2/delta1))
+    print(63*'-'+' done\n')
 
 
-def test_length_scale(n=30):
-    a = 10.
-    rc = 3 * a
-    xyz = np.random.uniform(-a, a, size=(n, 3))
-    env = sesoap(6, 6, quadratic_cutoff(rc), magnification=1.0)
-    p, q = env.derivatives(xyz, normalize=False)
-    #np.set_printoptions(formatter={'float_kind': lambda a: '{:10.3f}'.format(a)})
-    # print(q)
-    # print(p.shape)
-    # print(env.cdim)
+def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
+    """ 
+    Testing derivatives of sesoap by comparison to finite differences.
+    For numerical consistency, the second order derivative is also 
+    calculated as a measure (propto) of allowable error.
+    """
+    from theforce.sphcart import rand_cart_coord
+
+    env = sesoap(5, 5, quadratic_cutoff(rc), dot_size=1.)
+    delta = 1e-3 * rc
+    skin = 10 * delta
+
+    tests, failures, r_failed = [], [], []
+    for _ in range(N):
+
+        x, y, z = rand_cart_coord(n, rc-skin)
+        p1, q = env.derivatives(
+            [x, y, z], order=1, normalize=normalize, sumj=False)
+
+        # choose a particle, skip if r is too small, reduce this threshold to see some errors!
+        r = 0
+        while r < skin:
+            j = np.random.choice(n)
+            r = np.sqrt(x[j]**2 + y[j]**2 + z[j]**2)
+
+        # a random direction
+        u = np.random.uniform(size=3)
+        u /= np.linalg.norm(u)
+
+        # displace j
+        x[j] += delta * u[0]
+        y[j] += delta * u[1]
+        z[j] += delta * u[2]
+
+        # dp/delta via finite differences
+        p2 = env.descriptor([x, y, z], order=1, normalize=normalize)
+        fd = (p2 - p1) / delta
+
+        # grad in direction of u
+        grad = (q[:, :, j] * u).sum(axis=-1)
+
+        # displace one more time to estimate the sec-order diff
+        x[j] += delta * u[0]
+        y[j] += delta * u[1]
+        z[j] += delta * u[2]
+        p3 = env.descriptor([x, y, z], order=1, normalize=normalize)
+        sec_dr2 = (p1 + p3 - 2 * p2)
+
+        # check: |f(r+dr) - f(r) - grad(f).dr| < |grad^2(f).dr^2|
+        diff = abs(fd - grad)
+        tol = abs(sec_dr2/delta) * 5 + atol
+        ok = diff < tol
+        tests += list(ok)
+        if not ok.all():
+            failures += list(diff[np.logical_not(ok)])
+            r_failed += [r]
+
+    num = len(tests)
+    passed = sum(tests)
+    failed = num - passed
+    print('\ntesting derivatives with finite differences:')
+    print('passed: {}'.format(passed))
+    print('failed: {} \t (={} %)'.format(failed, failed/num))
+
+    if failed > 0:
+        print('maximum failure (with atol={}): {}'.format(
+            atol, max(failures)))
+
+    print(63*'-'+' done\n')
 
 
 if __name__ == '__main__':
 
     test_sesoap()
 
-    test_sesoap_performance()
+    test_derivatives()
 
-    test_length_scale()
+    test_sesoap_performance()
 
