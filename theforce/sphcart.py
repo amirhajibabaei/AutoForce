@@ -7,7 +7,21 @@
 import numpy as np
 
 
-tiny = 1.0e-16
+tiny = 1.0e-100
+
+
+# --------------------------------------------------- parsing
+def parse_xyz(xyz, order=0):
+    """ 
+    order:  order of elements in memory (invariat wrt any reshaping)
+            0 for xyz, xyz, xyz, xyz, ...
+            1 for xxx..., yyy..., zzz...
+    """
+    if order == 0:
+        a = np.asarray(xyz).reshape(-1, 3)
+    elif order == 1:
+        a = np.asarray(xyz).reshape(3, -1).T
+    return (b[:, 0] for b in np.hsplit(a, 3))
 
 
 # ---------------------------------------------------- conversions
@@ -100,16 +114,17 @@ def rotate(a, b, c, axis, beta, spherical=False):
 
 
 # ----------------------------------------------------------- tests
-def rand_cart_coord(N, d=1.0):
-    x, y, z = (np.random.uniform(-d, d, size=N) for _ in range(3))
-    return x, y, z
-
-
 def rand_sph_coord(N, R=1.0):
     r = np.random.uniform(0, R, size=N)
     t = np.random.uniform(0, np.pi, size=N)
     p = np.random.uniform(0, 2*np.pi, size=N)
     return r, t, p
+
+
+def rand_cart_coord(N, R=1.0):
+    r, t, p = rand_sph_coord(N, R)
+    x, y, z = sph_coord_to_cart(r, t, p)
+    return x, y, z
 
 
 def test_coord_transforms(N=1000):
