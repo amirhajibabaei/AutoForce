@@ -6,15 +6,15 @@
 
 import numpy as np
 from numpy import pi
-from theforce.sphcart import cart_coord_to_trig
 
 
 class sph_repr:
 
-    def __init__(self, lmax):
+    def __init__(self, lmax, tiny=1e-100):
 
         self.lmax = lmax
         self.lmax_p = lmax+1
+        self.tiny = tiny
 
         # pre-calculate
         self.Yoo = np.sqrt(1./(4*pi))
@@ -51,6 +51,17 @@ class sph_repr:
         self.coef = np.sqrt((self.l-self.m) * (self.l+self.m)
                             * (2*self.l+1) / (2*self.l-1.))[1:, 1:]
 
+    def cart_coord_to_trig(self, x, y, z):
+        rxy_sq = np.atleast_1d(x*x + y*y)
+        rxy = np.sqrt(rxy_sq) + self.tiny
+        r_sq = rxy_sq + z*z
+        r = np.sqrt(r_sq)
+        sin_theta = rxy/r
+        cos_theta = z/r
+        sin_phi = y/rxy
+        cos_phi = x/rxy
+        return r, sin_theta, cos_theta, sin_phi, cos_phi
+
     def ylm(self, x, y, z):
         """ 
         Inputs: x, y, z Cartesian coordinates
@@ -75,7 +86,8 @@ class sph_repr:
         the full harmonic with l, m (m>0): Y[l,l-m] + 1.0j*Y[l-m,l] 
                                     (m=0): Y[l,l]
         """
-        r, sin_theta, cos_theta, sin_phi, cos_phi = cart_coord_to_trig(x, y, z)
+        r, sin_theta, cos_theta, sin_phi, cos_phi = self.cart_coord_to_trig(
+            x, y, z)
         # alp
         Y = np.empty(shape=(self.lmax_p, self.lmax_p, *sin_theta.shape),
                      dtype=sin_theta.dtype)
@@ -111,7 +123,8 @@ class sph_repr:
         r**l * Y_l^m becomes  (m>0): Y[l,l-m] + 1.0j*Y[l-m,l] 
                               (m=0): Y[l,l]
         """
-        r, sin_theta, cos_theta, sin_phi, cos_phi = cart_coord_to_trig(x, y, z)
+        r, sin_theta, cos_theta, sin_phi, cos_phi = self.cart_coord_to_trig(
+            x, y, z)
         # r^l preparation
         r_sin_theta = r * sin_theta
         r_cos_theta = r * cos_theta
@@ -206,6 +219,7 @@ def test_sph_repr(n=1000):
     from theforce.sphcart import cart_coord_to_sph
     lmax = 8
     sph = sph_repr(lmax)
+    print(sph.cart_coord_to_trig(0, 0, 1.))
     x = np.random.uniform(-1.0, 1.0, size=n)
     y = np.random.uniform(-1.0, 1.0, size=n)
     z = np.random.uniform(-1.0, 1.0, size=n)
