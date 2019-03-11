@@ -9,79 +9,10 @@ import numpy as np
 from theforce.sph_repr import sph_repr
 
 
-#                           --- radial functions ---
-class constant:
-
-    def __init__(self, rc):
-        """ rc """
-        self.rc = rc
-
-    def radial(self, r):
-        return self.rc, 0
-
-
-class gaussian:
-
-    def __init__(self, rc):
-        """ exp( - r^2 / 2 rc^2 ) """
-        self.rc = rc
-
-    def radial(self, r):
-        x = -r / self.rc**2
-        y = np.exp(x*r/2)
-        return y, x*y
-
-    
-class cosine_cutoff:
-
-    def __init__(self, rc):
-        """ ( 1 + cos( pi * r / rc ) ) / 2 """
-        self.rc = rc
-
-    def radial(self, r):
-        x = np.pi * r / self.rc
-        y = (1 + np.cos(x)) / 2
-        outlier = r >= self.rc
-        y[outlier] = 0.0
-        dy = - np.pi * np.sin(x) / (2*self.rc)
-        dy[outlier] = 0.0
-        return y, dy
-    
-
-class quadratic_cutoff:
-
-    def __init__(self, rc):
-        """ ( 1 - r / r_c )^2 """
-        self.rc = rc
-
-    def radial(self, r):
-        x = 1. - r/self.rc
-        x[x < 0.0] = 0.0
-        return x*x, -2*x/self.rc
-
-
-class poly_cutoff:
-
-    def __init__(self, rc, n):
-        """ ( 1 - r / r_c )^n """
-        self.rc = rc
-        self.n = n
-        self.n_ = n - 1
-
-    def radial(self, r):
-        x = 1. - r/self.rc
-        x[x < 0.0] = 0.0
-        y = x**(self.n_)
-        return x*y, -self.n*y/self.rc
-
-
-#                              --- soap descriptor ---
 class sesoap:
 
     def __init__(self, lmax, nmax, radial, dot_size=1.):
         """
-        sesoap(self, lmax, nmax, radial, dot_size=1.):
-        ----------------------------------------------------
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
         radial: radial function e.g. quadratic_cutoff, gaussian, etc.
@@ -297,6 +228,7 @@ class sesoap:
 # tests ----------------------------------------------------------------------------------
 def test_sesoap():
     """ trying to regenerate numbers obtained by symbolic calculations using sympy """
+    from theforce.radial_funcs import quadratic_cutoff
     from theforce.sphcart import cart_vec_to_sph, rotate
     x = np.array([0.175, 0.884, -0.87, 0.354, -0.082] + [3.1])  # one outlier
     y = np.array([-0.791, 0.116, 0.19, -0.832, 0.184] + [0.0])
@@ -395,6 +327,7 @@ def test_sesoap():
 
 def test_sesoap_performance(n=30, N=100):
     import time
+    from theforce.radial_funcs import quadratic_cutoff
     print("\nTesting speed of sesoap with random xyz[{},3]".format(n))
 
     # np.random
@@ -444,6 +377,7 @@ def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
     calculated as a measure (propto) of allowable error.
     """
     from theforce.sphcart import rand_cart_coord
+    from theforce.radial_funcs import quadratic_cutoff
 
     env = sesoap(5, 5, quadratic_cutoff(rc), dot_size=1.)
     delta = 1e-3 * rc
