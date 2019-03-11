@@ -31,6 +31,22 @@ class gaussian:
         y = np.exp(x*r/2)
         return y, x*y
 
+    
+class cosine_cutoff:
+
+    def __init__(self, rc):
+        """ ( 1 + cos( pi * r / rc ) ) / 2 """
+        self.rc = rc
+
+    def radial(self, r):
+        x = np.pi * r / self.rc
+        y = (1 + np.cos(x)) / 2
+        outlier = r >= self.rc
+        y[outlier] = 0.0
+        dy = - np.pi * np.sin(x) / (2*self.rc)
+        dy[outlier] = 0.0
+        return y, dy
+    
 
 class quadratic_cutoff:
 
@@ -73,6 +89,8 @@ class sesoap:
         --------------------------------------------------------------------
         Smaller dot size results in higher resolution but it also may lead 
         to numerical unstability. 
+        Moreover, larger dot size is usefull for detecting regions far from 
+        center.
         The code uses a internal unit such that for dot-size=1 all 
         the terms in descriptor will be of the same order.
         Use negative values (in units of rc) for setting of dot_size directly.
