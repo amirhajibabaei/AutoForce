@@ -11,12 +11,13 @@ from theforce.sph_repr import sph_repr
 
 class sesoap:
 
-    def __init__(self, lmax, nmax, radial, density=1.0):
+    def __init__(self, lmax, nmax, radial, density=1.0, empirical=1.333):
         """
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
         radial: radial function e.g. quadratic_cutoff, gaussian, etc.
         density: approximate number density of the environment (see below)
+        empirical: empirical adjustment, change only slightly
         --------------------------------------------------------------------
         If a positive number is passed as density, it will calculate the 
         descriptor vector assuming constant density.
@@ -63,7 +64,7 @@ class sesoap:
 
         # configuring the length unit
         if density > 0:
-            self._opt_rc = self.__opt_rc__(density)
+            self._opt_rc = self.__opt_rc__(density) * empirical
             self.unit = self.radial.rc / self._opt_rc
         else:
             self.unit = abs(density)
@@ -242,9 +243,9 @@ class sesoap:
                                                 8*n**3*r_c**2 + 48*n**2*r_c**2 + 94*n*r_c**2 + 60*r_c**2)
         return integ
 
-    def __approx_plnn__(self, l, n, np, r_c, rho):
+    def __approx_plnn__(self, l, n, m, r_c, rho):
         """ approx sum over m: cnlm cn'lm """
-        return (2*l+1) * self.__approx_cnlm__(l, n, r_c, rho) * self.__approx_cnlm__(l, np, r_c, rho) *             self.lnnp_c[0]
+        return np.sqrt(2*l+1) * self.__approx_cnlm__(l, n, r_c, rho) * self.__approx_cnlm__(l, m, r_c, rho) *             self.lnnp_c[0]
 
     def __opt_rc__(self, rho):
         from scipy.optimize import minimize
