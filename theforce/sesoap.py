@@ -11,20 +11,18 @@ from theforce.sph_repr import sph_repr
 
 class sesoap:
 
-    def __init__(self, lmax, nmax, radial, dot_size=1.):
+    def __init__(self, lmax, nmax, radial, density=1.0):
         """
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
         radial: radial function e.g. quadratic_cutoff, gaussian, etc.
-        dot_size: control over the resolution of descriptor
+        density: approximate number density of the environment (see below)
         --------------------------------------------------------------------
-        Smaller dot size results in higher resolution but it also may lead 
-        to numerical unstability. 
-        Moreover, larger dot size is usefull for detecting regions far from 
-        center.
-        The code uses a internal unit such that for dot-size=1 all 
-        the terms in descriptor will be of the same order.
-        Use negative values (in units of rc) for setting of dot_size directly.
+        If a positive number is passed as density, it will calculate the 
+        descriptor vector assuming constant density.
+        Then it will find the optimal length units (or resolution).
+        If a negative number is passed as density, then its abs val
+        will be passed directly as the unit of length.
         """
         self.lmax = lmax
         self.nmax = nmax
@@ -53,17 +51,26 @@ class sesoap:
         # prepare for broadcasting
         self.rns = 2 * np.arange(self.nmax+1).reshape(nmax+1, 1, 1, 1)
 
-        # configuring resolution
-        self._dot_size = min(self.lnnp_c[0])**(1./(2*nmax+lmax+2))
-        if dot_size < 0:
-            rs = abs(dot_size)
+        # l, n, np compressed
+        _ar = np.arange(max(lmax, nmax)+1)
+        byte = _ar.strides[0]
+        self._il = self.compress(np.lib.stride_tricks.as_strided(
+            _ar, shape=(lmax+1, nmax+1, nmax+1), strides=(byte, 0, 0)), 'lnn')
+        self._in = self.compress(np.lib.stride_tricks.as_strided(
+            _ar, shape=(lmax+1, nmax+1, nmax+1), strides=(0, byte, 0)), 'lnn')
+        self._inp = self.compress(np.lib.stride_tricks.as_strided(
+            _ar, shape=(lmax+1, nmax+1, nmax+1), strides=(0, 0, byte)), 'lnn')
+
+        # configuring the length unit
+        if density > 0:
+            self._opt_rc = self.__opt_rc__(density)
+            self.unit = self.radial.rc / self._opt_rc
         else:
-            rs = self._dot_size * dot_size
-        self.rs = self.radial.rc * rs
-        self.radial.rc /= self.rs
+            self.unit = abs(density)
+        self.radial.rc /= self.unit
 
         # input preprocessing function
-        self.scaling = lambda a: a / self.rs
+        self.scaling = lambda a: a / self.unit
 
     def parse_xyz(self, xyz, order=0):
         """
@@ -130,9 +137,10 @@ class sesoap:
         q = np.stack([q1, q2, q3], axis=2-order)
         if normalize:
             norm = np.linalg.norm(p)
-            p /= norm
-            q /= norm
-            q -= p[:, None, None] * (p[:, None, None] * q).sum(axis=0)
+            if norm > 0.0:
+                p /= norm
+                q /= norm
+                q -= p[:, None, None] * (p[:, None, None] * q).sum(axis=0)
         if sumj:
             return p, self.scaling(q.sum(axis=order+1))
         else:
@@ -224,6 +232,32 @@ class sesoap:
                 type, a.shape))
         return a
 
+# optimizations of length scales -------------------------------------------------------
+    @staticmethod
+    def __approx_cnlm__(l, n, r_c, rho):
+        """ retruns: \int rho * r^(2n+l) * (1-r/rc)^2 * 4 pi r^2 dr """
+        c = 4*np.pi*rho
+        integ = c*2*r_c**5*r_c**l*r_c**(2*n) / (l**3*r_c**2 + 6*l**2*n*r_c**2 + 12*l**2*r_c**2 +
+                                                12*l*n**2*r_c**2 + 48*l*n*r_c**2 + 47*l*r_c**2 +
+                                                8*n**3*r_c**2 + 48*n**2*r_c**2 + 94*n*r_c**2 + 60*r_c**2)
+        return integ
+
+    def __approx_plnn__(self, l, n, np, r_c, rho):
+        """ approx sum over m: cnlm cn'lm """
+        return (2*l+1) * self.__approx_cnlm__(l, n, r_c, rho) * self.__approx_cnlm__(l, np, r_c, rho) *             self.lnnp_c[0]
+
+    def __opt_rc__(self, rho):
+        from scipy.optimize import minimize
+
+        def objective(rc):
+            p = self.__approx_plnn__(
+                self._il, self._in, self._inp, rc, rho)
+            norm = np.linalg.norm(p)
+            p /= norm
+            return p.var()
+        res = minimize(objective, 0.1, options={'gtol': 1e-10})
+        return res.x[0]
+
 
 # tests ----------------------------------------------------------------------------------
 def test_sesoap():
@@ -233,7 +267,7 @@ def test_sesoap():
     x = np.array([0.175, 0.884, -0.87, 0.354, -0.082] + [3.1])  # one outlier
     y = np.array([-0.791, 0.116, 0.19, -0.832, 0.184] + [0.0])
     z = np.array([0.387, 0.761, 0.655, -0.528, 0.973] + [0.0])
-    env = sesoap(2, 2, quadratic_cutoff(3.0), dot_size=-1./3)
+    env = sesoap(2, 2, quadratic_cutoff(3.0), density=-1.)
     p_ = env.descriptor([x, y, z], order=1, normalize=False)
     p_dc, q_dc = env.derivatives(
         [x, y, z], order=1, normalize=False, cart=False)
@@ -379,7 +413,7 @@ def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
     from theforce.sphcart import rand_cart_coord
     from theforce.radial_funcs import quadratic_cutoff
 
-    env = sesoap(5, 5, quadratic_cutoff(rc), dot_size=1.)
+    env = sesoap(5, 5, quadratic_cutoff(rc), density=1.)
     delta = 1e-3 * rc
     skin = 10 * delta
 
