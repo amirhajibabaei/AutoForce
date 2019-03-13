@@ -11,19 +11,20 @@ from theforce.sph_repr import sph_repr
 
 class sesoap:
 
-    def __init__(self, lmax, nmax, radial, density=1.0, empirical=1.333):
+    def __init__(self, lmax, nmax, radial, modify_scale=None):
         """
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
         radial: radial function e.g. quadratic_cutoff, gaussian, etc.
-        density: approximate number density of the environment (see below)
-        empirical: empirical adjustment, change only slightly
+        modify_scale: for fine-tuning the optimal length scale (see below)
         --------------------------------------------------------------------
-        If a positive number is passed as density, it will calculate the 
-        descriptor vector assuming constant density.
-        Then it will find the optimal length units (or resolution).
-        If a negative number is passed as density, then its abs val
-        will be passed directly as the unit of length.
+        An optimal length scale is calculated which depends on lmax, nmax,
+        radial.rc, and an empirical factor (1.333).
+        If a positive number is passed as modify_scale, it will multiply
+        the calculated length scale by this number.
+        Thus a float close to 1 should do the trick.
+        If a negative number is passed as modify_scale, then its abs value
+        will be passed directly as the scale.
         """
         self.lmax = lmax
         self.nmax = nmax
@@ -62,16 +63,20 @@ class sesoap:
         self._inp = self.compress(np.lib.stride_tricks.as_strided(
             _ar, shape=(lmax+1, nmax+1, nmax+1), strides=(0, 0, byte)), 'lnn')
 
-        # configuring the length unit
-        if density > 0:
-            self._opt_rc = self.__opt_rc__(density) * empirical
-            self.unit = self.radial.rc / self._opt_rc
+        # configuring the length scale
+        self._empirical = 1.333
+        self._opt_rc = self.__opt_rc__(1.0) * self._empirical
+        scale = self.radial.rc / self._opt_rc
+        if modify_scale is None:
+            self.scale = scale
+        elif modify_scale > 0:
+            self.scale = scale * modify_scale
         else:
-            self.unit = abs(density)
-        self.radial.rc /= self.unit
+            self.scale = abs(modify_scale)
+        self.radial.rc /= self.scale
 
         # input preprocessing function
-        self.scaling = lambda a: a / self.unit
+        self.scaling = lambda r: r / self.scale
 
     def parse_xyz(self, xyz, order=0):
         """
@@ -99,7 +104,8 @@ class sesoap:
         p = self.soap_dot(s, s, reverse=False)
         if normalize:
             norm = np.linalg.norm(p)
-            p /= norm
+            if norm > 0.0:
+                p /= norm
         return p
 
     def derivatives(self, xyz, order=0, normalize=True, sumj=True, cart=True):
@@ -268,7 +274,7 @@ def test_sesoap():
     x = np.array([0.175, 0.884, -0.87, 0.354, -0.082] + [3.1])  # one outlier
     y = np.array([-0.791, 0.116, 0.19, -0.832, 0.184] + [0.0])
     z = np.array([0.387, 0.761, 0.655, -0.528, 0.973] + [0.0])
-    env = sesoap(2, 2, quadratic_cutoff(3.0), density=-1.)
+    env = sesoap(2, 2, quadratic_cutoff(3.0), modify_scale=-1.)
     p_ = env.descriptor([x, y, z], order=1, normalize=False)
     p_dc, q_dc = env.derivatives(
         [x, y, z], order=1, normalize=False, cart=False)
@@ -414,7 +420,7 @@ def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
     from theforce.sphcart import rand_cart_coord
     from theforce.radial_funcs import quadratic_cutoff
 
-    env = sesoap(5, 5, quadratic_cutoff(rc), density=1.)
+    env = sesoap(5, 5, quadratic_cutoff(rc))
     delta = 1e-3 * rc
     skin = 10 * delta
 
