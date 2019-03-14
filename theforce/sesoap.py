@@ -108,7 +108,7 @@ class sesoap:
                 p /= norm
         return p
 
-    def derivatives(self, xyz, order=0, normalize=True, sumj=True, cart=True):
+    def derivatives(self, xyz, order=0, normalize=True, sumj=True, cart=True, flatten=False):
         """
         Inputs:   xyz -> Cartesian coordinates, see parse_xyz
         order:    0 or 1, see parse_xyz
@@ -151,7 +151,10 @@ class sesoap:
         if sumj:
             return p, self.scaling(q.sum(axis=order+1))
         else:
-            return p, self.scaling(q)
+            if flatten:
+                return p, self.scaling(q).reshape(self.dim, -1)
+            else:
+                return p, self.scaling(q)
 
     # ------------------- convenience functions -------------------------------------------------
     @staticmethod
