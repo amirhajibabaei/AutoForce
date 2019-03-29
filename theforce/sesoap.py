@@ -11,7 +11,7 @@ from theforce.sph_repr import sph_repr
 
 class sesoap:
 
-    def __init__(self, lmax, nmax, radial, modify_scale=None):
+    def __init__(self, lmax, nmax, radial, modify_scale=None, tiny=1e-10):
         """
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
@@ -25,12 +25,15 @@ class sesoap:
         Thus a float close to 1 should do the trick.
         If a negative number is passed as modify_scale, then its abs value
         will be passed directly as the scale.
+        --------------------------------------------------------------------
+        Note that radial.rc will be altered; use soap.rc instead.
         """
         self.lmax = lmax
         self.nmax = nmax
         self.radial = radial
+        self.rc = radial.rc
 
-        self.sph = sph_repr(lmax)
+        self.sph = sph_repr(lmax, tiny)
 
         # prepare some stuff
         self._m = [([l for m in range(0, l+1)] + [m for m in range(0, l)],
