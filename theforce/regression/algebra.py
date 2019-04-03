@@ -9,6 +9,14 @@ import torch
 _2pi = torch.tensor(2*pi)
 
 
+def positive(x):
+    return torch.log(1. + torch.exp(x))
+
+
+def free_form(x):
+    return torch.log(torch.exp(x) - 1.)
+
+
 def cholesky(A, jit=1e-6):
     ridge = 0
     try:

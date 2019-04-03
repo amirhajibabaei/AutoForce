@@ -1,46 +1,15 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 from math import pi
 import torch
 from torch.nn import Module, Parameter
-
-
+from theforce.regression.algebra import positive, free_form
+from theforce.regression.kernels import RBF
 twopi = torch.tensor(2*pi)
-
-
-def positive(x):
-    return torch.log(1. + torch.exp(x))
-
-
-def free_form(x):
-    return torch.log(torch.exp(x) - 1.)
-
-
-class RBF(Module):
-    """
-    Parameters: .scale, .variance
-    """
-
-    def __init__(self, scale, variance):
-        super(RBF, self).__init__()
-        self._scale = Parameter(free_form(scale))
-        self._variance = Parameter(free_form(variance))
-
-    def cov_matrix(self, x, xx):
-        r = (x[:, None, ] - xx[None, ]) / positive(self._scale)
-        cov = (-(r**2).sum(dim=-1)/2).exp() * self.diag()
-        return cov
-
-    def diag(self):
-        return positive(self._variance)
-
-    def extra_repr(self):
-        print('RBF parameters: \nscale: {}\nvariance: {}'.format(
-            positive(self._scale).data, positive(self._variance).data))
 
 
 class SGPR(Module):
@@ -139,4 +108,39 @@ class SGPR(Module):
             return mu, sig
         else:
             return mu
+        
+        
+def test_if_works():
+    import pylab as plt
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    X = (torch.rand(20,1)-0.5)*5
+    Y = (X.tanh() * (-X**2).exp()).view(-1)
+    model = SGPR(X, Y, 10)
+
+    # optimize
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.1)
+    for i in range(1):
+        for _ in range(100):
+            def closure():
+                global training
+                optimizer.zero_grad()
+                loss = model.forward()
+                loss.backward() 
+                return loss
+            optimizer.step(closure)
+        print((i+1)*100)
+    model.evaluate()
+    
+    # predict
+    with torch.no_grad():
+        plt.scatter(X, Y)
+        Xtest = torch.arange(-3,3,0.1, dtype=X.dtype).view(-1,1)
+        Ytest, Cov = model.predict(Xtest)
+        x, y, err = Xtest.numpy().reshape(-1), Ytest.numpy(), torch.sqrt(Cov.diag()).numpy()*10
+        plt.plot(x, y, color='red')
+        plt.fill_between(x, y-err, y+err, alpha=0.2)
+        
+        
+if __name__=='__main__':
+    test_if_works()
 
