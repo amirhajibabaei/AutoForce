@@ -18,13 +18,13 @@ class ClusterSoap:
     positions of atoms.
     """
 
-    def __init__(self, soap):
+    def __init__(self, soap, sorted=False):
         """ 
         Needs an instance of sesoap class.
         """
         self.soap = soap
         self.neighbors = NewPrimitiveNeighborList(soap.rc, skin=0.0, self_interaction=False,
-                                                  bothways=True)
+                                                  bothways=True, sorted=sorted)
 
     def descriptors(self, pbc, cell, positions, sumj=True):
         """ 
@@ -44,7 +44,7 @@ class ClusterSoap:
         present in the environment).
         Thus p, pairs will be the same either way.
         """
-        self.neighbors.build(pbc, cell, positions)
+        self.neighbors.build(pbc, cell, positions) #TODO: update maybe faster
         n = positions.shape[0]
         _p = []
         _q = []
@@ -78,19 +78,28 @@ def test_if_works():
     from theforce.sesoap import sesoap
     from theforce.radial_funcs import quadratic_cutoff
 
-    flake = hexagonal_flake(a=1.1)
-    positions = np.concatenate(([[0, 0, 0]], flake)) + np.array([3., 3., 3.])
-    atoms = Atoms(positions=positions, cell=[6., 6., 6.], pbc=True)
-
-    lmax, nmax, cutoff = 4, 4, 1.1000000001
+    a = 1.0
+    lmax, nmax, cutoff = 6, 6, a+1e-3
     soap = sesoap(lmax, nmax, quadratic_cutoff(cutoff))
     csoap = ClusterSoap(soap)
-    p, q, pairs = csoap.descriptors(
-        atoms.pbc, atoms.cell, atoms.positions, sumj=False)
-    print('it works!', p.shape, q.shape, len(pairs))
-    
-    import nglview
-    return nglview.show_ase(atoms)
+
+    pbc = True
+    cell = np.array([10, 10, 10])*a
+    center = cell/2
+    flake = hexagonal_flake(a=a, centre=True)
+
+    positions_a = flake + center
+    atoms_a = Atoms(positions=positions_a, cell=cell, pbc=pbc)
+    p_a, q_a, pairs_a = csoap.descriptors(atoms_a.pbc, atoms_a.cell,
+                                          atoms_a.positions, sumj=True)
+
+    positions_b = flake - center*0.33
+    atoms_b = Atoms(positions=positions_b, cell=cell, pbc=pbc)
+    p_b, q_b, pairs_b = csoap.descriptors(atoms_b.pbc, atoms_b.cell,
+                                          atoms_b.positions, sumj=True)
+
+    print(np.allclose(p_a-p_b, 0.0),
+          np.allclose(q_a-q_b, 0.0), (q_a-q_b).max())
 
 
 if __name__ == '__main__':
