@@ -7,6 +7,11 @@
 from math import factorial as fac
 import numpy as np
 from theforce.sph_repr import sph_repr
+import warnings
+
+
+normalization_warning = """normalization may lead to ugly derivatives 
+especially when particles move across the cutoff.""".replace('\n', '')
 
 
 class SeSoap:
@@ -95,12 +100,14 @@ class SeSoap:
             a = self.scaling(np.asarray(xyz).reshape(3, -1).T)
         return (b[:, 0] for b in np.hsplit(a, 3))
 
-    def descriptor(self, xyz, order=0, normalize=True):
+    def descriptor(self, xyz, order=0, normalize=False):
         """
         Inputs:   xyz -> Cartesian coordinates, see parse_xyz
         order:    0 or 1, see parse_xyz
         Returns:  p -> compressed (1d) descriptor
         """
+        if normalize:
+            warnings.warn(normalization_warning)
         r, _, _, _, _, Y = self.sph.ylm_rl(*self.parse_xyz(xyz, order=order))
         R, _ = self.radial.radial(r)
         s = (R * r**self.rns * Y).sum(axis=-1)
@@ -111,7 +118,7 @@ class SeSoap:
                 p /= norm
         return p
 
-    def derivatives(self, xyz, order=0, normalize=True, sumj=True, cart=True, flatten=False):
+    def derivatives(self, xyz, order=0, normalize=False, sumj=True, cart=True, flatten=False):
         """
         Inputs:   xyz -> Cartesian coordinates, see parse_xyz
         order:    0 or 1, see parse_xyz
@@ -123,6 +130,8 @@ class SeSoap:
                   (or gradient in sph coords if cart=False)
                   the order will be consistent with input order
         """
+        if normalize:
+            warnings.warn(normalization_warning)
         r, sin_theta, cos_theta, sin_phi, cos_phi, Y = self.sph.ylm_rl(
             *self.parse_xyz(xyz, order=order))
         Y_theta, Y_phi = self.sph.ylm_partials(

@@ -75,12 +75,12 @@ def test_if_works():
     import numpy as np
     from ase import Atoms
     from theforce.util.flake import hexagonal_flake
-    from theforce.sesoap import sesoap
+    from theforce.sesoap import SeSoap
     from theforce.radial_funcs import quadratic_cutoff
 
     a = 1.0
     lmax, nmax, cutoff = 6, 6, a+1e-3
-    soap = sesoap(lmax, nmax, quadratic_cutoff(cutoff))
+    soap = SeSoap(lmax, nmax, quadratic_cutoff(cutoff))
     csoap = ClusterSoap(soap)
 
     pbc = True
