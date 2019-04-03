@@ -9,7 +9,7 @@ import numpy as np
 from theforce.sph_repr import sph_repr
 
 
-class sesoap:
+class SeSoap:
 
     def __init__(self, lmax, nmax, radial, modify_scale=None, tiny=1e-10):
         """
@@ -280,7 +280,7 @@ def test_sesoap():
     x = np.array([0.175, 0.884, -0.87, 0.354, -0.082] + [3.1])  # one outlier
     y = np.array([-0.791, 0.116, 0.19, -0.832, 0.184] + [0.0])
     z = np.array([0.387, 0.761, 0.655, -0.528, 0.973] + [0.0])
-    env = sesoap(2, 2, quadratic_cutoff(3.0), modify_scale=-1.)
+    env = SeSoap(2, 2, quadratic_cutoff(3.0), modify_scale=-1.)
     p_ = env.descriptor([x, y, z], order=1, normalize=False)
     p_dc, q_dc = env.derivatives(
         [x, y, z], order=1, normalize=False, cart=False)
@@ -334,7 +334,7 @@ def test_sesoap():
                         [-0.01632531, -0.03301236, -0.0564123]]])]
     ref_p *= env.decompress(env.lnnp_c[0], 'lnn')
 
-    print("\nTesting validity of sesoap ...")
+    print("\nTesting validity of SeSoap ...")
     print(np.allclose(p_-ref_p[0], 0.0))
     print(np.allclose(p_d-ref_p[0], 0.0))
     for k in range(3):
@@ -375,7 +375,7 @@ def test_sesoap():
 def test_sesoap_performance(n=30, N=100):
     import time
     from theforce.radial_funcs import quadratic_cutoff
-    print("\nTesting speed of sesoap with random xyz[{},3]".format(n))
+    print("\nTesting speed of SeSoap with random xyz[{},3]".format(n))
 
     # np.random
     start = time.time()
@@ -385,7 +385,7 @@ def test_sesoap_performance(n=30, N=100):
     delta1 = (finish-start)/N
     print("t1: {} Sec per np.random.uniform(shape=({},3))".format(delta1, n))
 
-    env = sesoap(5, 5, quadratic_cutoff(3.0))
+    env = SeSoap(5, 5, quadratic_cutoff(3.0))
 
     # descriptor
     start = time.time()
@@ -419,14 +419,14 @@ def test_sesoap_performance(n=30, N=100):
 
 def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
     """ 
-    Testing derivatives of sesoap by comparison to finite differences.
+    Testing derivatives of SeSoap by comparison to finite differences.
     For numerical consistency, the second order derivative is also 
     calculated as a measure (propto) of allowable error.
     """
     from theforce.sphcart import rand_cart_coord
     from theforce.radial_funcs import quadratic_cutoff
 
-    env = sesoap(5, 5, quadratic_cutoff(rc))
+    env = SeSoap(5, 5, quadratic_cutoff(rc))
     delta = 1e-3 * rc
     skin = 10 * delta
 
