@@ -216,7 +216,7 @@ class sph_repr:
 # test routines ----------------------------------------------------------
 def test_sph_repr(n=1000):
     from scipy.special import sph_harm
-    from theforce.sphcart import cart_coord_to_sph
+    from theforce.descriptor.sphcart import cart_coord_to_sph
     lmax = 8
     sph = sph_repr(lmax)
     print(sph.cart_coord_to_trig(0, 0, 1.))
@@ -270,7 +270,7 @@ def test_sph_repr(n=1000):
 
 def test_hessian_ylm(lmax=4, N=3):
     from sympy import symbols, Ynm, Derivative
-    from theforce.sphcart import cart_coord_to_sph
+    from theforce.descriptor.sphcart import cart_coord_to_sph
     r_s, theta_s, phi_s = symbols('r theta phi')
     l_s = symbols('l', integer=True, nonnegative=True)
     m_s = symbols('m', integer=True)

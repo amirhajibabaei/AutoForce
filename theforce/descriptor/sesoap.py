@@ -6,7 +6,7 @@
 
 from math import factorial as fac
 import numpy as np
-from theforce.sph_repr import sph_repr
+from theforce.descriptor.sph_repr import sph_repr
 import warnings
 
 
@@ -284,8 +284,8 @@ class SeSoap:
 # tests ----------------------------------------------------------------------------------
 def test_sesoap():
     """ trying to regenerate numbers obtained by symbolic calculations using sympy """
-    from theforce.radial_funcs import quadratic_cutoff
-    from theforce.sphcart import cart_vec_to_sph, rotate
+    from theforce.descriptor.radial_funcs import quadratic_cutoff
+    from theforce.descriptor.sphcart import cart_vec_to_sph, rotate
     x = np.array([0.175, 0.884, -0.87, 0.354, -0.082] + [3.1])  # one outlier
     y = np.array([-0.791, 0.116, 0.19, -0.832, 0.184] + [0.0])
     z = np.array([0.387, 0.761, 0.655, -0.528, 0.973] + [0.0])
@@ -383,7 +383,7 @@ def test_sesoap():
 
 def test_sesoap_performance(n=30, N=100):
     import time
-    from theforce.radial_funcs import quadratic_cutoff
+    from theforce.descriptor.radial_funcs import quadratic_cutoff
     print("\nTesting speed of SeSoap with random xyz[{},3]".format(n))
 
     # np.random
@@ -432,8 +432,8 @@ def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
     For numerical consistency, the second order derivative is also 
     calculated as a measure (propto) of allowable error.
     """
-    from theforce.sphcart import rand_cart_coord
-    from theforce.radial_funcs import quadratic_cutoff
+    from theforce.descriptor.sphcart import rand_cart_coord
+    from theforce.descriptor.radial_funcs import quadratic_cutoff
 
     env = SeSoap(5, 5, quadratic_cutoff(rc))
     delta = 1e-3 * rc
