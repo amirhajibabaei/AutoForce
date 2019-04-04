@@ -17,7 +17,7 @@ def free_form(x):
     return torch.log(torch.exp(x) - 1.)
 
 
-def cholesky(A, jit=1e-6):
+def cholesky(A, jit=1e-6, base=2):
     ridge = 0
     try:
         L = torch.cholesky(A)
@@ -31,13 +31,13 @@ def cholesky(A, jit=1e-6):
                     *A.size(), dtype=A.dtype))
                 done = True
             except RuntimeError:
-                ridge *= 10
+                ridge *= base
             if ridge > scale:
                 raise RuntimeError('cholesky was not successful!')
     return L, ridge
 
 
-def scale_tril(K, Y, logdet=False, solve=False):
+def low_rank_factor(K, Y, logdet=False, solve=False, cholbase=2):
     """
     Inputs: Y, K
     K: a symmetric positive definite (covariance) matrix,
@@ -48,7 +48,7 @@ def scale_tril(K, Y, logdet=False, solve=False):
     The following equality holds:
     Q.t() @ Q = Y.t() @ K.inverse() @ Y
     """
-    L, ridge = cholesky(K)
+    L, ridge = cholesky(K, base=cholbase)
     if len(Y.size()) == 1:
         _1d, _Y = True, Y.view(-1, 1)
     else:
@@ -65,7 +65,7 @@ def scale_tril(K, Y, logdet=False, solve=False):
 
 
 def log_normal(Y, K):
-    Q, logdet, ridge = scale_tril(K, Y, logdet=True)
+    Q, logdet, ridge = low_rank_factor(K, Y, logdet=True)
     return -(torch.mm(Q.t(), Q) + logdet + torch.log(_2pi)*Y.size()[0])/2
 
 
