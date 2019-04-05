@@ -28,7 +28,7 @@ class RBF(Module):
         return positive(self._variance)
 
     def extra_repr(self):
-        print('RBF parameters: \nscale: {}\nvariance: {}'.format(
+        print('\nRBF parameters: \nscale: {}\nvariance: {}\n'.format(
             positive(self._scale).data, positive(self._variance).data))
 
 

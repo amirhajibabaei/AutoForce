@@ -17,7 +17,7 @@ def free_form(x):
     return torch.log(torch.exp(x) - 1.)
 
 
-def cholesky(A, jit=1e-6, base=2):
+def jitcholesky(A, jit=1e-6, jitbase=2):
     ridge = 0
     try:
         L = torch.cholesky(A)
@@ -31,13 +31,13 @@ def cholesky(A, jit=1e-6, base=2):
                     *A.size(), dtype=A.dtype))
                 done = True
             except RuntimeError:
-                ridge *= base
+                ridge *= jitbase
             if ridge > scale:
                 raise RuntimeError('cholesky was not successful!')
     return L, ridge
 
 
-def low_rank_factor(K, Y, logdet=False, solve=False, cholbase=2):
+def low_rank_factor(K, Y, logdet=False, solve=False, jitbase=2):
     """
     Inputs: Y, K
     K: a symmetric positive definite (covariance) matrix,
@@ -48,7 +48,7 @@ def low_rank_factor(K, Y, logdet=False, solve=False, cholbase=2):
     The following equality holds:
     Q.t() @ Q = Y.t() @ K.inverse() @ Y
     """
-    L, ridge = cholesky(K, base=cholbase)
+    L, ridge = jitcholesky(K, jitbase=jitbase)
     if len(Y.size()) == 1:
         _1d, _Y = True, Y.view(-1, 1)
     else:
@@ -74,7 +74,7 @@ def test(n=1000):
 
     # test cholesky
     K = torch.ones(n, n)
-    L, ridge = cholesky(K)
+    L, ridge = jitcholesky(K)
     test_cholesky = torch.allclose(torch.mm(L, L.t()), K)
     print('Cholesky: {}'.format(test_cholesky))
 
