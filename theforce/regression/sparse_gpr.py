@@ -46,11 +46,10 @@ class SGPR(Module):
         self.ones = torch.ones_like(self.Y)
 
     def extra_repr(self):
-        print('\nSGPR:\nnoise: {}\n'.format(positive(self._noise)))
-        print('\nSGPR:\nmean function used: constant {}\n'.format(self.mean))
+        print('\nSGPR:\nnoise: {}'.format(positive(self._noise)))
+        print('mean function used: constant {}\n'.format(self.mean))
 
     # --------------------------------------------------------------------
-
     def forward(self):
         noise = positive(self._noise)
         ZZ = self.kern.cov_matrix(self.Z, self.Z)
@@ -76,7 +75,6 @@ class SGPR(Module):
         return loss
 
     # ---------------------------------------------------------------------
-
     def evaluate(self):
         noise = positive(self._noise)
         ZZ = self.kern.cov_matrix(self.Z, self.Z)
@@ -128,6 +126,25 @@ class SGPR(Module):
         else:
             return self.out(mu, array=array)
 
+    # training -------------------------------------------------------------------
+    def train(self, steps=100, optimizer=None, lr=0.1):
+
+        if not hasattr(self, 'losses'):
+            self.losses = []
+            self.starts = []
+        self.starts += [len(self.losses)]
+
+        if optimizer is None:
+            optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+
+        for _ in range(steps):
+            optimizer.zero_grad()
+            loss = self.forward()
+            self.losses += [loss.data]
+            loss.backward()
+            optimizer.step()
+        print('trained for {} staps'.format(steps))
+
 
 class SparseGPR(SGPR):
 
@@ -145,19 +162,6 @@ class SparseGPR(SGPR):
     def forward(self):
         self.pre_forward()
         return super(SparseGPR, self).forward()
-
-
-def train(model, steps=100, optimizer=None, lr=0.1, losses=[]):
-    if optimizer is None:
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    for _ in range(steps):
-        optimizer.zero_grad()
-        loss = model.forward()
-        losses += [loss.data]
-        loss.backward()
-        optimizer.step()
-    print('trained for {} staps'.format(steps))
-    return losses
 
 
 # testing -------------------------------------------------------------------------
@@ -179,11 +183,10 @@ def test_if_works():
     model = SparseGPR(X, YY, 6, sizes)
 
     # training
-    losses = train(model, 60)
-    losses = train(model, 60, losses=losses)
+    model.train(100)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    ax1.plot(losses)
+    ax1.plot(model.losses)
 
     # predict
     with torch.no_grad():
