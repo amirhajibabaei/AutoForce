@@ -29,10 +29,12 @@ class SGPR(Module):
         self.X = X
         self.sizes = sizes
         if sizes:
-            self.mean = 0               # TODO: make it work with mean
+            _s = torch.as_tensor(sizes).type(Y.dtype)
+            self.mean = (Y/_s).mean()
         else:
+            _s = 1
             self.mean = Y.mean()
-        self.Y = Y - self.mean
+        self.Y = Y - self.mean*_s           # TODO: generalize Const mean to more types
 
         # parameters
         self._noise = Parameter(free_form(torch.tensor(1., dtype=X.dtype)))
@@ -45,7 +47,7 @@ class SGPR(Module):
 
     def extra_repr(self):
         print('\nSGPR:\nnoise: {}\n'.format(positive(self._noise)))
-        print('\nSGPR:\nmean used: {}\n'.format(self.mean))
+        print('\nSGPR:\nmean function used: constant {}\n'.format(self.mean))
 
     # --------------------------------------------------------------------
 
@@ -167,7 +169,7 @@ def test_if_works():
     # dummy data
     sizes = torch.randint(1, 10, (100,)).tolist()
     X = torch.cat([(torch.rand(size, 1)-0.5)*5 for size in sizes])
-    Y = (X.tanh() * (-X**2).exp()).view(-1) + 0 * 10.  # TODO
+    Y = (X.tanh() * (-X**2).exp()).view(-1) + 1 * 10.
 
     # transorm Y -> YY, trans
     YY = sum_packed_dim(Y, sizes)
