@@ -85,7 +85,7 @@ class SGPR(Module):
         # numerically stable calculation of _mu
         L, ridge = jitcholesky(ZZ, jitbase=2)
         A = torch.cat((XZ, noise * L.t()))
-        Y = torch.cat((self.Y, torch.zeros(self.Z.size()[0])))
+        Y = torch.cat((self.Y, torch.zeros(self.Z.size()[0], dtype=self.Y.dtype)))
         Q, R = torch.qr(A)
         self._mu = torch.mv(R.inverse(), torch.mv(Q.t(), Y))
 
@@ -117,7 +117,7 @@ class SGPR(Module):
         XZ = self.kern.cov_matrix(_X, self.Z)
         mu = self.mean + torch.mv(XZ, self._mu)
         if var:
-            sig = torch.ones(_X.size()[0])*self.kern.diag() +                 torch.mm(XZ, torch.mm(self._sig, XZ.t())).diag()
+            sig = torch.ones(_X.size()[0], dtype=self.X.dtype)*self.kern.diag() +                 torch.mm(XZ, torch.mm(self._sig, XZ.t())).diag()
             if (sig < 0).any():
                 sig = torch.clamp(sig, 0)
                 warnings.warn(
