@@ -144,6 +144,8 @@ class SGPR(Module):
             loss.backward()
             optimizer.step()
         print('trained for {} staps'.format(steps))
+        
+        self.ready = 0
 
 
 class SparseGPR(SGPR):
