@@ -9,6 +9,7 @@ import torch
 _2pi = torch.tensor(2*pi)
 
 
+# general ---------------------------------------
 def positive(x):
     return torch.log(1. + torch.exp(x))
 
@@ -17,6 +18,13 @@ def free_form(x):
     return torch.log(torch.exp(x) - 1.)
 
 
+def sum_packed_dim(packed, sizes, dim=-1):
+    result = torch.stack([piece.sum(dim=dim)
+                          for piece in torch.split(packed, sizes, dim=dim)], dim=dim)
+    return result
+
+
+# decompositions ---------------------------------------------
 def jitcholesky(A, jit=1e-6, jitbase=2):
     ridge = 0
     try:
@@ -69,6 +77,16 @@ def log_normal(Y, K):
     return -(torch.mm(Q.t(), Q) + logdet + torch.log(_2pi)*Y.size()[0])/2
 
 
+# examples ---------------------------------------------------------------------
+def example_sum_packed_dim():
+    sizes = torch.randint(1, 10, (100,))
+    Y = [torch.ones(7, size) for size in sizes]
+    Y = torch.cat(Y, dim=1)
+    P = sum_packed_dim(Y, sizes.tolist())
+    #print(Y.size(), P.size())
+    print('sum_packed_dim works: {}'.format(P.size() == torch.Size([7, 100])))
+
+
 # tests ------------------------------------------------------------------------
 def test(n=1000):
 
@@ -86,5 +104,6 @@ def test(n=1000):
 
 
 if __name__ == '__main__':
+    example_sum_packed_dim()
     test()
 

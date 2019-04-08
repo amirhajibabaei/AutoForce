@@ -15,18 +15,23 @@ or just simple (constant) tensors.
 import torch
 from torch.nn import Module, Parameter
 from torch.distributions import LowRankMultivariateNormal
-from theforce.regression.algebra import positive, free_form, low_rank_factor, jitcholesky
+from theforce.regression.algebra import positive, free_form, sum_packed_dim
+from theforce.regression.algebra import low_rank_factor, jitcholesky
 from theforce.regression.kernels import RBF
 import warnings
 
 
 class SGPR(Module):
 
-    def __init__(self, X, Y, Z):
+    def __init__(self, X, Y, Z, sizes=None):
         super(SGPR, self).__init__()
 
         self.X = X
-        self.mean = Y.mean()
+        self.sizes = sizes
+        if sizes:
+            self.mean = 0               # TODO: make it work with mean
+        else:
+            self.mean = Y.mean()
         self.Y = Y - self.mean
 
         # parameters
@@ -40,6 +45,7 @@ class SGPR(Module):
 
     def extra_repr(self):
         print('\nSGPR:\nnoise: {}\n'.format(positive(self._noise)))
+        print('\nSGPR:\nmean used: {}\n'.format(self.mean))
 
     # --------------------------------------------------------------------
 
@@ -47,12 +53,22 @@ class SGPR(Module):
         noise = positive(self._noise)
         ZZ = self.kern.cov_matrix(self.Z, self.Z)
         ZX = self.kern.cov_matrix(self.Z, self.X)
+
+        # if a transformation on ZX is needed or not # TODO: more efficient way?
+        if self.sizes:
+            ZX = sum_packed_dim(ZX, self.sizes)
+            tr = torch.stack([self.kern.cov_matrix(x, x).sum()
+                              for x in torch.split(self.X, self.sizes)]).sum()
+        else:
+            tr = self.X.size()[0]*self.kern.diag()
+
         # trace term
         Q, _, ridge = low_rank_factor(ZZ, ZX)
-        trace = 0.5*(self.X.size()[0]*self.kern.diag() -
-                     torch.einsum('ij,ij', Q, Q))/noise**2
+        trace = 0.5*(tr - torch.einsum('ij,ij', Q, Q))/noise**2
+
         # low rank MVN
         p = LowRankMultivariateNormal(self.zeros, Q.t(), self.ones*noise**2)
+
         # loss
         loss = -p.log_prob(self.Y) + trace
         return loss
@@ -63,6 +79,8 @@ class SGPR(Module):
         noise = positive(self._noise)
         ZZ = self.kern.cov_matrix(self.Z, self.Z)
         XZ = self.kern.cov_matrix(self.X, self.Z)
+        if self.sizes:
+            XZ = sum_packed_dim(XZ, self.sizes, dim=0)
 
         # numerically stable calculation of _mu
         L, ridge = jitcholesky(ZZ, jitbase=2)
@@ -111,9 +129,9 @@ class SGPR(Module):
 
 class SparseGPR(SGPR):
 
-    def __init__(self, X, Y, num_inducing):
+    def __init__(self, X, Y, num_inducing, sizes=None):
         Z = Parameter(X[torch.randint(Y.size()[0], (num_inducing,))])
-        super(SparseGPR, self).__init__(X, Y, Z)
+        super(SparseGPR, self).__init__(X, Y, Z, sizes=sizes)
 
     def extra_repr(self):
         super(SparseGPR, self).extra_repr()
@@ -145,13 +163,22 @@ def test_if_works():
     import numpy as np
     import pylab as plt
     get_ipython().run_line_magic('matplotlib', 'inline')
-    X = (torch.rand(100, 1)-0.5)*5
-    Y = (X.tanh() * (-X**2).exp()).view(-1) + 10.
-    model = SparseGPR(X, Y, 3)
+
+    # dummy data
+    sizes = torch.randint(1, 10, (100,)).tolist()
+    X = torch.cat([(torch.rand(size, 1)-0.5)*5 for size in sizes])
+    Y = (X.tanh() * (-X**2).exp()).view(-1) + 0 * 10.  # TODO
+
+    # transorm Y -> YY, trans
+    YY = sum_packed_dim(Y, sizes)
+
+    # define model
+    #model = SparseGPR(X, Y, 6, None)
+    model = SparseGPR(X, YY, 6, sizes)
 
     # training
-    losses = train(model, 40)
-    losses = train(model, 80, losses=losses)
+    losses = train(model, 60)
+    losses = train(model, 60, losses=losses)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     ax1.plot(losses)
