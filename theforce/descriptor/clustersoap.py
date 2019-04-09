@@ -90,15 +90,17 @@ class ClusterSoap:
             q = np.array([])
         return p, q, pairs
 
-    def read_traj(self, traj_file):
+    def read_traj(self, traj_file, descriptors=True):
         from ase.io.trajectory import Trajectory
         traj = Trajectory(traj_file)
-        clusters, energies, forces = zip(*[((atoms.pbc, atoms.cell, atoms.positions),
-                                            atoms.get_potential_energy(), atoms.get_forces())
-                                           for atoms in traj])
-        p = [self.descriptors(*cl) for cl in clusters]
-        sizes = [_.shape[0] for _ in p]
-        return clusters, np.vstack(p), sizes, np.array(energies), np.vstack(forces)
+        clusters, s, E, F = zip(*[((atoms.pbc, atoms.cell, atoms.positions), atoms.positions.shape[0],
+                                   atoms.get_potential_energy(), atoms.get_forces())
+                                  for atoms in traj])
+        if descriptors:
+            p = np.vstack([self.descriptors(*cl) for cl in clusters])
+        else:
+            p = None
+        return clusters, s, np.array(E), np.vstack(F), p
 
 
 class TorchSoap(Function):
