@@ -143,7 +143,7 @@ class SGPR(Module):
             self.losses += [loss.data]
             loss.backward()
             optimizer.step()
-        print('trained for {} staps'.format(steps))
+        print('trained for {} steps'.format(steps))
         
         self.ready = 0
 
