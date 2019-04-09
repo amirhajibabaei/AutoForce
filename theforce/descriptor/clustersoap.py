@@ -15,7 +15,7 @@ class ClusterSoap:
     as well as positions of its atoms.
     It uses ase to create neighbors list and then
     constructs the descriptor vectors for each atom.
-    It also calculates derivatives of descriptors wrt
+    It also calculates derivatives of descriptors_derivatives wrt
     positions of atoms.
     """
 
@@ -27,7 +27,26 @@ class ClusterSoap:
         self.neighbors = NewPrimitiveNeighborList(soap.rc, skin=0.0, self_interaction=False,
                                                   bothways=True, sorted=sorted)
 
-    def descriptors(self, pbc, cell, positions, sumj=True):
+    def descriptors(self, pbc, cell, positions):
+        """ 
+        Inputs: pbc, cell, positions 
+        Returns: p 
+        p is the descripter vector which is per-atom.
+        """
+        self.neighbors.build(pbc, cell, positions)  # TODO: update maybe faster
+        n = positions.shape[0]
+        _p = []
+        for k in range(n):
+            indices, offsets = self.neighbors.get_neighbors(k)
+            if indices.shape[0] > 0:
+                env = positions[indices] + np.einsum('ik,kj->ij', offsets, cell)                     - positions[k]
+                _p += [self.soap.descriptor(env)]
+            else:
+                _p += [np.zeros(shape=self.soap.dim)]
+        p = np.asarray(_p)
+        return p
+
+    def descriptors_derivatives(self, pbc, cell, positions, sumj=True):
         """ 
         Inputs: pbc, cell, positions 
         Returns: p, q, pairs
@@ -71,6 +90,16 @@ class ClusterSoap:
             q = np.array([])
         return p, q, pairs
 
+    def read_traj(self, traj_file):
+        from ase.io.trajectory import Trajectory
+        traj = Trajectory(traj_file)
+        clusters, energies, forces = zip(*[((atoms.pbc, atoms.cell, atoms.positions),
+                                            atoms.get_potential_energy(), atoms.get_forces())
+                                           for atoms in traj])
+        p = [self.descriptors(*cl) for cl in clusters]
+        sizes = [_.shape[0] for _ in p]
+        return clusters, np.vstack(p), sizes, np.array(energies), np.vstack(forces)
+
 
 class TorchSoap(Function):
     """
@@ -83,7 +112,7 @@ class TorchSoap(Function):
     def forward(ctx, pbc, cell, xyz, csoap):
         """ csoap is an instance of ClusterSoap """
         _xyz = xyz.detach().numpy()
-        _p, _q, _ = csoap.descriptors(pbc, cell, _xyz)
+        _p, _q, _ = csoap.descriptors_derivatives(pbc, cell, _xyz)
         p = torch.as_tensor(_p, dtype=xyz.dtype)
         q = torch.as_tensor(_q, dtype=xyz.dtype)
         ctx.save_for_backward(q)
@@ -118,16 +147,20 @@ def test_if_works():
 
     positions_a = flake + center
     atoms_a = Atoms(positions=positions_a, cell=cell, pbc=pbc)
-    p_a, q_a, pairs_a = csoap.descriptors(atoms_a.pbc, atoms_a.cell,
-                                          atoms_a.positions, sumj=True)
+    p_a, q_a, pairs_a = csoap.descriptors_derivatives(atoms_a.pbc, atoms_a.cell,
+                                                      atoms_a.positions, sumj=True)
 
     positions_b = flake - center*0.33
     atoms_b = Atoms(positions=positions_b, cell=cell, pbc=pbc)
-    p_b, q_b, pairs_b = csoap.descriptors(atoms_b.pbc, atoms_b.cell,
-                                          atoms_b.positions, sumj=True)
+    p_b, q_b, pairs_b = csoap.descriptors_derivatives(atoms_b.pbc, atoms_b.cell,
+                                                      atoms_b.positions, sumj=True)
 
     print(np.allclose(p_a-p_b, 0.0),
           np.allclose(q_a-q_b, 0.0), (q_a-q_b).max())
+
+    p_ = csoap.descriptors(atoms_b.pbc, atoms_b.cell,
+                           atoms_b.positions)
+    print(np.allclose(p_a-p_, 0.0))
 
 
 if __name__ == '__main__':
