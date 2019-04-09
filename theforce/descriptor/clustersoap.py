@@ -6,6 +6,7 @@
 
 import numpy as np
 from ase.neighborlist import NewPrimitiveNeighborList
+from torch.autograd import Function
 
 
 class ClusterSoap:
@@ -44,7 +45,7 @@ class ClusterSoap:
         present in the environment).
         Thus p, pairs will be the same either way.
         """
-        self.neighbors.build(pbc, cell, positions) #TODO: update maybe faster
+        self.neighbors.build(pbc, cell, positions)  # TODO: update maybe faster
         n = positions.shape[0]
         _p = []
         _q = []
@@ -69,6 +70,33 @@ class ClusterSoap:
         else:
             q = np.array([])
         return p, q, pairs
+
+
+class TorchSoap(Function):
+    """
+    A wrapper around the ClusterSoap.
+    The key variable is xyz (in the forward method) which should be
+    a torch.tensor object and it may have xyz.requires_grad=True.
+    """
+
+    @staticmethod
+    def forward(ctx, pbc, cell, xyz, csoap):
+        """ csoap is an instance of ClusterSoap """
+        _xyz = xyz.detach().numpy()
+        _p, _q, _ = csoap.descriptors(pbc, cell, _xyz)
+        p = torch.as_tensor(_p, dtype=xyz.dtype)
+        q = torch.as_tensor(_q, dtype=xyz.dtype)
+        ctx.save_for_backward(q)
+        return p
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        q, = ctx.saved_tensors
+        grad = torch.einsum('ij,ijk->ik', grad_output, q)
+        return None, None, grad, None
+
+
+torchsoap = TorchSoap.apply
 
 
 def test_if_works():
