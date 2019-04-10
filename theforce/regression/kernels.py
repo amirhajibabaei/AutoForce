@@ -40,7 +40,8 @@ class RBF(Module):
             for _ in range(d_dtheta.dim()-2):
                 r = torch.unsqueeze(r, -1)
                 cov = torch.unsqueeze(cov, -1)
-            _derivative = (r*torch.unsqueeze(d_dtheta, dim=1-wrt)) * (-(-1)**(wrt))
+            _derivative = (r*torch.unsqueeze(d_dtheta, dim=1-wrt)
+                           ) * (-(-1)**(wrt))
             if sumd:
                 cov = cov * _derivative.sum(dim=2)
             else:
@@ -49,6 +50,12 @@ class RBF(Module):
 
     def diag(self):
         return positive(self._variance)
+
+    def diag_derivatives(self, d_dtheta):
+        scale = positive(self._scale)
+        for _ in range(d_dtheta.dim()-2):
+            scale = torch.unsqueeze(scale, -1)
+        return ((d_dtheta / scale)**2).sum() * self.diag()
 
     def extra_repr(self):
         print('\nRBF parameters: \nscale: {}\nvariance: {}\n'.format(
@@ -75,6 +82,7 @@ def test_if_works():
     dX = torch.ones_like(X1)
     K = kern.cov_matrix(X1, X2, d_dtheta=dX, wrt=0, sumd=False)
     print(K.shape)
+
 
 if __name__ == '__main__':
     test_if_works()

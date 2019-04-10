@@ -45,7 +45,7 @@ def jitcholesky(A, jit=1e-6, jitbase=2):
     return L, ridge
 
 
-def low_rank_factor(K, Y, logdet=False, solve=False, jitbase=2):
+def low_rank_factor(K, Y, logdet=False, solve=False, jit=1e-6, jitbase=2):
     """
     Inputs: Y, K
     K: a symmetric positive definite (covariance) matrix,
@@ -56,7 +56,7 @@ def low_rank_factor(K, Y, logdet=False, solve=False, jitbase=2):
     The following equality holds:
     Q.t() @ Q = Y.t() @ K.inverse() @ Y
     """
-    L, ridge = jitcholesky(K, jitbase=jitbase)
+    L, ridge = jitcholesky(K, jit=jit, jitbase=jitbase)
     if len(Y.size()) == 1:
         _1d, _Y = True, Y.view(-1, 1)
     else:
