@@ -220,105 +220,76 @@ class SparseGPR(GPR):
 
 
 # testing -------------------------------------------------------------------------
-def test_if_works():
+def plot_model(self, ax, ax2, Y):
     import numpy as np
-    import pylab as plt
-    get_ipython().run_line_magic('matplotlib', 'inline')
+    X = self.X
+    pred_Y, var, _ = self.predict(X, var=True)
+    ax.scatter(X, Y)
+    ax.plot(self.out(X, array=True), pred_Y, color='red', lw=2)
+    ax.scatter(self.out(self.Z, array=True),
+               self.out(self.u, array=True), marker='X', s=200)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
 
-    # dummy data
-    chunks = torch.randint(1, 10, (100,)).tolist()
-    X = torch.cat([(torch.rand(size, 1)-0.5)*5 for size in chunks])
-    Y = (X.tanh() * (-X**2).exp()).view(-1) + 1 * 10.
-
-    # transorm Y -> YY, trans
-    YY = sum_packed_dim(Y, chunks)
-
-    # define model
-    #model = SparseGPR(X, Y, 6, None)
-    model = SparseGPR(X, YY, 6, chunks)
-
-    # training
-    model.train(100)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    ax1.plot(model.losses)
-
-    # predict
-    with torch.no_grad():
-        ax2.scatter(X, Y)
-        Xtest = torch.arange(-3, 3, 0.1, dtype=X.dtype).view(-1, 1)
-        Ytest, var, deriv = model.predict(Xtest, var=True, array=False)
-        x, y, err = Xtest.numpy().reshape(-1), Ytest.numpy(), torch.sqrt(var).numpy()*10
-        ax2.plot(x, y, color='green')
-        ax2.fill_between(x, y-err, y+err, alpha=0.2)
-        Z = model.Z.detach().numpy().reshape(-1)
-        u = model.u.detach().numpy()
-        ax2.scatter(Z, u, marker='x', s=200, color='red')
-
-        Ytest, _, _ = model.predict(Xtest, var=False)
-        assert Ytest.__class__ == np.ndarray
-
-    print(model)
+    err = np.sqrt(var) * 10
+    ax2.fill_between(X.view(-1), pred_Y-err, pred_Y+err, alpha=0.2)
+    ax.set_xlabel('X')
+    ax.set_ylabel('10*sqrt(var)')
 
 
-def second_test():
-    """
-    Here we have a chain relationship as Y=Y(X(T)).
-    The data we are given are (X, dX_dT, dY_dT).
-    We want to regress the latent function Y = f(X).
-    """
-    import numpy as np
-    from theforce.regression.algebra import _2pi
-    import pylab as plt
-    get_ipython().run_line_magic('matplotlib', 'inline')
+def plot_derivatives(self, ax, dX_dany, dY_dany, label='dY/d?'):
+    X = self.X
+    pred_Y, _, pred_d = self.predict(X, derivative=dX_dany)
+    ax.scatter(X, dY_dany)
+    ax.plot(self.out(X, array=True), pred_d, color='red', lw=2)
+    ax.set_xlabel('X')
+    ax.set_ylabel(label)
+
+
+def test_if_works(data_function):
+
+    def visualize_trained_model(model):
+        import matplotlib.pylab as plt
+        get_ipython().run_line_magic('matplotlib', 'inline')
+        fig, axes = plt.subplots(1, 4, figsize=(15, 4))
+        ax = axes[0]
+        plot_model(model, axes[0], axes[1], Y)
+        dX_dX = torch.ones_like(X)
+        plot_derivatives(model, axes[2], dX_dX, dY_dX, 'dY/dX')
+        plot_derivatives(model, axes[3], dX_dT.view(-1, 1, 1), dY_dT, 'dY/dT')
+        fig.tight_layout()
 
     chunks = torch.randint(1, 10, (10,)).tolist()
-    T = torch.cat([torch.rand(size, 1) for size in chunks])
-    X = _2pi*torch.cos(_2pi*T)
-    dX_dT = -_2pi**2*torch.sin(_2pi*T)
-    Y = torch.squeeze(torch.sin(X))
-    dY_dT = dX_dT*torch.cos(X)
+    size = sum(chunks)
+    T, X, dX_dT, Y, dY_dX, dY_dT = data_function(size=size)
     YY = sum_packed_dim(Y, chunks)
+    
+    X = X.view(-1, 1)
+    dX_dX = torch.ones_like(X)
+    dX_dT = dX_dT.view(-1, 1, 1)
 
-    # define model
-    dX_dT = torch.unsqueeze(dX_dT, dim=-1)
-    model = SparseGPR(X, YY, 6, chunks, derivatives=(dX_dT, dY_dT))
+    # select the data to be used
+    #model = SparseGPR(X, Y, 8)
+    #model = SparseGPR(X, YY, 8, chunks)
+    #model = SparseGPR(X, None, 8, chunks, derivatives=(dX_dX, dY_dX))
+    #model = SparseGPR(X, None, 8, chunks, derivatives=(dX_dT, dY_dT))
+    model = SparseGPR(X, YY, 8, chunks, derivatives=(dX_dT, dY_dT))
 
-    # return 0
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4))
-    ax1.scatter(X, dX_dT)
-    ax2.scatter(X, dY_dT)
-    ax3.scatter(X, Y)
+    model.train(100)
+    visualize_trained_model(model)
 
-    # training
-    model.train(300)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    ax1.plot(model.losses)
-
-    # predict
-    with torch.no_grad():
-        ax2.scatter(X, Y)
-        #T = torch.arange(-1., 1., 0.01, dtype=X.dtype).view(-1, 1)
-        #Xtest = _2pi*torch.cos(_2pi*T)
-        Xtest = torch.arange(-_2pi, _2pi, 0.1, dtype=X.dtype).view(-1, 1)
-        Ytest, var, _ = model.predict(Xtest, var=True, array=False)
-        x, y, err = Xtest.numpy().reshape(-1), Ytest.numpy(), torch.sqrt(var).numpy()*10
-        ax2.plot(x, y, color='green')
-        ax2.fill_between(x, y-err, y+err, alpha=0.2)
-        Z = model.Z.detach().numpy().reshape(-1)
-        u = model.u.detach().numpy()
-        ax2.scatter(Z, u, marker='x', s=200, color='red')
-
-        Ytest, _, _ = model.predict(Xtest, var=False)
-        assert Ytest.__class__ == np.ndarray
-
-    print(model)
+def dummy_data(size=100):
+    T = torch.linspace(-1., 1., size)
+    X = torch.exp(T) - torch.exp(-T)
+    dX_dT = torch.exp(T) + torch.exp(-T)
+    Y = torch.exp(-X**2)
+    dY_dX = -2*X*Y
+    dY_dT = dY_dX * dX_dT
+    return T, X, dX_dT, Y, dY_dX, dY_dT
 
 
 if __name__ == '__main__':
 
-    # test_if_works()
-
-    second_test()
+    test_if_works(dummy_data)
 
