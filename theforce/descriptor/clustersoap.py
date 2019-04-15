@@ -13,19 +13,19 @@ class ClusterSoap:
     """ 
     A cluster is defined by its box=(pbc, cell)
     as well as positions of its atoms.
-    It uses ase to create neighbors list and then
+    It uses ASE to create neighbors list and then
     constructs the descriptor vectors for each atom.
-    It also calculates derivatives of descriptors_derivatives wrt
+    It also calculates derivatives of descriptors wrt
     positions of atoms.
     """
 
-    def __init__(self, soap, sorted=False):
+    def __init__(self, soap):
         """ 
-        Needs an instance of sesoap class.
+        Needs an instance of SeSoap class.
         """
         self.soap = soap
         self.neighbors = NewPrimitiveNeighborList(soap.rc, skin=0.0, self_interaction=False,
-                                                  bothways=True, sorted=sorted)
+                                                  bothways=True, sorted=False)
 
     def descriptors(self, pbc, cell, positions):
         """ 
@@ -36,43 +36,40 @@ class ClusterSoap:
         self.neighbors.build(pbc, cell, positions)  # TODO: update maybe faster
         n = positions.shape[0]
         _p = []
-        pairs = []
         for k in range(n):
             indices, offsets = self.neighbors.get_neighbors(k)
             if indices.shape[0] > 0:
                 env = positions[indices] + np.einsum('ik,kj->ij', offsets, cell)                     - positions[k]
                 _p += [self.soap.descriptor(env)]
-                #pairs += [(k, j) for j in indices]
-                pairs += [indices]
             else:
                 _p += [np.zeros(shape=self.soap.dim)]
-                pairs += [[]]
         p = np.asarray(_p)
-        return p, pairs
+        return p
 
-    def descriptors_derivatives(self, pbc, cell, positions, sumj=True):
+    def descriptors_derivatives(self, pbc, cell, positions, sumj=False, jsorted=True):
         """ 
         Inputs: pbc, cell, positions 
-        Returns: p, q, pairs
+        Returns: p, q, indices
         p: descripter vector which is per-atom.
         q: derivatives of p wrt coordinates of atoms, which is per-atom if 
         sumj is True, per-pair if sumj is False.
         --------------------------------------------------------------------
-        If sumj is False, q[k,l,m] is a sparse matrix where k refers to k'th 
-        pair (in pairs), l counts the dimension of the descriptor, and m counts 
-        the 3 Cartesian axes.
-        If sumj is True, the only difference is that k counts the atoms.
-        ------------------------------------------------------------------
-        Notice that when sumj=False, q is a sparse matrix.
-        Otherwise all arrays are full (zeros will be passed if no atoms are
-        present in the environment).
-        Thus p, pairs will be the same either way.
+        * If sumj is True, jsorted will be assumed False.
+        * If sumj is False q and indices are sequences with a length equal
+          to the number of atoms is the cell.
+        * If jsorted is True,
+            q[j] indicates derivatives of p[i] wrt r_j for all i in
+            the neighborhood of j which are saved in indices[j].
+        * If jsorted is False,
+            q[i] indicates derivatives of p[i] wrt r_j for all j in
+            the neighborhood of i which are saved in indices[i].
         """
         self.neighbors.build(pbc, cell, positions)  # TODO: update maybe faster
         n = positions.shape[0]
         _p = []
         _q = []
-        pairs = []
+        js = []
+        nj = []
         for k in range(n):
             indices, offsets = self.neighbors.get_neighbors(k)
             if indices.shape[0] > 0:
@@ -80,24 +77,31 @@ class ClusterSoap:
                 a, b = self.soap.derivatives(env, sumj=sumj)
                 _p += [a]
                 _q += [b]
-                #pairs += [(k, j) for j in indices]
-                pairs += [indices]
+                js += [indices]
+                nj += [indices.shape[0]]
             else:
                 _p += [np.zeros(shape=self.soap.dim)]
                 if sumj:
                     _q += [np.zeros(shape=(self.soap.dim, 3))]
-                pairs += [[]]
+                js += [[]]
+                nj += [0]
         p = np.asarray(_p)
         if sumj:
             q = np.asarray(_q)
-        elif len(_q) > 0:
-            #q = np.transpose(np.concatenate(_q, axis=1), axes=[1, 0, 2])
-            #q = np.concatenate(_q, axis=1)
-            q = _q
         else:
-            #q = np.array([])
-            q = []
-        return p, q, pairs
+            if jsorted:
+                _is = np.concatenate([np.full_like(a, i)
+                                      for i, a in enumerate(js)])
+                _js = np.concatenate(js)
+                k = np.argsort(_js)
+                sections = np.cumsum(nj)[:-1]
+                _is = np.split(_is[k], indices_or_sections=sections)
+                q = np.split(np.concatenate(_q, axis=1)[:, k],
+                             indices_or_sections=sections, axis=1)
+            else:
+                q = _q
+        indices = (js if sumj or not jsorted else _is)
+        return p, q, indices
 
 
 class TorchSoap(Function):
@@ -135,7 +139,7 @@ def test_if_works():
     from theforce.descriptor.radial_funcs import quadratic_cutoff
 
     a = 1.0
-    lmax, nmax, cutoff = 6, 6, a+1e-3
+    lmax, nmax, cutoff = 3, 3, a+1e-3
     soap = SeSoap(lmax, nmax, quadratic_cutoff(cutoff))
     csoap = ClusterSoap(soap)
 
@@ -146,20 +150,26 @@ def test_if_works():
 
     positions_a = flake + center
     atoms_a = Atoms(positions=positions_a, cell=cell, pbc=pbc)
-    p_a, q_a, pairs_a = csoap.descriptors_derivatives(atoms_a.pbc, atoms_a.cell,
-                                                      atoms_a.positions, sumj=True)
+    p_a, q_a, js_a = csoap.descriptors_derivatives(atoms_a.pbc, atoms_a.cell,
+                                                   atoms_a.positions, sumj=True)
 
     positions_b = flake - center*0.33
     atoms_b = Atoms(positions=positions_b, cell=cell, pbc=pbc)
-    p_b, q_b, pairs_b = csoap.descriptors_derivatives(atoms_b.pbc, atoms_b.cell,
-                                                      atoms_b.positions, sumj=True)
+    p_b, q_b, js_b = csoap.descriptors_derivatives(atoms_b.pbc, atoms_b.cell,
+                                                   atoms_b.positions, sumj=True)
 
     print(np.allclose(p_a-p_b, 0.0),
           np.allclose(q_a-q_b, 0.0), (q_a-q_b).max())
 
-    p_, _ = csoap.descriptors(atoms_b.pbc, atoms_b.cell,
-                              atoms_b.positions)
+    p_ = csoap.descriptors(atoms_b.pbc, atoms_b.cell,
+                           atoms_b.positions)
     print(np.allclose(p_a-p_, 0.0))
+
+    #
+    p, q, indices = csoap.descriptors_derivatives(atoms_b.pbc, atoms_b.cell, atoms_b.positions,
+                                                  sumj=False, jsorted=True)
+    #for a, b in zip(q, indices):
+    #    print(a.shape, b.shape, b)
 
 
 if __name__ == '__main__':
