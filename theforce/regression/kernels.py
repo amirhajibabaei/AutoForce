@@ -7,6 +7,7 @@
 import torch
 from torch.nn import Module, Parameter
 from theforce.regression.algebra import positive, free_form
+import warnings
 
 
 class RBF(Module):
@@ -48,10 +49,38 @@ class RBF(Module):
                 cov = torch.unsqueeze(cov, dim=2) * _derivative
         return cov
 
+    def matrices(self, x, xx, d_dx=False, d_dxx=False, d_dxdxx=False):
+
+        # covariance matrix
+        iscale = 1.0/positive(self._scale)
+        r = (x[:, None, ] - xx[None, ]) * iscale
+        cov = (-(r**2).sum(dim=-1)/2).exp() * self.diag()
+
+        # derivatives
+        _dx = _dxx = _dxdxx = None
+        if d_dx or d_dxx or d_dxdxx:
+            rr = (r*iscale)
+        if d_dx or d_dxx:
+            cov_r = cov[..., None] * rr
+
+        if d_dx:
+            _dx = -cov_r
+        if d_dxx:
+            _dxx = cov_r
+        if d_dxdxx:
+            rirj = -rr[..., None] * rr[..., None, :]
+            d = torch.LongTensor(torch.arange(iscale.size()[0]))
+            rirj[..., d, d] = rirj[..., d, d] + iscale**2
+            _dxdxx = rirj * cov[..., None, None]
+
+        return cov, _dx, _dxx, _dxdxx
+
     def diag(self):
         return positive(self._variance)
 
     def diag_derivatives(self, d_dtheta):
+        warnings.warn(
+            'diag_derivatives in RBF is deprecated! It may be incorrect!')
         scale = positive(self._scale)
         for _ in range(d_dtheta.dim()-2):
             scale = torch.unsqueeze(scale, -1)
@@ -82,6 +111,9 @@ def test_if_works():
     dX = torch.ones_like(X1)
     K = kern.cov_matrix(X1, X2, d_dtheta=dX, wrt=0, sumd=False)
     print(K.shape)
+
+    a, b, c, d = kern.matrices(X1, X2, True, True, True)
+    print([p.shape for p in [a, b, c, d]])
 
 
 if __name__ == '__main__':
