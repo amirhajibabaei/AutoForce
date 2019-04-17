@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -168,11 +168,52 @@ def test_if_works():
     #
     p, q, indices = csoap.descriptors_derivatives(atoms_b.pbc, atoms_b.cell, atoms_b.positions,
                                                   sumj=False, jsorted=True)
-    #for a, b in zip(q, indices):
+    # for a, b in zip(q, indices):
     #    print(a.shape, b.shape, b)
+
+
+def test_grad():
+    import numpy as np
+    from ase import Atoms
+    from theforce.util.flake import hexagonal_flake
+    from theforce.descriptor.sesoap import SeSoap
+    from theforce.descriptor.radial_funcs import quadratic_cutoff
+
+    # csoap
+    a = 1.0
+    lmax, nmax, cutoff = 3, 3, a+1e-3
+    soap = SeSoap(lmax, nmax, quadratic_cutoff(cutoff))
+    csoap = ClusterSoap(soap)
+
+    # atoms
+    pbc = True
+    cell = np.array([10, 10, 10])*a
+    center = cell/2
+    flake = hexagonal_flake(a=a, centre=True)
+    positions = flake + center
+    atoms = Atoms(positions=positions, cell=cell, pbc=pbc)
+
+    # dp
+    delta = 1e-5
+    p1, q1, idx1 = csoap.descriptors_derivatives(atoms.pbc, atoms.cell, atoms.positions,
+                                                 jsorted=False, sumj=False)
+    dr = np.random.uniform(-delta, delta, size=atoms.positions.shape)
+    atoms.positions += dr
+    p2, q2, idx2 = csoap.descriptors_derivatives(atoms.pbc, atoms.cell, atoms.positions,
+                                                 jsorted=False, sumj=False)
+
+    dpr = np.concatenate([a.sum(axis=1, keepdims=True)
+                          for a in q1], axis=1) * dr
+    dp = dpr.sum(axis=(1, 2))
+    # the point is that error scales with delta, to see this,
+    # try dp with different orders of delta and calculate p2-p1
+    test = np.allclose(p2-p1, dp, atol=10**3*delta)
+    print(test)
 
 
 if __name__ == '__main__':
 
     view = test_if_works()
+
+    test_grad()
 

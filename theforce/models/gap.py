@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -76,7 +76,7 @@ class GAP(Module):
 
         # inducing
         rnd = torch.randint(len(self.data), (num_inducing,))
-        Z = torch.cat([self.data[k][0][torch.randint(self.data[k][0].size()[0], (1,))]
+        Z = torch.cat([self.data[k][0][torch.randint(self.data[k][0].size(0), (1,))]
                        for k in rnd], dim=0)
         self.Z = Parameter(Z, requires_grad=False)
 
@@ -167,7 +167,7 @@ class GAP(Module):
         # numerically stable calculation of _mu
         L, ridge = jitcholesky(ZZ, jitbase=2)
         A = torch.cat((XZ, noise * L.t()))
-        Y = torch.cat((Y, torch.zeros(self.Z.size()[0],
+        Y = torch.cat((Y, torch.zeros(self.Z.size(0),
                                       dtype=Y.dtype)))
         Q, R = torch.qr(A)
         self._mu = torch.mv(R.inverse(), torch.mv(Q.t(), Y))
@@ -207,7 +207,7 @@ class GAP(Module):
 
         # predict
         mu = torch.mv(XZ, self._mu)
-        energy = mu[0:p.size()[0]].sum()
-        forces = mu[p.size()[0]:].view(-1, 3)
+        energy = mu[0:p.size(0)].sum()
+        forces = mu[p.size(0):].view(-1, 3)
         return energy, forces
 
