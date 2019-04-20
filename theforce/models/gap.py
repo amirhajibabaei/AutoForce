@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # In[ ]:
@@ -69,10 +69,10 @@ class GAP(Module):
         # add to data
         self.data += [(p, q, indices, energy, forces)]
 
-    def parameterize(self, num_inducing, use_energies=1, use_forces=1):
+    def parameterize(self, num_inducing, use_energies=1, use_forces=1, kern=RBF):
         # kernel param
         self._noise = Parameter(torch.tensor(1.))
-        self.kern = RBF(torch.ones(self.csoap.soap.dim), torch.tensor(1.))
+        self.kern = kern(torch.ones(self.csoap.soap.dim), torch.tensor(1.))
 
         # inducing
         rnd = torch.randint(len(self.data), (num_inducing,))

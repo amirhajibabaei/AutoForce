@@ -91,6 +91,39 @@ class RBF(Module):
             positive(self._scale).data, positive(self._variance).data))
 
 
+class Cauchy(Module):
+
+    def __init__(self, scale, variance):
+        super(Cauchy, self).__init__()
+        self._scale = Parameter(free_form(scale))
+        self._variance = Parameter(free_form(variance))
+
+    def matrices(self, x, xx, d_dx=False, d_dxx=False, d_dxdxx=False):
+        # covariance matrix
+        scale = positive(self._scale)
+        r = (x[:, None, ]-xx[None, ])/scale
+        cov = 1.0/(1.0+(r**2).sum(dim=-1))
+
+        # derivatives
+        _dx = _dxx = _dxdxx = None
+        if d_dx or d_dxx:
+            a = (-2*r*cov[..., None]**2/scale) * self.diag()
+            if d_dx:
+                _dx = a
+            if d_dxx:
+                _dxx = -a
+
+        if d_dxdxx:
+            _dxdxx = -(8*r[..., None, :]*r[..., None]*cov[..., None, None] - 2*torch.eye(scale.size(0))
+                       )*cov[..., None, None]**2/(scale[None, ]*scale[:, None]) * self.diag()
+            
+        cov = self.diag()*cov
+        return cov, _dx, _dxx, _dxdxx
+
+    def diag(self):
+        return positive(self._variance)
+
+
 def test_if_works():
     from theforce.regression.algebra import jitcholesky
     variance = torch.tensor(1.0)
@@ -114,7 +147,13 @@ def test_if_works():
 
     a, b, c, d = kern.matrices(X1, X2, True, True, True)
     print([p.shape for p in [a, b, c, d]])
+    
+    #--------------------------------------
+    kern = Cauchy(scale, variance)
+    a, b, c, d = kern.matrices(X1, X2, True, True, True)
+    print([p.shape for p in [a, b, c, d]])
 
+    
 
 if __name__ == '__main__':
     test_if_works()
