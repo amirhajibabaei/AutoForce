@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -53,7 +53,8 @@ class sph_repr:
 
     def cart_coord_to_trig(self, x, y, z):
         rxy_sq = np.atleast_1d(x*x + y*y)
-        rxy = np.sqrt(rxy_sq) + self.tiny
+        rxy = np.sqrt(rxy_sq)
+        rxy[rxy == 0.0] += self.tiny
         r_sq = rxy_sq + z*z
         r = np.sqrt(r_sq)
         sin_theta = rxy/r
