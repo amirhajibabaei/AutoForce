@@ -17,7 +17,7 @@ def lennard_jones(xyz, sigma=1.0):
 
 
 # ------------------------------------------ flakes
-def cubic_flake(a=1.0, centre=False):
+def cubic_flake(a=1.0, centre=True):
     if centre:
         trans = [[0, 0, 0]]
     else:
@@ -84,9 +84,9 @@ if __name__ == '__main__':
 
     xyz = hexagonal_flake()
     xyz, energies, forces = from_flake(xyz, 3, eps=0.1)
-    show_flake(xyz, rc=1.5, d=0.3)
+    #show_flake(xyz, rc=1.5, d=0.3)
 
     xyz = cubic_flake()
     xyz, energies, forces = from_flake(xyz, 3, eps=0.1)
-    show_flake(xyz, rc=1.5, d=0.3)
+    #show_flake(xyz, rc=1.5, d=0.3)
 
