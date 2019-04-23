@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # In[ ]:
@@ -47,13 +47,13 @@ class GAP(Module):
 
         # descriptors
         if forces is not None:
-            p, q, indices = self.csoap.descriptors_derivatives(pbc, cell, positions,
-                                                               sumj=False, jsorted=True)
+            p, q, i, j = self.csoap.descriptors_derivatives(pbc, cell, positions,
+                                                            sumj=False, jsorted=True)
         elif energy is not None:
             p = self.csoap.descriptors(pbc, cell, positions)
-            q, indices = None, None
+            q, i, j = None, None, None
         else:
-            p, q, indices = None, None, None
+            p, q, i, j = None, None, None, None
 
         # apply torch.as_tensor
         if energy is not None:
@@ -64,10 +64,10 @@ class GAP(Module):
             p = torch.as_tensor(p)
         if q is not None:
             q = [torch.as_tensor(v) for v in q]
-            indices = [torch.as_tensor(v) for v in indices]
+            i = [torch.as_tensor(v) for v in i]
 
         # add to data
-        self.data += [(p, q, indices, energy, forces)]
+        self.data += [(p, q, i, j, energy, forces)]
 
     def select_Z(self, num_inducing):
         X = torch.cat([a[0] for a in self.data])
@@ -90,7 +90,7 @@ class GAP(Module):
 
     def covariances(self):
 
-        for (p, q, indices, energy, forces) in self.data:
+        for (p, q, I, J, energy, forces) in self.data:
 
             # TODO: d_dx, d_dxdxx are only needed if forces are present
             # TODO: d_dxdxx is not fully needed at a given instance
@@ -104,13 +104,13 @@ class GAP(Module):
                 diag = xx.sum()
                 yield ZX.view(-1, 1), diag.view(1), energy.view(1)
 
-            if self.use_forces and q is not None and forces is not None and indices is not None:
-                for i in range(len(q)):
-                    dxj_dri, j = q[i], indices[i]
-                    ZF = -torch.einsum('ijp,pjm->im', d_dx[:, j], dxj_dri)
+            if self.use_forces and q is not None and forces is not None and I is not None:
+                for i, j, dxi_drj in zip(I, J, q):
+                    # NOTE: if env of an atom is empty, it will not be present in J
+                    ZF = -torch.einsum('ijp,pjm->im', d_dx[:, i], dxi_drj)
                     diag = torch.einsum('qim,ijqp,pjm->m',
-                                        dxj_dri, d_dxdxx[j][:, j], dxj_dri)
-                    yield ZF, diag.view(3), forces[i].view(3)
+                                        dxi_drj, d_dxdxx[i][:, i], dxi_drj)
+                    yield ZF, diag.view(3), forces[j].view(3)
 
     def matrices(self):
         ZZ, _, _, _ = self.kern.matrices(self.Z, self.Z)
@@ -194,23 +194,25 @@ class GAP(Module):
             atomic_numbers = cluster.get_atomic_numbers()
 
         # descriptors
-        p, q, indices = self.csoap.descriptors_derivatives(pbc, cell, positions,
-                                                           sumj=False, jsorted=True)
+        p, q, I, J = self.csoap.descriptors_derivatives(pbc, cell, positions,
+                                                        sumj=False, jsorted=True)
         p = torch.as_tensor(p)
         q = [torch.as_tensor(v) for v in q]
-        indices = [torch.as_tensor(v) for v in indices]
+        I = [torch.as_tensor(v) for v in I]
 
         # covariances
         ZX, _, d_dx, _ = self.kern.matrices(self.Z, p, False, True, False)
         ZF = []
-        for i in range(len(q)):
-            dxj_dri, j = q[i], indices[i]
-            ZF += [-torch.einsum('ijp,pjm->im', d_dx[:, j], dxj_dri)]
+        for i, j, dxi_drj in zip(*[I, J, q]):
+            ZF += [-torch.einsum('ijp,pjm->im', d_dx[:, i], dxi_drj)]
         XZ = torch.cat([ZX, *ZF], dim=1).t()
 
         # predict
         mu = torch.mv(XZ, self._mu)
         energy = mu[0:p.size(0)].sum()
-        forces = mu[p.size(0):].view(-1, 3)
+        forces = torch.zeros(p.size(0), 3)
+        forces[J] = mu[p.size(0):].view(-1, 3)
+        # NOTE: if env of an atom is empty, it will not be present in J
+        # and the zero will be passed as the force
         return energy, forces
 
