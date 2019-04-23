@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -69,16 +69,19 @@ class GAP(Module):
         # add to data
         self.data += [(p, q, indices, energy, forces)]
 
+    def select_Z(self, num_inducing):
+        X = torch.cat([a[0] for a in self.data])
+        rnd = torch.randint(len(self.data), (num_inducing,))
+        Z = X[rnd]
+        return Z
+
     def parameterize(self, num_inducing, use_energies=1, use_forces=1, kern=RBF):
         # kernel param
         self._noise = Parameter(torch.tensor(1.))
         self.kern = kern(torch.ones(self.csoap.soap.dim), torch.tensor(1.))
 
         # inducing
-        rnd = torch.randint(len(self.data), (num_inducing,))
-        Z = torch.cat([self.data[k][0][torch.randint(self.data[k][0].size(0), (1,))]
-                       for k in rnd], dim=0)
-        self.Z = Parameter(Z, requires_grad=False)
+        self.Z = Parameter(self.select_Z(num_inducing), requires_grad=False)
 
         # flags
         self.parameterized = 1
