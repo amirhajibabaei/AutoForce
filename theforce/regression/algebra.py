@@ -77,6 +77,33 @@ def log_normal(Y, K):
     return -(torch.mm(Q.t(), Q) + logdet + torch.log(_2pi)*Y.size()[0])/2
 
 
+def solve_svd(A, Y):
+    U, S, V = torch.svd(A)
+    return V @ ((U.t() @ Y)/S)
+
+
+# greedy algorithms ------------------------------------------------------------
+def select_greedy_simple(T, num, Z=None):
+    assert T.dim() == 2
+    X = T
+    if Z is None:
+        arg = torch.randint(X.shape[0], (1,))
+        Z = X[arg]
+        X = torch.cat([X[:arg], X[arg+1:]])
+        #selected = [arg]
+        n = num-1
+    else:
+        assert Z.dim() == 2
+        #selected = []
+        n = num
+    for _ in range(n):
+        val, arg = torch.max(((X[:, None]-Z[None])**2).sum(dim=(1, 2)), 0)
+        #selected += [arg]
+        Z = torch.cat([Z, X[arg][None]])
+        X = torch.cat([X[:arg], X[arg+1:]])
+    return Z
+
+
 # examples ---------------------------------------------------------------------
 def example_sum_packed_dim():
     sizes = torch.randint(1, 10, (100,))
@@ -101,6 +128,19 @@ def test(n=1000):
     dist = torch.distributions.MultivariateNormal(torch.zeros(n), scale_tril=L)
     test_log_normal = torch.allclose(dist.log_prob(Y), log_normal(Y, K))
     print('log_normal: {}'.format(test_log_normal))
+
+    # test select_greedy
+    X = torch.rand(100, 7)
+    Z = select_greedy_simple(X, 17)
+    Z = select_greedy_simple(X, 17, Z=Z)
+
+    # test solve SVD
+    A = torch.diag(torch.ones(10))
+    Y = torch.linspace(0, 100, 10)
+    X = solve_svd(A, Y)
+    test_solve_svd = torch.allclose(X, Y)
+    print('solve_svd: {}'.format(test_solve_svd))
+
 
 
 if __name__ == '__main__':
