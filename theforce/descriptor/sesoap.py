@@ -16,7 +16,7 @@ especially when particles move across the cutoff.""".replace('\n', '')
 
 class SeSoap:
 
-    def __init__(self, lmax, nmax, radial, modify_scale=None, tiny=1e-10):
+    def __init__(self, lmax, nmax, radial, modify_scale=None, tiny=1e-100):
         """
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
@@ -45,6 +45,9 @@ class SeSoap:
                     [m for m in range(0, l+1)] + [l for m in range(0, l)])
                    for l in range(0, lmax+1)]
 
+        # dim of descriptor after compression
+        self.dim = (lmax+1)*((nmax+1)*(nmax+2)//2)
+
         # lower triangle indices
         self.In, self.Jn = np.tril_indices(nmax+1)
 
@@ -54,9 +57,6 @@ class SeSoap:
         tmp = self.compress(
             np.sqrt(np.einsum('ln,lm->lnm', a_ln, a_ln)), 'lnn')
         self.lnnp_c = [tmp, tmp[:, np.newaxis], tmp[:, np.newaxis, np.newaxis]]
-
-        # dim of descriptor after compression
-        self.dim = (lmax+1)*((nmax+1)*(nmax+2)//2)
 
         # prepare for broadcasting
         self.rns = 2 * np.arange(self.nmax+1).reshape(nmax+1, 1, 1, 1)
@@ -203,18 +203,18 @@ class SeSoap:
 
     def compress(self, a, type):
         if type == 'lnn':
-            return a[:, self.In, self.Jn].reshape(-1)
+            return a[:, self.In, self.Jn].reshape(self.dim)
         elif type == 'lnnj' or type == 'lnnk':
             j = a.shape[-1]
-            return a[:, self.In, self.Jn].reshape(-1, j)
+            return a[:, self.In, self.Jn].reshape(self.dim, j)
         elif type == '3lnn':
-            return a[:, :, self.In, self.Jn].reshape((3, -1))
+            return a[:, :, self.In, self.Jn].reshape((3, self.dim))
         elif type == '3lnnj' or type == '3lnnk':
             j = a.shape[-1]
-            return a[:, :, self.In, self.Jn, :].reshape((3, -1, j))
+            return a[:, :, self.In, self.Jn, :].reshape((3, self.dim, j))
         elif type == 'lnnjk' or type == 'lnnkj':
             j = a.shape[-1]
-            return a[:, self.In, self.Jn].reshape(-1, j, j)
+            return a[:, self.In, self.Jn].reshape(self.dim, j, j)
         else:
             print("type {} not defined yet, for matrix with shape {}".format(
                 type, a.shape))
@@ -498,6 +498,16 @@ def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
     print(63*'-'+' done\n')
 
 
+def test_special_cases():
+    from theforce.descriptor.radial_funcs import quadratic_cutoff
+    env = SeSoap(2, 2, quadratic_cutoff(3.0))
+    xyz = np.random.uniform(size=(0, 3))
+    p, q = env.derivatives(xyz)
+    #print(q.shape, q)
+    p, q = env.derivatives(xyz, sumj=False)
+    #print(q.shape, q)
+
+
 if __name__ == '__main__':
 
     test_sesoap()
@@ -505,4 +515,6 @@ if __name__ == '__main__':
     test_derivatives()
 
     test_sesoap_performance()
+
+    test_special_cases()
 
