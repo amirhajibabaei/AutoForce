@@ -48,7 +48,7 @@ class ClusterSoap:
         p = np.asarray(_p)
         return p
 
-    def descriptors_derivatives(self, pbc, cell, positions, sumj=False, jsorted=True):
+    def descriptors_derivatives(self, pbc, cell, positions, sumj=False, jsorted=True, selfderive=True):
         """ 
         Inputs: pbc, cell, positions 
         Returns: p, q, i, j
@@ -74,6 +74,10 @@ class ClusterSoap:
             if indices.shape[0] > 0:
                 env = positions[indices] + np.einsum('ik,kj->ij', offsets, cell)                     - positions[k]
                 a, b = self.soap.derivatives(env, sumj=sumj)
+                if not sumj and selfderive:
+                    indices = np.concatenate([indices, [k]])
+                    b = np.concatenate([b, -b.sum(axis=1, keepdims=True)],
+                                       axis=1)
                 p += [a]
                 q += [b]
                 i += [k]
