@@ -5,6 +5,7 @@
 
 
 import torch
+import warnings
 
 
 def cat(tensors, dim=0):
@@ -86,10 +87,28 @@ class SparseTensor:
         """ key: 0->i, 1->j """
         if type(self.i) == list:
             self._cat()
-        argsort = torch.argsort([self.i, self.j][key])
+
+        # get argsort
+        ij = [a.tolist() for a in [self.j, self.i]]
+        if key == 0:
+            ij = ij[1::-1]
+        _, argsort = zip(*sorted([([a, b], c) for a, b, c in
+                                  zip(*[*ij, range(self.i.size(0))])],
+                                 key=lambda x: x[0]))
+        argsort = torch.LongTensor(argsort)
+
+        # sort tensors
         self.i = self.i[argsort]
         self.j = self.j[argsort]
         self.a = torch.index_select(self.a, self.sdim, argsort)
+
+        # get counts, and create split-sizes for future
+        idx = [self.i, self.j][key]
+        unique = idx.unique(sorted=True)
+        count = torch.stack([(idx == e).sum() for e in unique]).tolist()
+        self._ispec = torch.LongTensor(count + [0])
+        self._jspec = torch.LongTensor(count + [0])
+        self._aspec = torch.LongTensor(count + [self.sdim])
 
 
 # -------------------------------------------------------------
@@ -99,7 +118,7 @@ def test():
     b = torch.rand(10, 8, 3)
     c = torch.rand(10, 9, 3)
     t, spec = cat([a, b, c], 1)
-    print([a.shape for a in split(t, spec)])
+    #print([a.shape for a in split(t, spec)])
 
 
 def test_sparse():
@@ -113,7 +132,7 @@ def test_sparse():
     S.add([1, 1, 1], [list(range(3)), list(range(3)),
                       list(range(3))], [a, a, a])
     S._cat()
-    print(S.i.shape, S.j.shape, S.a.shape)
+    #print(S.i.shape, S.j.shape, S.a.shape)
 
     a = torch.rand(7, 3, 6)
     b = torch.rand(7, 4, 6)
@@ -125,7 +144,21 @@ def test_sparse():
     S._cat()
     S.add(3, list(range(5)), c)
     S._cat()
-    print(S.i.shape, S.j.shape, S.a.shape)
+    #print(S.i.shape, S.j.shape, S.a.shape)
+
+    # test full sorting
+    s = SparseTensor(shape=(0,))
+    s.add([4, 3, 2], 1, torch.tensor([4, 3, 2]))
+    s.add([3, 1], 2, torch.tensor([3, 1]))
+    s.add([2, 1, 4], 3, torch.tensor([2, 1, 4]))
+    s.add([1, 3], 4, torch.tensor([1, 3]))
+    s.add([2], 4, torch.tensor([2]))
+
+    s._sort(key=1)
+    s._split()
+    print(s.i)
+    print(s.j)
+    print(s.a)
 
 
 if __name__ == '__main__':

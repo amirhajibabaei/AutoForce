@@ -9,6 +9,7 @@ from ase.neighborlist import NewPrimitiveNeighborList
 import torch
 from torch.autograd import Function
 from theforce.util.tensors import cat, split
+from theforce.util.arrays import SparseArray
 
 
 class ClusterSoap:
@@ -28,6 +29,29 @@ class ClusterSoap:
         self.soap = soap
         self.neighbors = NewPrimitiveNeighborList(soap.rc, skin=0.0, self_interaction=False,
                                                   bothways=True, sorted=False)
+
+    def describe(self, pbc, cell, positions, iderive=True, jderive=True):
+        """
+        Inputs: pbc, cell, positions
+        Returns: p, s
+        p: descripter vector which is per-atom.
+        s: derivatives of p wrt positions (a SparseArray is returned)
+        """
+        self.neighbors.build(pbc, cell, positions)  # TODO: update maybe faster
+        n = positions.shape[0]
+        p = []
+        s = SparseArray(shape=(self.soap.dim, 0, 3))
+        for k in range(n):
+            indices, offsets = self.neighbors.get_neighbors(k)
+            env = positions[indices] + np.einsum('ik,kj->ij', offsets, cell)                 - positions[k]
+            a, b = self.soap.derivatives(env, sumj=False, normalize=False)
+            p += [a]
+            if iderive:
+                s.add([k], [k], -b.sum(axis=1, keepdims=True))
+            if jderive and indices.shape[0] > 0:
+                s.add(k, indices, b)
+        p = np.asarray(p)
+        return p, s
 
     def descriptors(self, pbc, cell, positions):
         """ 

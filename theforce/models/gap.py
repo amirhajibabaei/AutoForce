@@ -60,29 +60,19 @@ class GAP(Module):
                 atomic_numbers = None
 
         # descriptors
-        if forces is not None:
-            p, q, i, j = self.csoap.descriptors_derivatives(pbc, cell, positions,
-                                                            sumj=False, jsorted=True)
-        elif energy is not None:
-            p = self.csoap.descriptors(pbc, cell, positions)
-            q, i, j = None, None, None
-        else:
-            p, q, i, j = None, None, None, None
+        p, _s = self.csoap.describe(pbc, cell, positions,
+                                    iderive=True, jderive=True)
+        p = torch.as_tensor(p)
+        s = SparseTensor(shape=(self.csoap.soap.dim, 0, 3))
+        s.add(_s.i, _s.j, _s.a)
+        h = unnamed_operation(s)
+        s._cat()
 
         # apply torch.as_tensor
         if energy is not None:
             energy = torch.as_tensor([energy])
         if forces is not None:
             forces = torch.as_tensor(forces)
-        if p is not None:
-            p = torch.as_tensor(p)
-        if q is not None:
-            q = [torch.as_tensor(v) for v in q]
-            i = [torch.as_tensor(v) for v in i]
-            s = SparseTensor(shape=(self.csoap.soap.dim, 0, 3))
-            s.add(i, j, q)
-            h = unnamed_operation(s)
-            s._cat()
 
         # add to data
         self.data += [(p, s, h, energy, forces)]
@@ -215,25 +205,23 @@ class GAP(Module):
             atomic_numbers = cluster.get_atomic_numbers()
 
         # descriptors
-        p, q, I, J = self.csoap.descriptors_derivatives(pbc, cell, positions,
-                                                        sumj=False, jsorted=True)
+        p, _s = self.csoap.describe(pbc, cell, positions)
         p = torch.as_tensor(p)
-        q = [torch.as_tensor(v) for v in q]
-        I = [torch.as_tensor(v) for v in I]
+        s = SparseTensor(shape=_s.shape)
+        s.add(_s.i, _s.j, _s.a)
+        s._cat()
 
         # covariances
         ZX, _, d_dx, _ = self.kern.matrices(self.Z, p, False, True, False)
-        ZF = []
-        for i, j, dxi_drj in zip(*[I, J, q]):
-            ZF += [-torch.einsum('ijp,pjm->im', d_dx[:, i], dxi_drj)]
-        XZ = torch.cat([ZX, *ZF], dim=1).t()
+        temp = -(d_dx[:, s.i, :, None]*s.a.permute(1, 0, 2)).sum(dim=2)
+        m = self.Z.size(0)
+        ZF = torch.zeros(m, *positions.shape).index_add(1, s.j, temp
+                                                        ).view(m, -1)
+        XZ = torch.cat([ZX, ZF], dim=1).t()
 
         # predict
         mu = torch.mv(XZ, self._mu)
         energy = mu[0:p.size(0)].sum()
-        forces = torch.zeros(p.size(0), 3)
-        forces[J] = mu[p.size(0):].view(-1, 3)
-        # NOTE: if env of an atom is empty, it will not be present in J
-        # and the zero will be passed as the force
+        forces = mu[p.size(0):].view(-1, 3)
         return energy, forces
 
