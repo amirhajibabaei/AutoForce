@@ -10,6 +10,7 @@ from theforce.descriptor.clustersoap import ClusterSoap
 from theforce.regression.kernels import RBF
 from theforce.regression.algebra import low_rank_factor, jitcholesky
 from theforce.regression.algebra import positive, free_form, sum_packed_dim
+from theforce.util.tensors import SparseTensor, stretch_tensor
 import ase
 import numpy as np
 import torch
@@ -17,6 +18,19 @@ from torch.nn import Module, Parameter
 from torch.distributions import LowRankMultivariateNormal
 import warnings
 torch.set_default_tensor_type(torch.DoubleTensor)
+
+
+def unnamed_operation(s):
+    s._sort(key=1)
+    s._split()
+    size = max(s.i_max, s.j_max) + 1  # number of particles
+    h = torch.zeros(s.shape[0], s.shape[0], size, size)
+    for i, j, a in zip(*[s.i, s.j, s.a]):
+        b = (stretch_tensor(a, (0, 1)) *
+             stretch_tensor(a, (1, 2))).sum(dim=-1)
+        k, l = torch.broadcast_tensors(i[None, ], i[:, None])
+        h[:, :, k, l] += b
+    return h.permute(2, 3, 0, 1)
 
 
 class GAP(Module):
@@ -65,9 +79,13 @@ class GAP(Module):
         if q is not None:
             q = [torch.as_tensor(v) for v in q]
             i = [torch.as_tensor(v) for v in i]
+            s = SparseTensor(shape=(self.csoap.soap.dim, 0, 3))
+            s.add(i, j, q)
+            h = unnamed_operation(s)
+            s._cat()
 
         # add to data
-        self.data += [(p, q, i, j, energy, forces)]
+        self.data += [(p, s, h, energy, forces)]
 
     def select_Z(self, num_inducing):
         X = torch.cat([a[0] for a in self.data])
@@ -90,10 +108,9 @@ class GAP(Module):
 
     def covariances(self):
 
-        for (p, q, I, J, energy, forces) in self.data:
+        for (p, s, h, energy, forces) in self.data:
 
             # TODO: d_dx, d_dxdxx are only needed if forces are present
-            # TODO: d_dxdxx is not fully needed at a given instance
             zx, _, d_dx, _ = self.kern.matrices(self.Z, p, False,
                                                 True, False)
             xx, _, _, d_dxdxx = self.kern.matrices(p, p, False,
@@ -104,13 +121,13 @@ class GAP(Module):
                 diag = xx.sum()
                 yield ZX.view(-1, 1), diag.view(1), energy.view(1)
 
-            if self.use_forces and q is not None and forces is not None and I is not None:
-                for i, j, dxi_drj in zip(I, J, q):
-                    # NOTE: if env of an atom is empty, it will not be present in J
-                    ZF = -torch.einsum('ijp,pjm->im', d_dx[:, i], dxi_drj)
-                    diag = torch.einsum('qim,ijqp,pjm->m',
-                                        dxi_drj, d_dxdxx[i][:, i], dxi_drj)
-                    yield ZF, diag.view(3), forces[j].view(3)
+            if self.use_forces and s is not None and forces is not None and h is not None:
+                temp = -(d_dx[:, s.i, :, None]*s.a.permute(1, 0, 2)).sum(dim=2)
+                m = self.Z.size(0)
+                ZF = torch.zeros(m, *forces.size()).index_add(1, s.j, temp
+                                                              ).view(m, -1)
+                sum_diag = (d_dxdxx*h).sum()
+                yield ZF, sum_diag.view(1), forces.view(-1)
 
     def matrices(self):
         ZZ, _, _, _ = self.kern.matrices(self.Z, self.Z)
@@ -149,7 +166,9 @@ class GAP(Module):
         self.starts += [len(self.losses)]
 
         if optimizer is None:
-            optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+            if not hasattr(self, 'optimizer'):
+                self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+            optimizer = self.optimizer
 
         for _ in range(steps):
             optimizer.zero_grad()
@@ -157,6 +176,8 @@ class GAP(Module):
             self.losses += [loss.data]
             loss.backward()
             optimizer.step()
+        optimizer.zero_grad()  # NOTE: maybe unnecessary
+
         print('trained for {} steps'.format(steps))
 
         self.ready = 0
