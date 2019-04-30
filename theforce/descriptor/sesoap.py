@@ -100,7 +100,7 @@ class SeSoap:
             a = self.scaling(np.asarray(xyz).reshape(3, -1).T)
         return (b[:, 0] for b in np.hsplit(a, 3))
 
-    def descriptor(self, xyz, order=0, normalize=False):
+    def descriptor(self, xyz, order=0, normalize=False, weights=None):
         """
         Inputs:   xyz -> Cartesian coordinates, see parse_xyz
         order:    0 or 1, see parse_xyz
@@ -110,6 +110,8 @@ class SeSoap:
             warnings.warn(normalization_warning)
         r, _, _, _, _, Y = self.sph.ylm_rl(*self.parse_xyz(xyz, order=order))
         R, _ = self.radial.radial(r)
+        if weights is not None:
+            R *= weights
         s = (R * r**self.rns * Y).sum(axis=-1)
         p = self.soap_dot(s, s, reverse=False)
         if normalize:
@@ -118,7 +120,7 @@ class SeSoap:
                 p /= norm
         return p
 
-    def derivatives(self, xyz, order=0, normalize=False, sumj=True, cart=True, flatten=False):
+    def derivatives(self, xyz, order=0, normalize=False, sumj=True, cart=True, weights=None):
         """
         Inputs:   xyz -> Cartesian coordinates, see parse_xyz
         order:    0 or 1, see parse_xyz
@@ -137,6 +139,9 @@ class SeSoap:
         Y_theta, Y_phi = self.sph.ylm_partials(
             sin_theta, cos_theta, Y, with_r=r)
         R, dR = self.radial.radial(r)
+        if weights is not None:
+            R *= weights
+            dR *= weights
         rns = r**self.rns
         R_rns = R * rns
         # descriptor
@@ -163,10 +168,7 @@ class SeSoap:
         if sumj:
             return p, self.scaling(q.sum(axis=order+1))
         else:
-            if flatten:
-                return p, self.scaling(q).reshape(self.dim, -1)
-            else:
-                return p, self.scaling(q)
+            return p, self.scaling(q)
 
     # ------------------- convenience functions -------------------------------------------------
     @staticmethod
@@ -438,13 +440,14 @@ def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
     env = SeSoap(5, 5, quadratic_cutoff(rc))
     delta = 1e-3 * rc
     skin = 10 * delta
+    weights = np.random.uniform(0.1, 3.0, size=(n,))
 
     tests, failures, r_failed = [], [], []
     for _ in range(N):
 
         x, y, z = rand_cart_coord(n, rc-skin)
-        p1, q = env.derivatives(
-            [x, y, z], order=1, normalize=normalize, sumj=False)
+        p1, q = env.derivatives([x, y, z], order=1, normalize=normalize,
+                                sumj=False, weights=weights)
 
         # choose a particle, skip if r is too small, reduce this threshold to see some errors!
         r = 0
@@ -462,7 +465,8 @@ def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
         z[j] += delta * u[2]
 
         # dp/delta via finite differences
-        p2 = env.descriptor([x, y, z], order=1, normalize=normalize)
+        p2 = env.descriptor([x, y, z], order=1,
+                            normalize=normalize, weights=weights)
         fd = (p2 - p1) / delta
 
         # grad in direction of u
@@ -472,7 +476,8 @@ def test_derivatives(n=20, rc=1., normalize=True, N=100, atol=1e-10):
         x[j] += delta * u[0]
         y[j] += delta * u[1]
         z[j] += delta * u[2]
-        p3 = env.descriptor([x, y, z], order=1, normalize=normalize)
+        p3 = env.descriptor([x, y, z], order=1,
+                            normalize=normalize, weights=weights)
         sec_dr2 = (p1 + p3 - 2 * p2)
 
         # check: |f(r+dr) - f(r) - grad(f).dr| < |grad^2(f).dr^2|
@@ -509,12 +514,8 @@ def test_special_cases():
 
 
 if __name__ == '__main__':
-
     test_sesoap()
-
     test_derivatives()
-
     test_sesoap_performance()
-
     test_special_cases()
 
