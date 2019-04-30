@@ -77,24 +77,39 @@ class GAP(Module):
         # add to data
         self.data += [(p, s, h, energy, forces)]
 
-    def select_Z(self, num_inducing):
+        self.new_data = 1
+
+    def build_X(self):
         self.X = torch.cat([a[0] for a in self.data])
+        self.new_data = 0
+
+    def select_Z(self, num_inducing):
+        if not hasattr(self, 'X') or self.new_data:
+            self.build_X()
         rnd = torch.randint(len(self.data), (num_inducing,))
         Z = self.X[rnd]
         return Z
 
+    def extend_Z(self, num):
+        self.Z = Parameter(
+            torch.cat([self.Z, self.select_Z(num)]), requires_grad=False)
+
     def parameterize(self, num_inducing, use_energies=1, use_forces=1, kern=RBF):
-        # kernel param
-        self._noise = Parameter(torch.tensor(1.))
-        self.kern = kern(torch.ones(self.csoap.soap.dim), torch.tensor(1.))
+        if not hasattr(self, 'parameterized') or not self.parameterized:
+            # kernel param
+            self._noise = Parameter(torch.tensor(1.))
+            self.kern = kern(torch.ones(self.csoap.soap.dim), torch.tensor(1.))
 
-        # inducing
-        self.Z = Parameter(self.select_Z(num_inducing), requires_grad=False)
+            # inducing
+            self.Z = Parameter(self.select_Z(num_inducing),
+                               requires_grad=False)
 
-        # flags
-        self.parameterized = 1
-        self.use_energies = use_energies
-        self.use_forces = use_forces
+            # flags
+            self.parameterized = 1
+            self.use_energies = use_energies
+            self.use_forces = use_forces
+        else:
+            warnings.warn("a second attempt to parameterize model is ignored!")
 
     def covariances(self):
 
@@ -175,6 +190,8 @@ class GAP(Module):
         self.ready = 0
 
     def greedy(self, steps=10):
+        if not hasattr(self, 'X') or self.new_data:
+            self.build_X()
         n = self.X.size(0)
         m = self.Z.size(0)
         with torch.no_grad():
