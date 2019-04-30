@@ -78,9 +78,9 @@ class GAP(Module):
         self.data += [(p, s, h, energy, forces)]
 
     def select_Z(self, num_inducing):
-        X = torch.cat([a[0] for a in self.data])
+        self.X = torch.cat([a[0] for a in self.data])
         rnd = torch.randint(len(self.data), (num_inducing,))
-        Z = X[rnd]
+        Z = self.X[rnd]
         return Z
 
     def parameterize(self, num_inducing, use_energies=1, use_forces=1, kern=RBF):
@@ -143,7 +143,7 @@ class GAP(Module):
         loss = -p.log_prob(Y) + trace
         return loss
 
-    def train(self, steps=100, optimizer=None, lr=0.1):
+    def train(self, steps=100, optimizer=None, lr=0.1, greedy=None):
 
         if not self.parameterized:
             warnings.warn(
@@ -166,9 +166,28 @@ class GAP(Module):
             self.losses += [loss.data]
             loss.backward()
             optimizer.step()
+            if greedy is not None:
+                self.greedy(steps=greedy)
         optimizer.zero_grad()  # NOTE: maybe unnecessary
 
         print('trained for {} steps'.format(steps))
+
+        self.ready = 0
+
+    def greedy(self, steps=10):
+        n = self.X.size(0)
+        m = self.Z.size(0)
+        with torch.no_grad():
+            for _ in range(steps):
+                randX = torch.randint(n, (1,))
+                randZ = torch.randint(m, (1,))
+                Z = self.Z[randZ]
+                self.Z[randZ] = self.X[randX]
+                loss = self.forward()
+                if loss < self.losses[-1]:
+                    self.losses += [loss.data]
+                else:
+                    self.Z[randZ] = Z
 
         self.ready = 0
 
