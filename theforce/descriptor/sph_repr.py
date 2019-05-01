@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # In[ ]:
@@ -10,11 +10,10 @@ from numpy import pi
 
 class sph_repr:
 
-    def __init__(self, lmax, tiny=1e-100):
+    def __init__(self, lmax):
 
         self.lmax = lmax
         self.lmax_p = lmax+1
-        self.tiny = tiny
 
         # pre-calculate
         self.Yoo = np.sqrt(1./(4*pi))
@@ -52,15 +51,17 @@ class sph_repr:
                             * (2*self.l+1) / (2*self.l-1.))[1:, 1:]
 
     def cart_coord_to_trig(self, x, y, z):
+        """ points along the z-axis are special, origin is double special """
         rxy_sq = np.atleast_1d(x*x + y*y)
         rxy = np.sqrt(rxy_sq)
-        rxy[rxy == 0.0] += self.tiny
         r_sq = rxy_sq + z*z
         r = np.sqrt(r_sq)
-        sin_theta = rxy/r
+        sin_theta = np.nan_to_num(rxy/r)
         cos_theta = z/r
-        sin_phi = y/rxy
+        cos_theta[np.isnan(cos_theta)] = 1.0
+        sin_phi = np.nan_to_num(y/rxy)
         cos_phi = x/rxy
+        cos_phi[np.isnan(cos_phi)] = 1.0
         return r, sin_theta, cos_theta, sin_phi, cos_phi
 
     def ylm(self, x, y, z):
@@ -123,6 +124,8 @@ class sph_repr:
 
         r**l * Y_l^m becomes  (m>0): Y[l,l-m] + 1.0j*Y[l-m,l] 
                               (m=0): Y[l,l]
+        ---------------------------------------------------------
+        Note that at the special point (0,0,0) theta, phi become 0.
         """
         r, sin_theta, cos_theta, sin_phi, cos_phi = self.cart_coord_to_trig(
             x, y, z)
@@ -178,7 +181,7 @@ class sph_repr:
         Y_phi = np.transpose(Y, axes=axes).copy()
         Y_phi[self.tril_indices] *= -1
         Y_phi *= self.m
-        return Y_theta, Y_phi
+        return np.nan_to_num(Y_theta), np.nan_to_num(Y_phi)
 
     def ylm_hessian(self, sin_theta, cos_theta, Y, Y_theta, Y_phi, with_r=None):
         """
@@ -211,7 +214,8 @@ class sph_repr:
         Y_theta_phi = np.transpose(Y_theta, axes=axes).copy()
         Y_theta_phi[self.tril_indices] *= -1
         Y_theta_phi *= self.m
-        return Y_theta_2, Y_phi_2, Y_theta_phi
+        # TODO: see if nan_to_num is appropriate here (not checked yet)
+        return (np.nan_to_num(a) for a in (Y_theta_2, Y_phi_2, Y_theta_phi))
 
 
 # test routines ----------------------------------------------------------
@@ -220,16 +224,15 @@ def test_sph_repr(n=1000):
     from theforce.descriptor.sphcart import cart_coord_to_sph
     lmax = 8
     sph = sph_repr(lmax)
-    print(sph.cart_coord_to_trig(0, 0, 1.))
-    x = np.random.uniform(-1.0, 1.0, size=n)
-    y = np.random.uniform(-1.0, 1.0, size=n)
-    z = np.random.uniform(-1.0, 1.0, size=n)
+    x = np.concatenate((np.random.uniform(-1.0, 1.0, size=n), [1, 0, 0, 0]))
+    y = np.concatenate((np.random.uniform(-1.0, 1.0, size=n), [0, 1, 0, 0]))
+    z = np.concatenate((np.random.uniform(-1.0, 1.0, size=n), [0, 0, 1, 0]))
     r, theta, phi = cart_coord_to_sph(x, y, z)
     r, st, ct, sp, cp, Y = sph.ylm(x, y, z)
     r, _, _, _, _, Y_rl = sph.ylm_rl(x, y, z)
     Y_theta, Y_phi = sph.ylm_partials(st, ct, Y)
     Y_theta_rl, Y_phi_rl = sph.ylm_partials(st, ct, Y_rl, with_r=r)
-    cott = ct / st
+    cott = np.nan_to_num(ct / st)
     errors = []
     for l in range(lmax+1):
         # m = 0
@@ -251,7 +254,7 @@ def test_sph_repr(n=1000):
             errors += [Y_phi_rl[l, l-m] + 1.0j *
                        Y_phi_rl[l-m, l] - 1.0j*rl*m*tmp]
             # partial wrt theta
-            tmp2 = m * cott * tmp
+            tmp2 = np.nan_to_num(m * cott * tmp)
             if m < l:
                 tmp2 += np.sqrt((l-m)*(l+m+1.)) * np.exp(
                     -1.0j * phi) * sph_harm(m+1, l, phi, theta)
@@ -315,9 +318,27 @@ def test_hessian_ylm(lmax=4, N=3):
     return test_result
 
 
+def test_special():
+    from scipy.special import sph_harm
+    lmax = 2
+    sph = sph_repr(lmax)
+    r, sin_theta, cos_theta, sin_phi, cos_phi, Y = sph.ylm(0.0, 0.0, 0.0)
+    phi, theta = 0, 0
+    Y_scipy = np.array([sph_harm(0, l, phi, theta).real
+                        for l in range(lmax+1)])
+    print('test at xyz=[0,0,0]: {}'.format(np.allclose(Y_scipy, Y.diagonal())))
+
+    # test r^l Ylm, and partials
+    r, sin_theta, cos_theta, sin_phi, cos_phi, Y = sph.ylm_rl(0, 0, 0)
+    Y_theta, Y_phi = sph.ylm_partials(sin_theta, cos_theta,
+                                      Y, with_r=r)
+
+    #print(Y_phi[..., 0])
+    #print(Y_theta[..., 0])
+
+
 if __name__ == '__main__':
-
     test_sph_repr()
-
     test_hessian_ylm()
+    test_special()
 

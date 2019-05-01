@@ -16,7 +16,7 @@ especially when particles move across the cutoff.""".replace('\n', '')
 
 class SeSoap:
 
-    def __init__(self, lmax, nmax, radial, modify_scale=None, tiny=1e-100):
+    def __init__(self, lmax, nmax, radial, modify_scale=None):
         """
         lmax: maximum l in r^l * Ylm terms (Ylm are spherical harmonics)
         nmax: maximum n in r^(2n) terms
@@ -38,7 +38,7 @@ class SeSoap:
         self.radial = radial
         self.rc = radial.rc
 
-        self.sph = sph_repr(lmax, tiny)
+        self.sph = sph_repr(lmax)
 
         # prepare some stuff
         self._m = [([l for m in range(0, l+1)] + [m for m in range(0, l)],
