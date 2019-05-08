@@ -8,6 +8,11 @@ import torch
 import warnings
 
 
+def nan_to_num(t, num=0):
+    t[torch.isnan(t)] = num
+    return t
+
+
 def cat(tensors, dim=0):
     lengths = [tensor.size(dim) for tensor in tensors]
     cat = torch.cat(tensors, dim=dim)

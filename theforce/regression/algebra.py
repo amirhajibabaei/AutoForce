@@ -62,7 +62,7 @@ def low_rank_factor(K, Y, logdet=False, solve=False, jit=1e-6, jitbase=2):
     else:
         _1d, _Y = False, Y
     if solve:
-        Q, _ = torch.trtrs(_Y, L, upper=False)
+        Q, _ = torch.triangular_solve(_Y, L, upper=False)
     else:
         Q = torch.mm(L.inverse(), _Y)
     if logdet:
@@ -72,9 +72,9 @@ def low_rank_factor(K, Y, logdet=False, solve=False, jit=1e-6, jitbase=2):
     return Q, ld, ridge
 
 
-def log_normal(Y, K):
-    Q, logdet, ridge = low_rank_factor(K, Y, logdet=True)
-    return -(torch.mm(Q.t(), Q) + logdet + torch.log(_2pi)*Y.size()[0])/2
+def log_normal(Y, K, solve=True):
+    Q, logdet, ridge = low_rank_factor(K, Y, logdet=True, solve=solve)
+    return -(torch.mm(Q.t(), Q) + logdet + torch.log(_2pi)*Y.size(0))/2
 
 
 def solve_svd(A, Y):
@@ -124,7 +124,7 @@ def test(n=1000):
     print('Cholesky: {}'.format(test_cholesky))
 
     # test log_normal
-    Y = torch.ones(n)
+    Y = torch.rand(n)
     dist = torch.distributions.MultivariateNormal(torch.zeros(n), scale_tril=L)
     test_log_normal = torch.allclose(dist.log_prob(Y), log_normal(Y, K))
     print('log_normal: {}'.format(test_log_normal))
