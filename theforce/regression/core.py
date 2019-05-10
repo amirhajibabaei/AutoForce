@@ -1,9 +1,10 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
+""" experimental """
 import torch
 from torch.nn import Module, Parameter
 from theforce.regression.algebra import free_form, positive
@@ -49,6 +50,7 @@ class Stationary(Module):
         super().__init__()
         self.rp = PNorm(**kwargs)
         self._signal = Parameter(free_form(torch.as_tensor(signal)))
+        self.params = [self.rp.r._scale, self._signal]
 
     def forward(self, x=None, xx=None):
         return positive(self._signal).pow(2)*self.cov_func(self.rp(x=x, xx=xx))
@@ -81,6 +83,7 @@ class White(Stationary):
 
     def __init__(self, signal=1e-3, **kwargs):
         super().__init__(signal=signal, **kwargs)
+        self._signal.requires_grad = False
 
     def forward(self, x=None, xx=None):
         x_in = x is not None

@@ -4,6 +4,7 @@
 # In[ ]:
 
 
+""" experimental """
 import torch
 from torch.nn import Module, Parameter
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
@@ -30,6 +31,7 @@ class Covariance(Module):
         super().__init__()
         self.kernels = (kernels if hasattr(kernels, '__iter__')
                         else (kernels,))
+        self.params = [par for kern in self.kernels for par in kern.params]
 
     def calculate(self, x=None, xx=None):
         return torch.stack([kern(x=x, xx=xx) for kern in self.kernels]).sum(dim=0)
@@ -50,6 +52,7 @@ class Inducing(Covariance):
                               requires_grad=learn)
         self.white = White(signal=signal)
         self.white._signal.requires_grad = True
+        self.params += [self.white._signal, self.xind]
 
     def extra_repr(self):
         print('num of inducing points: {}'.format(self.xind.size(0)))
@@ -92,6 +95,7 @@ class GaussianProcess(Module):
         super().__init__()
         self.mean = mean
         self.cov = cov
+        self.params = self.cov.params + list(self.mean.parameters())
 
     def forward(self, x):
         if hasattr(self.cov, 'cov_factor'):
@@ -128,7 +132,7 @@ class PosteriorGP(Module):
 
 
 def train_gp(gp, X, Y, steps=100):
-    optimizer = torch.optim.Adam(gp.parameters(), lr=0.1)
+    optimizer = torch.optim.Adam(gp.params, lr=0.1)
     for _ in range(steps):
         optimizer.zero_grad()
         #p = gp(X)
@@ -150,14 +154,17 @@ def test():
     X = (torch.rand(n, dim)-0.5)*10
     Y = (-(X**2).sum(dim=-1)).exp()
 
+    #X *= 10
+    #Y *= 10
+
     # model
-    #cov = Covariance((SquaredExp(dim=dim), White(1e-2)))
-    cov = Inducing(SquaredExp(dim=dim), X, 10, learn=False)
+    #cov = Covariance((SquaredExp(dim=dim), White(1e-1)))
+    cov = Inducing(SquaredExp(dim=dim), X, 10, learn=True)
     gp = GaussianProcess(ConstMean(), cov)
     train_gp(gp, X, Y)
     gpr = PosteriorGP(gp, X, Y)
     with torch.no_grad():
-        XX = torch.arange(-5.0, 5.0, 0.1).view(-1, 1)
+        XX = torch.linspace(X.min(), X.max(), 100).view(-1, 1)
         f = gpr.mean(XX)
     plt.scatter(X, Y)
     plt.scatter(XX, f)
