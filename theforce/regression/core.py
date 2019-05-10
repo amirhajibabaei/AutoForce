@@ -24,6 +24,9 @@ class Displacement(Module):
             xx = x
         return (x[:, None]-xx[None])/positive(self._scale)
 
+    def extra_repr(self):
+        print('length scales: {}'.format(positive(self._scale)))
+
 
 class PNorm(Module):
 
@@ -60,6 +63,9 @@ class Stationary(Module):
             return positive(self._signal).pow(2)
         else:
             return positive(self._signal).pow(2)*torch.ones(x.size(0))
+
+    def extra_repr(self):
+        print('signal variance: {}'.format(positive(self._signal).pow(2)))
 
 
 class SquaredExp(Stationary):
