@@ -113,14 +113,14 @@ class PosteriorGP(Module):
 
     def __init__(self, gp, X, Y):
         super().__init__()
-        self.xind = X
+        self.x = X
         self.gp = gp
         p = gp(X)
         self.mu = p.precision_matrix @ (Y-p.loc)
 
     def mean(self, X):
         mean = self.gp.mean(X)
-        cov = self.gp.cov(X, self.xind)
+        cov = self.gp.cov(X, self.x)
         return mean + cov @ self.mu
 
     def cov(self, X):
@@ -131,12 +131,10 @@ class PosteriorGP(Module):
                                            'a MultivariateNormal instance which is not implemented yet')))
 
 
-def train_gp(gp, X, Y, steps=100):
-    optimizer = torch.optim.Adam(gp.params, lr=0.1)
+def train_gp(gp, X, Y, steps=100, lr=0.1):
+    optimizer = torch.optim.Adam(gp.params, lr=lr)
     for _ in range(steps):
         optimizer.zero_grad()
-        #p = gp(X)
-        #loss = -p.log_prob(Y)
         loss = gp.loss(X, Y)
         loss.backward()
         optimizer.step()
@@ -154,20 +152,21 @@ def test():
     X = (torch.rand(n, dim)-0.5)*10
     Y = (-(X**2).sum(dim=-1)).exp()
 
-    #X *= 10
-    #Y *= 10
-
     # model
-    #cov = Covariance((SquaredExp(dim=dim), White(1e-1)))
-    cov = Inducing(SquaredExp(dim=dim), X, 10, learn=True)
+    #cov = Covariance((SquaredExp(dim=dim), White(1e-2)))
+    cov = Inducing(SquaredExp(dim=dim), X, 9, learn=True)
     gp = GaussianProcess(ConstMean(), cov)
-    train_gp(gp, X, Y)
+    train_gp(gp, X, Y, steps=500, lr=0.1)
     gpr = PosteriorGP(gp, X, Y)
     with torch.no_grad():
         XX = torch.linspace(X.min(), X.max(), 100).view(-1, 1)
         f = gpr.mean(XX)
     plt.scatter(X, Y)
     plt.scatter(XX, f)
+    if hasattr(cov, 'xind'):
+        plt.scatter(cov.xind.detach().numpy(),
+                    gpr.mean(cov.xind).detach().numpy(),
+                    marker='x', s=200)
 
 
 if __name__ == '__main__':
