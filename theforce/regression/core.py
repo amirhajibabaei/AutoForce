@@ -25,40 +25,34 @@ class Displacement(Module):
             xx = x
         return (x[:, None]-xx[None])/positive(self._scale)
 
+    def delta(self):
+        return torch.eye(self._scale.size(0))
+
+    def divide(self, operation):
+        if operation is 'func':
+            return 1.0
+        else:
+            scale = positive(self._scale)
+            if operation is 'grad':
+                return scale
+            elif operation is 'hessian':
+                return scale[None]*scale[:, None]
+
     def extra_repr(self):
         print('length scales: {}'.format(positive(self._scale)))
 
 
-class PNorm(Module):
-
-    def __init__(self, power=2, **kwargs):
-        super().__init__()
-        self.r = Displacement(**kwargs)
-        self.p = power
-
-    def forward(self, true_norm=False, **kwargs):
-        norm = (self.r(**kwargs).abs().pow(self.p)).sum(dim=-1)
-        if true_norm:
-            norm = norm**(1.0/self.p)
-        return norm
-
-
 class Stationary(Module):
-    """ [p=2, dim=1] """
+    """ [dim=1, signal=1] """
 
-    def __init__(self, signal=torch.ones(1), **kwargs):
+    def __init__(self, dim=1, signal=1.0):
         super().__init__()
-        self.rp = PNorm(**kwargs)
+        self.r = Displacement(dim=dim)
         self._signal = Parameter(free_form(torch.as_tensor(signal)))
-        self.params = [self.rp.r._scale, self._signal]
+        self.params = [self.r._scale, self._signal]
 
-    def forward(self, x=None, xx=None):
-        return positive(self._signal).pow(2)*self.cov_func(self.rp(x=x, xx=xx))
-
-    def cov_func(self, rp):
-        """ if r=0 it should return 1 """
-        raise NotImplementedError(
-            'This should be implemented in a child class!')
+    def forward(self, x=None, xx=None, operation='func'):
+        return positive(self._signal).pow(2)*getattr(self, operation)(self.r(x=x, xx=xx))             / self.r.divide(operation)
 
     def diag(self, x=None):
         if x is None:
@@ -71,12 +65,21 @@ class Stationary(Module):
 
 
 class SquaredExp(Stationary):
+    """ [dim=1, signal=1] """
 
     def __init__(self, **kwargs):
-        super().__init__(power=2, **kwargs)
+        super().__init__(**kwargs)
 
-    def cov_func(self, rp):
-        return (-rp/2).exp()
+    def func(self, r):
+        return (-(r**2).sum(dim=-1)/2).exp()
+
+    def grad(self, r):
+        cov = self.func(r)
+        return -r*cov[..., None]
+
+    def hessian(self, r):
+        cov = self.func(r)
+        return (r[..., None, :]*r[..., None]-self.r.delta())*cov[..., None, None]
 
 
 class White(Stationary):
@@ -103,13 +106,6 @@ class White(Stationary):
 
 def test():
     if 1:
-        r = PNorm(dim=1, power=torch.rand(1))
-        x = torch.tensor([[0.0], [1.]])
-        assert (r(x=x, true_norm=True) == r(xx=x, true_norm=True)).all()
-        assert (r(x=x, true_norm=True) == torch.tensor(
-            [[0.0, 1.0], [1.0, 0.0]])).all()
-
-    if 1:
         dim = 7
         kern = SquaredExp(dim=dim)
         x = torch.rand(19, dim)
@@ -117,6 +113,9 @@ def test():
         K = kern(x=x, xx=xx)
         assert torch.allclose(K, (-(x[:, None]-xx[None])**2/2)
                               .sum(dim=-1).exp())
+        print(kern(x, xx, 'func').shape)
+        print(kern(x, xx, 'grad').shape)
+        print(kern(x, xx, 'hessian').shape)
 
     if 1:
         white = White(signal=1.0)
