@@ -50,11 +50,16 @@ class LazyWhite(Module):
             return (k[..., None, None]*torch.eye(self.dim)
                     ).permute(0, 2, 1, 3) * (-1)             # NOTE 1.
 
-    def diag(self, x=None):
+    def diag(self, x=None, operation='func'):
         if x is None:
             return positive(self._signal).pow(2)
         else:
-            return positive(self._signal).pow(2)*torch.ones(x.size(0))
+            if operation == 'func':
+                return positive(self._signal).pow(2)*torch.ones(x.size(0))
+            elif operation == 'grad':
+                raise NotImplementedError('This is not supposed to happen!')
+            elif operation == 'gradgrad':
+                return positive(self._signal).pow(2)*torch.ones(x.numel())
 
 
 class Displacement(Module):
@@ -106,11 +111,17 @@ class Stationary(Module):
     def forward(self, x=None, xx=None, operation='func'):
         return positive(self._signal).pow(2)*getattr(self, operation)(self.r(x=x, xx=xx))             / self.r.divide(operation)
 
-    def diag(self, x=None):
+    def diag(self, x=None, operation='func'):
         if x is None:
             return positive(self._signal).pow(2)
         else:
-            return positive(self._signal).pow(2)*torch.ones(x.size(0))
+            if operation == 'func':
+                return positive(self._signal).pow(2)*torch.ones(x.size(0))
+            elif operation == 'grad':
+                raise NotImplementedError('This is not supposed to happen!')
+            elif operation == 'gradgrad':
+                return (positive(self._signal).pow(2)*self.d2diag() *
+                        (1./self.r.divide('grad'))**2).repeat(x.size(0))
 
     def extra_repr(self):
         print('signal variance: {}'.format(positive(self._signal).pow(2)))
@@ -133,6 +144,10 @@ class SquaredExp(Stationary):
         cov = self.func(r)
         return ((r[..., None, :]*r[..., None]-self.r.delta())*cov[..., None, None]
                 ).permute(0, 2, 1, 3)
+
+    def d2diag(self):
+        """ second deriv of kernel wrt r[i] at r[i]=0 """
+        return torch.tensor(-1.0)
 
 
 def test():

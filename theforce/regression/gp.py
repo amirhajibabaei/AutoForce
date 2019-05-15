@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 """ experimental """
@@ -47,8 +47,15 @@ class Covariance(Module):
         return torch.stack([kern(x=x, xx=xx, operation=operation)
                             for kern in self.kernels]).sum(dim=0)
 
-    def diag(self, x=None):
-        return torch.stack([kern.diag(x=x) for kern in self.kernels]).sum(dim=0)
+    def diag(self, x=None, operation='func'):
+        if operation == 'func':
+            sign = 1
+        elif operation == 'gradgrad':
+            sign = -1
+        else:
+            raise NotImplementedError('This shoud not happen!')
+        return sign * torch.stack([kern.diag(x=x, operation=operation)
+                                   for kern in self.kernels]).sum(dim=0)
 
     def forward(self, x=None, xx=None, operation='func'):
         if hasattr(self, operation):
@@ -98,13 +105,13 @@ class Inducing(Covariance):        # TODO 1. extend for grad-data
         chol, _ = jitcholesky(self.base_kerns(self.xind, self.xind))
         return left, chol.inverse(), right
 
-    def cov_factor(self, x):
-        L, M, R = self.decompose(x=x)
+    def cov_factor(self, x, operation='func'):
+        L, M, R = self.decompose(x=x, operation=operation)
         Q = L @ M.t()
-        cov_loss = 0.5*(self.diag(x).sum() - torch.einsum('ij,ij', Q, Q))             / self.white.diag()
-        return Q, self.white.diag(x), cov_loss
+        cov_loss = 0.5*(self.diag(x, operation=operation).sum() - torch.einsum('ij,ij', Q, Q))             / self.white.diag()
+        return Q, self.white.diag(x, operation=operation), cov_loss
 
-    def forward(self, x=None, xx=None, operation='operation'):
+    def forward(self, x=None, xx=None, operation='func'):
         L, M, R = self.decompose(x=x, xx=xx, operation=operation)
         return L @ M.t() @ M @ R + self.white(x=x, xx=xx)
 
@@ -128,8 +135,9 @@ class GaussianProcess(Module):
                                           covariance_matrix=self.cov(x))
         elif op == 'grad':
             if hasattr(self.cov, 'cov_factor'):
-                raise NotImplementedError(
-                    'Inducing kernel is not implemented for grads yet!')
+                Q, diag, self.covariance_loss = self.cov.cov_factor(
+                    x, operation='gradgrad')
+                return LowRankMultivariateNormal(self.mean(x, operation='grad').view(-1), Q, diag)
             else:
                 cov = self.cov(x, operation='gradgrad')
                 return MultivariateNormal(self.mean(x, operation='grad').reshape(-1),
@@ -233,10 +241,9 @@ def test_grad():
     dY = X.cos()
     Y_data = dY             # use Y or dY
 
-    kernels = (SquaredExp(dim=dim), LazyWhite(dim=dim, signal=0.01))
-
     # model
-    cov = Covariance(kernels)
+    #cov = Covariance((SquaredExp(dim=dim), LazyWhite(dim=dim, signal=0.01)))
+    cov = Inducing((SquaredExp(dim=dim),), X, 8, learn=True)
     gp = GaussianProcess(ConstMean(), cov)
     train_gp(gp, X, Y_data, steps=100)
     gpr = PosteriorGP(gp, X, Y_data)
@@ -269,6 +276,7 @@ def test_multidim():
         dY = -2*X*Y[:, None]
         return Y, dY
 
+    torch.random.manual_seed(56453435468)
     X = (torch.rand(20, 2)-0.5)*2
     Y, dY = dummy_data(X)
     for data_Y in [Y, dY]:
@@ -281,7 +289,7 @@ def test_multidim():
 
 
 if __name__ == '__main__':
-    #test_basic()
-    #test_grad()
+    # test_basic()
+    # test_grad()
     test_multidim()
 
