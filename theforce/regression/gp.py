@@ -10,17 +10,6 @@ from torch.nn import Module, Parameter
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.core import LazyWhite
 from theforce.regression.algebra import jitcholesky
-"""
-NOTES:
-1. Hessian has to be multiplied by -1 because kernels return 
-derivatives wrt r and not x, x'.
-2. When Y are grad data, (-1) is multiplied to mu because X
-will play the role of xx in PosteriorGP.mean. This will also
-satisfy the -1 needed in PosteriorGP.grad.
-
-TODO:
-1. Make Inducing kernel work with grad data.
-"""
 
 
 class ConstMean(Module):
@@ -42,6 +31,11 @@ class ConstMean(Module):
 
 
 class Covariance(Module):
+    """ 
+    Calculates the covariance matrix.
+    A layer between stationary (base) kernels which depend 
+    only on r (=x-xx) and the data (x, xx).
+    """
 
     def __init__(self, kernels):
         super().__init__()
@@ -49,7 +43,7 @@ class Covariance(Module):
                         else (kernels,))
         self.params = [par for kern in self.kernels for par in kern.params]
 
-    def calculate(self, x=None, xx=None, operation='func'):
+    def base_kerns(self, x=None, xx=None, operation='func'):
         return torch.stack([kern(x=x, xx=xx, operation=operation)
                             for kern in self.kernels]).sum(dim=0)
 
@@ -57,10 +51,25 @@ class Covariance(Module):
         return torch.stack([kern.diag(x=x) for kern in self.kernels]).sum(dim=0)
 
     def forward(self, x=None, xx=None, operation='func'):
-        return self.calculate(x=x, xx=xx, operation=operation)
+        if hasattr(self, operation):
+            return getattr(self, operation)(x=x, xx=xx)
+        else:
+            return self.base_kerns(x=x, xx=xx, operation=operation)
+
+    def leftgrad(self, x=None, xx=None):
+        t = self.base_kerns(x=x, xx=xx, operation='grad').permute(0, 2, 1)
+        return t.view(t.size(0)*t.size(1), t.size(2))
+
+    def rightgrad(self, x=None, xx=None):
+        t = -self.base_kerns(x=x, xx=xx, operation='grad')
+        return t.view(t.size(0), t.size(1)*t.size(2))
+
+    def gradgrad(self, x=None, xx=None):
+        t = -self.base_kerns(x=x, xx=xx, operation='gradgrad')
+        return t.view(t.size(0)*t.size(1), t.size(2)*t.size(3))
 
 
-class Inducing(Covariance):        # TODO 1.
+class Inducing(Covariance):        # TODO 1. extend for grad-data
 
     def __init__(self, kernels, x, num=None, learn=False, signal=5e-2):
         super().__init__(kernels)
@@ -81,18 +90,18 @@ class Inducing(Covariance):        # TODO 1.
             left = torch.ones(0, self.xind.size(0))
             right = left.t()
         elif x_in and not xx_in:
-            left = self.calculate(x, self.xind)
+            left = self.base_kerns(x, self.xind)
             right = left.t()
         elif xx_in and not x_in:
-            right = self.calculate(self.xind, xx)
+            right = self.base_kerns(self.xind, xx)
             left = right.t()
         elif x_in and xx_in:
-            left = self.calculate(x, self.xind)
+            left = self.base_kerns(x, self.xind)
             if x.shape == xx.shape and torch.allclose(x, xx):
                 right = left.t()
             else:
-                right = self.calculate(self.xind, xx)
-        chol, _ = jitcholesky(self.calculate(self.xind, self.xind))
+                right = self.base_kerns(self.xind, xx)
+        chol, _ = jitcholesky(self.base_kerns(self.xind, self.xind))
         return left, chol.inverse(), right
 
     def cov_factor(self, x):
@@ -128,8 +137,7 @@ class GaussianProcess(Module):
                 raise NotImplementedError(
                     'Inducing kernel is not implemented for grads yet!')
             else:
-                cov = (-1)*self.cov(x, operation='gradgrad').reshape(     # NOTE 1.
-                    x.numel(), x.numel())
+                cov = self.cov(x, operation='gradgrad')
                 return MultivariateNormal(self.mean(x, operation='grad').reshape(-1),
                                           covariance_matrix=cov)
 
@@ -149,26 +157,27 @@ class PosteriorGP(Module):
         self.x = X
         self.gp = gp
         if X.shape == Y.shape:
-            self.Y_type = 'grad'
-            sign = -1                     # NOTE 2.
+            self.data_type = 'grad'
         else:
-            self.Y_type = 'func'
-            sign = 1
-        p = gp(X, op=self.Y_type)
-        self.mu = p.precision_matrix @ (Y.reshape(-1)-p.loc) * sign
+            self.data_type = 'func'
+        p = gp(X, op=self.data_type)
+        self.mu = p.precision_matrix @ (Y.reshape(-1)-p.loc)
 
     def mean(self, X):
         mean = self.gp.mean(X)
-        cov = self.gp.cov(X, self.x, operation=self.Y_type)
-        return mean + cov.reshape(-1, self.mu.size(0)) @ self.mu
+        if self.data_type == 'func':
+            cov = self.gp.cov(X, self.x, operation='func')
+        elif self.data_type == 'grad':
+            cov = self.gp.cov(X, self.x, operation='rightgrad')
+        return mean + cov @ self.mu
 
     def grad(self, X):
-        gradmean = self.gp.mean(X, operation='grad').reshape(-1)
-        if self.Y_type == 'func':
-            cov = self.gp.cov(X, self.x, operation='grad').permute(0, 2, 1)
-        elif self.Y_type == 'grad':
+        gradmean = self.gp.mean(X, operation='grad')
+        if self.data_type == 'func':
+            cov = self.gp.cov(X, self.x, operation='leftgrad')
+        elif self.data_type == 'grad':
             cov = self.gp.cov(X, self.x, operation='gradgrad')
-        return (gradmean + cov.reshape(-1, self.mu.size(0)) @ self.mu).reshape_as(X)
+        return gradmean + (cov @ self.mu).reshape_as(X)
 
     def cov(self, X):
         raise NotImplementedError('Covariance has not been implemented yet!')
@@ -276,7 +285,7 @@ def test_multidim():
 
 
 if __name__ == '__main__':
-    #test_basic()
-    #test_grad()
+    # test_basic()
+    # test_grad()
     test_multidim()
 
