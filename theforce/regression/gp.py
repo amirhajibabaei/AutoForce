@@ -58,7 +58,7 @@ class Covariance(Module):
 
     def leftgrad(self, x=None, xx=None):
         t = self.base_kerns(x=x, xx=xx, operation='grad').permute(0, 2, 1)
-        return t.view(t.size(0)*t.size(1), t.size(2))
+        return t.contiguous().view(t.size(0)*t.size(1), t.size(2))
 
     def rightgrad(self, x=None, xx=None):
         t = -self.base_kerns(x=x, xx=xx, operation='grad')
@@ -83,24 +83,18 @@ class Inducing(Covariance):        # TODO 1. extend for grad-data
     def extra_repr(self):
         print('num of inducing points: {}'.format(self.xind.size(0)))
 
-    def decompose(self, x=None, xx=None):
-        x_in = x is not None
-        xx_in = xx is not None
-        if not x_in and not xx_in:
-            left = torch.ones(0, self.xind.size(0))
-            right = left.t()
-        elif x_in and not xx_in:
-            left = self.base_kerns(x, self.xind)
-            right = left.t()
-        elif xx_in and not x_in:
-            right = self.base_kerns(self.xind, xx)
-            left = right.t()
-        elif x_in and xx_in:
-            left = self.base_kerns(x, self.xind)
-            if x.shape == xx.shape and torch.allclose(x, xx):
-                right = left.t()
-            else:
-                right = self.base_kerns(self.xind, xx)
+    def decompose(self, x=None, xx=None, operation='func'):
+        if x is None and xx is None:
+            x = torch.ones(0, self.xind.size(0))
+            xx = torch.ones(0, self.xind.size(0))
+        elif x is None:
+            x = xx
+        elif xx is None:
+            xx = x
+        left = (self.leftgrad(x, self.xind) if operation == 'leftgrad' or
+                operation == 'gradgrad' else self.base_kerns(x, self.xind))
+        right = (self.rightgrad(self.xind, xx) if operation == 'rightgrad' or
+                 operation == 'gradgrad' else self.base_kerns(self.xind, xx))
         chol, _ = jitcholesky(self.base_kerns(self.xind, self.xind))
         return left, chol.inverse(), right
 
@@ -110,8 +104,8 @@ class Inducing(Covariance):        # TODO 1. extend for grad-data
         cov_loss = 0.5*(self.diag(x).sum() - torch.einsum('ij,ij', Q, Q))             / self.white.diag()
         return Q, self.white.diag(x), cov_loss
 
-    def forward(self, x=None, xx=None, operation='placeholder=func'):
-        L, M, R = self.decompose(x=x, xx=xx)
+    def forward(self, x=None, xx=None, operation='operation'):
+        L, M, R = self.decompose(x=x, xx=xx, operation=operation)
         return L @ M.t() @ M @ R + self.white(x=x, xx=xx)
 
 
@@ -218,12 +212,15 @@ def test_basic():
     with torch.no_grad():
         XX = torch.linspace(X.min(), X.max(), 100).view(-1, 1)
         f = gpr.mean(XX)
-    plt.scatter(X, Y)
-    plt.scatter(XX, f)
+        df = gpr.grad(XX)
+    plt.scatter(X, Y, label='Y')
+    plt.scatter(XX, f, label='f')
+    plt.scatter(XX, df, label='df')
     if hasattr(cov, 'xind'):
         plt.scatter(cov.xind.detach().numpy(),
                     gpr.mean(cov.xind).detach().numpy(),
                     marker='x', s=200)
+    plt.legend()
 
 
 def test_grad():
@@ -266,7 +263,6 @@ def test_grad():
 def test_multidim():
     import torch
     from theforce.regression.core import SquaredExp, LazyWhite
-    from theforce.regression.gp import ConstMean, Covariance, GaussianProcess, PosteriorGP, train_gp
 
     def dummy_data(X):
         Y = (-X**2).sum(dim=1).exp()
@@ -285,7 +281,7 @@ def test_multidim():
 
 
 if __name__ == '__main__':
-    # test_basic()
-    # test_grad()
+    #test_basic()
+    #test_grad()
     test_multidim()
 
