@@ -163,12 +163,12 @@ class PosteriorGP(Module):
         return mean + cov.reshape(-1, self.mu.size(0)) @ self.mu
 
     def grad(self, X):
-        mean = self.gp.mean(X, operation='grad').reshape(-1)
-        op = 'grad'
-        if self.Y_type == 'grad':
-            op = 'gradgrad'
-        cov = self.gp.cov(X, self.x, operation=op)
-        return mean + cov.reshape(-1, self.mu.size(0)) @ self.mu
+        gradmean = self.gp.mean(X, operation='grad').reshape(-1)
+        if self.Y_type == 'func':
+            cov = self.gp.cov(X, self.x, operation='grad').permute(0, 2, 1)
+        elif self.Y_type == 'grad':
+            cov = self.gp.cov(X, self.x, operation='gradgrad')
+        return (gradmean + cov.reshape(-1, self.mu.size(0)) @ self.mu).reshape_as(X)
 
     def cov(self, X):
         raise NotImplementedError('Covariance has not been implemented yet!')
@@ -254,7 +254,29 @@ def test_grad():
         plt.legend()
 
 
+def test_multidim():
+    import torch
+    from theforce.regression.core import SquaredExp, LazyWhite
+    from theforce.regression.gp import ConstMean, Covariance, GaussianProcess, PosteriorGP, train_gp
+
+    def dummy_data(X):
+        Y = (-X**2).sum(dim=1).exp()
+        dY = -2*X*Y[:, None]
+        return Y, dY
+
+    X = (torch.rand(20, 2)-0.5)*2
+    Y, dY = dummy_data(X)
+    for data_Y in [Y, dY]:
+        cov = Covariance((SquaredExp(dim=2), LazyWhite(dim=2, signal=0.01)))
+        gp = GaussianProcess(ConstMean(), cov)
+        train_gp(gp, X, data_Y, steps=500)
+        gpr = PosteriorGP(gp, X, data_Y)
+        assert (gpr.mean(X)-Y).var().sqrt() < 0.05
+        assert (gpr.grad(X)-dY).var().sqrt() < 0.05
+
+
 if __name__ == '__main__':
-    test_basic()
-    test_grad()
+    #test_basic()
+    #test_grad()
+    test_multidim()
 
