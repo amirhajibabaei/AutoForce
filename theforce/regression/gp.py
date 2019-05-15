@@ -1,10 +1,9 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
-""" experimental """
 import torch
 from torch.nn import Module, Parameter
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
@@ -31,9 +30,9 @@ class ConstMean(Module):
 
 
 class Covariance(Module):
-    """ 
+    """
     Calculates the covariance matrix.
-    A layer between stationary (base) kernels which depend 
+    A layer between stationary (base) kernels which depend
     only on r (=x-xx) and the data (x, xx).
     """
 
@@ -76,7 +75,7 @@ class Covariance(Module):
         return t.view(t.size(0)*t.size(1), t.size(2)*t.size(3))
 
 
-class Inducing(Covariance):        # TODO 1. extend for grad-data
+class Inducing(Covariance):
 
     def __init__(self, kernels, x, num=None, learn=False, signal=5e-2):
         super().__init__(kernels)
@@ -113,7 +112,10 @@ class Inducing(Covariance):        # TODO 1. extend for grad-data
 
     def forward(self, x=None, xx=None, operation='func'):
         L, M, R = self.decompose(x=x, xx=xx, operation=operation)
-        return L @ M.t() @ M @ R + self.white(x=x, xx=xx)
+        # NOTE 1. is white kernel needed here? it is buggy to include!
+        # If it must be included in future, operation could be rightgrad, etc
+        # which is not considered in the white level, and should be fixed.
+        return L @ M.t() @ M @ R  # + self.white(x=x, xx=xx, operation=operation)
 
 
 class GaussianProcess(Module):
@@ -126,22 +128,14 @@ class GaussianProcess(Module):
 
     def forward(self, x, op='func'):
         self.covariance_loss = 0
-        if op == 'func':
-            if hasattr(self.cov, 'cov_factor'):
-                Q, diag, self.covariance_loss = self.cov.cov_factor(x)
-                return LowRankMultivariateNormal(self.mean(x), Q, diag)
-            else:
-                return MultivariateNormal(self.mean(x),
-                                          covariance_matrix=self.cov(x))
-        elif op == 'grad':
-            if hasattr(self.cov, 'cov_factor'):
-                Q, diag, self.covariance_loss = self.cov.cov_factor(
-                    x, operation='gradgrad')
-                return LowRankMultivariateNormal(self.mean(x, operation='grad').view(-1), Q, diag)
-            else:
-                cov = self.cov(x, operation='gradgrad')
-                return MultivariateNormal(self.mean(x, operation='grad').reshape(-1),
-                                          covariance_matrix=cov)
+        operation = {'func': 'func', 'grad': 'gradgrad'}
+        if hasattr(self.cov, 'cov_factor'):
+            Q, diag, self.covariance_loss = self.cov.cov_factor(
+                x, operation=operation[op])
+            return LowRankMultivariateNormal(self.mean(x, operation=op).view(-1), Q, diag)
+        else:
+            return MultivariateNormal(self.mean(x, operation=op).view(-1),
+                                      covariance_matrix=self.cov(x, operation=operation[op]))
 
     def loss(self, x, y):
         if y.dim() == 1:
@@ -277,15 +271,17 @@ def test_multidim():
         return Y, dY
 
     torch.random.manual_seed(56453435468)
-    X = (torch.rand(20, 2)-0.5)*2
+    X = (torch.rand(100, 2)-0.5)*2
     Y, dY = dummy_data(X)
     for data_Y in [Y, dY]:
-        cov = Covariance((SquaredExp(dim=2), LazyWhite(dim=2, signal=0.01)))
-        gp = GaussianProcess(ConstMean(), cov)
-        train_gp(gp, X, data_Y, steps=500)
-        gpr = PosteriorGP(gp, X, data_Y)
-        assert (gpr.mean(X)-Y).var().sqrt() < 0.05
-        assert (gpr.grad(X)-dY).var().sqrt() < 0.05
+        cov1 = Covariance((SquaredExp(dim=2), LazyWhite(dim=2, signal=0.01)))
+        cov2 = Inducing((SquaredExp(dim=2),), X, 19, learn=True)
+        for cov in (cov1, cov2):
+            gp = GaussianProcess(ConstMean(), cov)
+            train_gp(gp, X, data_Y, steps=500)
+            gpr = PosteriorGP(gp, X, data_Y)
+            assert (gpr.mean(X)-Y).var().sqrt() < 0.05
+            assert (gpr.grad(X)-dY).var().sqrt() < 0.05
 
 
 if __name__ == '__main__':
