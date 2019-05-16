@@ -152,28 +152,22 @@ class PosteriorGP(Module):
         super().__init__()
         self.x = X
         self.gp = gp
-        if X.shape == Y.shape:
-            self.data_type = 'grad'
-        else:
-            self.data_type = 'func'
-        p = gp(X, op=self.data_type)
+        self.dtype = 'grad' if X.shape == Y.shape else 'func'
+        p = gp(X, op=self.dtype)
         self.mu = p.precision_matrix @ (Y.reshape(-1)-p.loc)
+        self.kw = {('func', 'func'): 'func', ('func', 'grad'): 'rightgrad',
+                   ('grad', 'func'): 'leftgrad', ('grad', 'grad'): 'gradgrad'}
+
+    def loc(self, X, op='func'):
+        mean = self.gp.mean(X, operation=op)
+        cov = self.gp.cov(X, self.x, operation=self.kw[(op, self.dtype)])
+        return mean + ((cov @ self.mu).reshape_as(X) if op == 'grad' else cov @ self.mu)
 
     def mean(self, X):
-        mean = self.gp.mean(X)
-        if self.data_type == 'func':
-            cov = self.gp.cov(X, self.x, operation='func')
-        elif self.data_type == 'grad':
-            cov = self.gp.cov(X, self.x, operation='rightgrad')
-        return mean + cov @ self.mu
+        return self.loc(X, op='func')
 
     def grad(self, X):
-        gradmean = self.gp.mean(X, operation='grad')
-        if self.data_type == 'func':
-            cov = self.gp.cov(X, self.x, operation='leftgrad')
-        elif self.data_type == 'grad':
-            cov = self.gp.cov(X, self.x, operation='gradgrad')
-        return gradmean + (cov @ self.mu).reshape_as(X)
+        return self.loc(X, op='grad')
 
     def cov(self, X):
         raise NotImplementedError('Covariance has not been implemented yet!')
