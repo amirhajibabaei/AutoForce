@@ -23,12 +23,12 @@ class System:
                  energy=None, forces=None, elements=None):
 
         if atoms:
-            self.xyz = torch.from_numpy(atoms.positions)
+            self.xyz = torch.as_tensor(atoms.positions)
             self.cell = atoms.cell
             self.pbc = atoms.pbc
             self.nums = atoms.get_atomic_numbers()
             try:
-                self.forces = torch.from_numpy(atoms.get_forces())
+                self.forces = torch.as_tensor(atoms.get_forces())
             except RuntimeError:
                 self.forces = None
             try:
@@ -36,26 +36,32 @@ class System:
             except RuntimeError:
                 self.energy = None
         else:
-            self.xyz = torch.from_numpy(positions)
+            self.xyz = torch.as_tensor(positions)
             self.cell = cell
             self.pbc = pbc
-            self.nums = (numbers if numbers else
+            self.nums = (numbers if numbers is not None else
                          np.zeros(self.xyz.size(0), dtype=np.int))
-            self.forces = (torch.from_numpy(forces) if forces else None)
-            self.energy = (torch.tensor(energy) if energy else None)
+            self.forces = (torch.as_tensor(forces)
+                           if forces is not None else None)
+            self.energy = (torch.as_tensor(energy)
+                           if energy is not None else None)
 
         self.idx = dict_to_indices(self.nums, elements=elements)
-        self.natom = self.xyz.size(0)
+        self.natoms = self.xyz.size(0)
 
     def build_nl(self, cutoff, self_interaction=False):
-        self.i, self.j, offset = primitive_neighbor_list('ijS', self.pbc, self.cell,
-                                                         self.xyz.detach().numpy(),
-                                                         cutoff, numbers=None,
-                                                         self_interaction=self_interaction)
-        self.r = self.xyz[self.j] + torch.einsum('ik,kj->ij',
-                                                 torch.from_numpy(
-                                                     offset.astype(np.float)),
-                                                 torch.from_numpy(self.cell)) - self.xyz[self.i]
+        i, j, offset = primitive_neighbor_list('ijS', self.pbc, self.cell,
+                                               self.xyz.detach().numpy(),
+                                               cutoff, numbers=None,
+                                               self_interaction=self_interaction)
+        self.r = self.xyz[j] + torch.einsum('ik,kj->ij',
+                                            torch.as_tensor(
+                                                offset.astype(np.float)),
+                                            torch.as_tensor(self.cell)) - self.xyz[i]
+        self.i = torch.as_tensor(i).long()
+        self.j = torch.as_tensor(j).long()
+        self.d = (self.r**2).sum(dim=-1).sqrt().view(-1, 1)
+        self.dr = self.r / self.d
 
 
 def test():

@@ -52,7 +52,7 @@ class PosteriorMGP(Module):
 
 def test():
     from theforce.regression.core import SquaredExp, LazyWhite
-    from theforce.regression.gp import GaussianProcess, ConstMean, Covariance, train_gp
+    from theforce.regression.gp import GaussianProcess, ConstMean, Covariance, Inducing, train_gp
     import pylab as plt
     import torch
     from math import pi
@@ -77,7 +77,10 @@ def test():
     Y = Y1 + Y2 + Y3
 
     # regression
-    gps = [GaussianProcess(ConstMean(), Covariance((SquaredExp(dim=1), LazyWhite(dim=1, signal=1e-2))))
+    # gps = [GaussianProcess(ConstMean(), Covariance((SquaredExp(dim=1), LazyWhite(dim=1, signal=1e-2))))
+    #       for _ in range(3)]
+    Xind = torch.linspace(-_2pi, _2pi, 11).view(-1, 1)
+    gps = [GaussianProcess(ConstMean(), Inducing((SquaredExp(dim=1),), Xind))
            for _ in range(3)]
     mgp = MultiProcess(gps)
     train_gp(mgp, (X1, X2, X3), Y, steps=10)
