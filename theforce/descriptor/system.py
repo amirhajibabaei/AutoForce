@@ -20,7 +20,7 @@ def dict_to_indices(numbers, elements=None):
 class System:
 
     def __init__(self, atoms=None, positions=None, cell=None, pbc=None, numbers=None,
-                 energy=None, forces=None, elements=None):
+                 energy=None, forces=None, elements=None, cutoff=None):
 
         if atoms:
             self.xyz = torch.as_tensor(atoms.positions)
@@ -48,6 +48,9 @@ class System:
 
         self.idx = dict_to_indices(self.nums, elements=elements)
         self.natoms = self.xyz.size(0)
+
+        if cutoff is not None:
+            self.build_nl(cutoff)
 
     def build_nl(self, cutoff, self_interaction=False):
         i, j, offset = primitive_neighbor_list('ijS', self.pbc, self.cell,
