@@ -9,15 +9,16 @@ from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.core import LazyWhite
 from theforce.regression.algebra import jitcholesky
+from theforce.util.util import iterable
 import copy
 
 
 class EnergyForceKernel(Module):
 
-    def __init__(self, similaritykernel):
+    def __init__(self, similaritykernels):
         super().__init__()
-        self.kern = similaritykernel
-        self.params = similaritykernel.params
+        self.kernels = iterable(similaritykernels)
+        self.params = [par for kern in self.kernels for par in kern.params]
 
     def forward(self, first, second=None, cov='energy_energy', inducing=None):
         sec = first if second is None else second
@@ -40,23 +41,27 @@ class EnergyForceKernel(Module):
                          [self.forces_forces(sys, sys).diag() for sys in data])
 
     def energy_energy(self, first, second):
-        return self.kern(first, second, 'func')
+        return self.base_kerns(first, second, 'func')
 
     def forces_energy(self, first, second):
-        return -self.kern(first, second, 'leftgrad')
+        return -self.base_kerns(first, second, 'leftgrad')
 
     def energy_forces(self, first, second):
-        return -self.kern(first, second, 'rightgrad')
+        return -self.base_kerns(first, second, 'rightgrad')
 
     def forces_forces(self, first, second):
-        return self.kern(first, second, 'gradgrad')
+        return self.base_kerns(first, second, 'gradgrad')
+
+    def base_kerns(self, first, second, operation):
+        return torch.stack([kern(first, second, operation)
+                            for kern in self.kernels]).sum(dim=0)
 
 
 class GaussianProcessPotential(Module):
 
-    def __init__(self, kernel):
+    def __init__(self, kernels):
         super().__init__()
-        self.kern = EnergyForceKernel(kernel)
+        self.kern = EnergyForceKernel(kernels)
         self.noise = LazyWhite(signal=0.01, requires_grad=True)
         self.params = self.kern.params + self.noise.params
 
