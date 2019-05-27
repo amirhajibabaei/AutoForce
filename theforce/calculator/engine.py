@@ -43,7 +43,7 @@ class Engine(Calculator):
             r = xyz[neighbors] + cells - xyz[a]
             energy = energy + sum([pot(nums[a], nums[neighbors], r)
                                    for pot in self.terms])
-        forces, = grad(energy, xyz)
+        forces, = grad(-energy, xyz)
 
         self.results['energy'] = energy.detach().numpy()
         self.results['forces'] = forces.detach().numpy()
