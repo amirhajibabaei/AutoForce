@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -28,35 +28,32 @@ class PairSimilarity(SimilarityKernel):
         super().__init__(kernel)
         self.a = a
         self.b = b
-        if a == b:
-            self.double_count = 2
-        else:
-            self.double_count = 1
+        self.double_count = 2
 
     def func(self, first, second):
-        m1 = first.select(self.a, self.b)
-        m2 = second.select(self.a, self.b)
+        m1 = first.select(self.a, self.b, bothways=True)
+        m2 = second.select(self.a, self.b, bothways=True)
         return self.kern(first.d[m1], second.d[m2]).sum().view(1, 1) / self.double_count**2
 
     def leftgrad(self, first, second):
-        m1 = first.select(self.a, self.b)
-        m2 = second.select(self.a, self.b)
+        m1 = first.select(self.a, self.b, bothways=True)
+        m2 = second.select(self.a, self.b, bothways=True)
         return -zeros(first.natoms, 3).index_add(0, first.i[m1],
                                                  (self.kern.leftgrad(first.d[m1], second.d[m2])
                                                   [:, None] * first.dr[m1][..., None]
                                                   ).sum(dim=-1)).view(first.natoms*3, 1) / self.double_count
 
     def rightgrad(self, first, second):
-        m1 = first.select(self.a, self.b)
-        m2 = second.select(self.a, self.b)
+        m1 = first.select(self.a, self.b, bothways=True)
+        m2 = second.select(self.a, self.b, bothways=True)
         return - zeros(second.natoms, 3).index_add(0, second.i[m2],
                                                    (self.kern.rightgrad(first.d[m1], second.d[m2])
                                                     [..., None] * second.dr[m2]).sum(dim=0)
                                                    ).view(1, second.natoms*3) / self.double_count
 
     def gradgrad(self, first, second):
-        m1 = first.select(self.a, self.b)
-        m2 = second.select(self.a, self.b)
+        m1 = first.select(self.a, self.b, bothways=True)
+        m2 = second.select(self.a, self.b, bothways=True)
         return zeros(first.natoms, second.natoms, 3, 3
                      ).index_add(1, second.i[m2], zeros(first.natoms, second.i[m2].size(0), 3, 3
                                                         ).index_add(0, first.i[m1],

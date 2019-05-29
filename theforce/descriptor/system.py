@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -73,15 +73,10 @@ class System:
 
         self.mask = {}
         if masks:
-            # for a in set(self.nums):
-            #    self.mask[(a, a)] = self.select(a, a)
-            # for a, b in itertools.combinations(set(self.nums), 2):
-            #    self.mask[(a, b)] = self.select(a, b)
-            #    self.mask[(b, a)] = self.select(b, a)
             for (a, b) in itertools.product(set(self.nums), set(self.nums)):
-                self.mask[(a, b)] = self.select(a, b)
+                self.get_mask(a, b)
 
-    def select(self, a, b):
+    def get_mask(self, a, b):
         try:
             return self.mask[(a, b)]
         except KeyError:
@@ -89,6 +84,12 @@ class System:
                                                self.nums[self.j] == b))
             self.mask[(a, b)] = mask
             return mask
+
+    def select(self, a, b, bothways=True):
+        m = self.get_mask(a, b)
+        if bothways and a != b:
+            m = (m.byte() | self.get_mask(b, a).byte()).to(torch.bool)
+        return m
 
 
 def test():
@@ -120,14 +121,19 @@ def test_empty_nl():
 
 def test_multi():
     from ase import Atoms
-    xyz = np.random.uniform(0, 10., size=(10, 3))
-    nums = np.random.randint(1, 3, size=(10,))
+    xyz = np.random.uniform(0, 10., size=(15, 3))
+    nums = np.random.randint(1, 4, size=(15,))
     atoms = Atoms(positions=xyz, numbers=nums,
                   cell=[10, 10, 10], pbc=True)
     sys = System(atoms, cutoff=3.0)
-    mask = sys.select(2, 1)
+    mask = sys.select(2, 1, bothways=False)
     assert (sys.nums[sys.i[mask]] == 2).all() and (
         sys.nums[sys.j[mask]] == 1).all()
+
+    mask = sys.select(2, 1, bothways=True)
+    # print(sys.nums[sys.i])
+    # print(sys.nums[sys.j])
+    # print(mask.byte().numpy())
 
 
 if __name__ == '__main__':
