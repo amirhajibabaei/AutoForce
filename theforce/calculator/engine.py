@@ -49,7 +49,7 @@ class Engine(Calculator):
         if self.with_grads:
             xyz.detach_()
         else:
-            energy = energy.detach().numpy()
+            energy = energy.detach().numpy().reshape(1)[0]
             forces = forces.detach().numpy()
 
         self.results['energy'] = energy
