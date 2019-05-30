@@ -1,28 +1,26 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # In[ ]:
 
 
-import torch
-import numpy as np
-from ase.neighborlist import primitive_neighbor_list
+import warnings
+from theforce.util.util import iterable
 import itertools
-# torch.set_default_tensor_type(torch.DoubleTensor)
+from ase.neighborlist import primitive_neighbor_list
+import numpy as np
+import torch
 
 
-def dict_to_indices(numbers, elements=None):
-    if elements is None:
-        elements = sorted(list(set(numbers.tolist())))
-    elements_dict = {e: i for i, e in enumerate(elements)}
-    return torch.tensor(list(map(lambda a: elements_dict[a], numbers.tolist())))
+def mask_values(arr, vals):
+    return np.stack([arr == v for v in iterable(vals)]).any(axis=0)
 
 
 class System:
 
     def __init__(self, atoms=None, positions=None, cell=None, pbc=None, numbers=None,
-                 energy=None, forces=None, elements=None, cutoff=None):
-
+                 energy=None, forces=None, max_cutoff=None, cutoff=None):
+        """The idea is to store minimal information."""
         if atoms:
             self.xyz = torch.as_tensor(atoms.positions)
             self.cell = atoms.cell
@@ -47,13 +45,17 @@ class System:
             self.energy = (torch.as_tensor(energy)
                            if energy is not None else None)
 
-        self.idx = dict_to_indices(self.nums, elements=elements)
         self.natoms = self.xyz.size(0)
+        self.max_cutoff = max_cutoff
 
         if cutoff is not None:
+            warnings.warn('System: cutoff keyword will be removed in near future',
+                          category=DeprecationWarning)
             self.build_nl(cutoff)
 
     def build_nl(self, cutoff, self_interaction=False, masks=True):
+        warnings.warn('Systems.build_nl is deprecated, see System.ijr instead',
+                      category=DeprecationWarning)
         i, j, offset = primitive_neighbor_list('ijS', self.pbc, self.cell,
                                                self.xyz.detach().numpy(),
                                                cutoff, numbers=None,
@@ -77,6 +79,8 @@ class System:
                 self.get_mask(a, b)
 
     def get_mask(self, a, b):
+        warnings.warn('System.get_mask is deprecated, see System.ijr instead',
+                      category=DeprecationWarning)
         try:
             return self.mask[(a, b)]
         except KeyError:
@@ -86,10 +90,47 @@ class System:
             return mask
 
     def select(self, a, b, bothways=True):
+        warnings.warn('System.select is deprecated, see System.ijr instead',
+                      category=DeprecationWarning)
         m = self.get_mask(a, b)
         if bothways and a != b:
             m = (m.byte() | self.get_mask(b, a).byte()).to(torch.bool)
         return m
+
+    def ijr(self, cutoff=None, include=None, ignore_same_numbers=False, self_interaction=False):
+        """
+        Returns i, j, r (tensors) of neighboring atoms.
+        i, j are indices, r is the displacement vector (xyz[j]-xyz[i]).
+        If cutoff is None it will use System.max_cutoff.
+        If a sequence of atomic numbers is passed as include,
+        numbers not in this sequence will be ignored.
+        If ignore_same_numbers is True, bonds between similar atoms 
+        will be discarded.
+        """
+        if cutoff is None:
+            if self.max_cutoff is None:
+                raise RuntimeError('No cutoff found for building neighborlist')
+            else:
+                cutoff = self.max_cutoff
+        if include is None:  # then include all atomic-numbers
+            m = np.full(self.natoms, True)
+        else:
+            m = mask_values(self.nums, include)
+        _xyz = self.xyz.detach().numpy()[m]
+        i, j, offset = primitive_neighbor_list('ijS', self.pbc, self.cell, _xyz,
+                                               cutoff, self_interaction=self_interaction)
+        index = np.arange(self.natoms, dtype=np.int)[m]
+        i = index[i]
+        j = index[j]
+        if ignore_same_numbers:
+            m2 = self.nums[i] != self.nums[j]
+        else:
+            m2 = np.full(i.shape[0], True)
+        i = torch.from_numpy(i[m2]).long()
+        j = torch.from_numpy(j[m2]).long()
+        cells = torch.from_numpy(np.einsum('ik,kj->ij', offset[m2], self.cell))
+        r = self.xyz[j] + cells - self.xyz[i]
+        return i, j, r
 
 
 def test():
@@ -103,7 +144,7 @@ def test():
     atoms = Atoms(positions=positions, cell=cell, pbc=True)
     atoms.set_calculator(LennardJones(epsilon=1.0, sigma=1.0, rc=3.0))
     atoms.get_potential_energy()
-    sys = System(atoms, elements=[0])
+    sys = System(atoms)
     sys.xyz.requires_grad = True
     sys.build_nl(3.0)
     r2 = (sys.r**2).sum(dim=-1)
@@ -131,13 +172,31 @@ def test_multi():
         sys.nums[sys.j[mask]] == 1).all()
 
     mask = sys.select(2, 1, bothways=True)
-    # print(sys.nums[sys.i])
-    # print(sys.nums[sys.j])
-    # print(mask.byte().numpy())
+
+
+def test_ijr():
+    from ase import Atoms
+    xyz = np.random.uniform(0, 10., size=(15, 3))
+    nums = np.random.randint(1, 4, size=(15,))
+    atoms = Atoms(positions=xyz, numbers=nums,
+                  cell=[10, 10, 10], pbc=True)
+    sys = System(atoms, cutoff=3.0)
+    mask = sys.select(1, 2, bothways=True)
+    i, j, r = sys.ijr(cutoff=3.0, include=(1, 2), ignore_same_numbers=True)
+    print((sys.nums[i] == sys.nums[sys.i[mask]]).all())
+    print((sys.nums[j] == sys.nums[sys.j[mask]]).all())
+    d = (r**2).sum(dim=-1).sqrt()
+    test_d = d.allclose(sys.d[mask].view(-1))
+    print(test_d)
+    if not test_d:
+        print('probably numbers are just swapped (thats ok!)')
+        print(d)
+        print(sys.d[mask].view(-1))
 
 
 if __name__ == '__main__':
     test()
     test_empty_nl()
     test_multi()
+    test_ijr()
 
