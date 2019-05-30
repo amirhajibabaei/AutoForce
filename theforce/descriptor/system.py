@@ -4,7 +4,6 @@
 # In[ ]:
 
 
-import warnings
 from theforce.util.util import iterable
 import itertools
 from ase.neighborlist import primitive_neighbor_list
@@ -49,25 +48,15 @@ class System:
         self.max_cutoff = max_cutoff
 
         if cutoff is not None:
-            warnings.warn('System: cutoff keyword will be removed in near future',
-                          category=DeprecationWarning)
             self.build_nl(cutoff)
 
     def build_nl(self, cutoff, self_interaction=False, masks=True):
-        warnings.warn('Systems.build_nl is deprecated, see System.ijr instead',
-                      category=DeprecationWarning)
         i, j, offset = primitive_neighbor_list('ijS', self.pbc, self.cell,
                                                self.xyz.detach().numpy(),
                                                cutoff, numbers=None,
                                                self_interaction=self_interaction)
-        if i.shape[0] > 0:
-            self.r = self.xyz[j] + torch.einsum('ik,kj->ij',
-                                                torch.as_tensor(
-                                                    offset.astype(np.float)),
-                                                torch.as_tensor(self.cell)) - self.xyz[i]
-        else:
-            self.r = torch.zeros(0, 3)
-
+        cells = torch.from_numpy(np.einsum('ik,kj->ij', offset, self.cell))
+        self.r = self.xyz[j] + cells - self.xyz[i]
         self.i = torch.as_tensor(i).long()
         self.j = torch.as_tensor(j).long()
         self.d = (self.r**2).sum(dim=-1).sqrt().view(-1, 1)
@@ -79,8 +68,6 @@ class System:
                 self.get_mask(a, b)
 
     def get_mask(self, a, b):
-        warnings.warn('System.get_mask is deprecated, see System.ijr instead',
-                      category=DeprecationWarning)
         try:
             return self.mask[(a, b)]
         except KeyError:
@@ -90,8 +77,6 @@ class System:
             return mask
 
     def select(self, a, b, bothways=True):
-        warnings.warn('System.select is deprecated, see System.ijr instead',
-                      category=DeprecationWarning)
         m = self.get_mask(a, b)
         if bothways and a != b:
             m = (m.byte() | self.get_mask(b, a).byte()).to(torch.bool)
@@ -170,7 +155,6 @@ def test_multi():
     mask = sys.select(2, 1, bothways=False)
     assert (sys.nums[sys.i[mask]] == 2).all() and (
         sys.nums[sys.j[mask]] == 1).all()
-
     mask = sys.select(2, 1, bothways=True)
 
 

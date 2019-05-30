@@ -11,6 +11,7 @@ from theforce.regression.core import LazyWhite
 from theforce.regression.algebra import jitcholesky
 from theforce.util.util import iterable
 import copy
+import warnings
 
 
 class EnergyForceKernel(Module):
@@ -84,11 +85,16 @@ class GaussianProcessPotential(Module):
         return torch.cat([torch.tensor([sys.energy for sys in data])] +
                          [sys.forces.view(-1) for sys in data])
 
-    def loss(self, data, Y=None, inducing=None):
+    def loss(self, data, Y=None, inducing=None, cov_loss=False):
         p = self(data, inducing=inducing)
         if hasattr(p, 'cov_factor'):
-            covariance_loss = 0.5*(self.kern.diag(data).sum() - torch.einsum(
-                'ij,ij', p.cov_factor, p.cov_factor))/self.noise.diag()
+            if cov_loss:
+                covariance_loss = 0.5*(self.kern.diag(data).sum() - torch.einsum(
+                    'ij,ij', p.cov_factor, p.cov_factor))/self.noise.diag()
+            else:
+                covariance_loss = 0
+                warnings.warn("""The trace term in Titsias's variational ELBO is being ignored, 
+                              set cov_loss=True to include it""")
         else:
             covariance_loss = 0
         return -p.log_prob(self.Y(data) if Y is None else Y) + covariance_loss
@@ -98,44 +104,46 @@ class PosteriorPotential(Module):
 
     def __init__(self, gp, data, inducing=None):
         super().__init__()
-        self.gp = gp
-        p = gp(data, inducing)
-        if inducing is None:
-            self.X = copy.deepcopy(data)
-            self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
-        else:
-            K = torch.cat([gp.kern(data, inducing, cov='energy_energy'),
-                           gp.kern(data, inducing, cov='forces_energy')], dim=0)
-            M = gp.kern.energy_energy(inducing, inducing)
-            L, _ = jitcholesky(M)
-            A = torch.cat([K, gp.noise.diag().sqrt()*L.t()], dim=0)
-            Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
-            Q, R = torch.qr(A)
-            self.mu = R.inverse() @ Q.t() @ Y
-            self.X = copy.deepcopy(inducing)
-            self.inducing = 1
+        with torch.no_grad():
+            self.gp = gp
+            p = gp(data, inducing)
+            if inducing is None:
+                self.X = copy.deepcopy(data)
+                self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
+            else:
+                K = torch.cat([gp.kern(data, inducing, cov='energy_energy'),
+                               gp.kern(data, inducing, cov='forces_energy')], dim=0)
+                M = gp.kern.energy_energy(inducing, inducing)
+                L, _ = jitcholesky(M)
+                A = torch.cat([K, gp.noise.diag().sqrt()*L.t()], dim=0)
+                Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
+                Q, R = torch.qr(A)
+                self.mu = R.inverse() @ Q.t() @ Y
+                self.X = copy.deepcopy(inducing)
+                self.inducing = 1
 
     def forward(self, test):
-        A = self.gp.kern(test, self.X, cov='energy_energy')
-        B = self.gp.kern(test, self.X, cov='forces_energy')
-        if not hasattr(self, 'inducing'):
-            A = torch.cat([A, self.gp.kern(test, self.X, cov='energy_forces')],
-                          dim=1)
-            B = torch.cat([B, self.gp.kern(test, self.X, cov='forces_forces')],
-                          dim=1)
+        with torch.no_grad():
+            A = self.gp.kern(test, self.X, cov='energy_energy')
+            B = self.gp.kern(test, self.X, cov='forces_energy')
+            if not hasattr(self, 'inducing'):
+                A = torch.cat([A, self.gp.kern(test, self.X, cov='energy_forces')],
+                              dim=1)
+                B = torch.cat([B, self.gp.kern(test, self.X, cov='forces_forces')],
+                              dim=1)
 
-        energy = A @ self.mu
-        forces = B @ self.mu
+            energy = A @ self.mu
+            forces = B @ self.mu
         return energy, forces.view(-1, 3)
 
 
-def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None):
+def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, cov_loss=False):
     if not hasattr(gp, 'optimizer'):
         gp.optimizer = torch.optim.Adam(gp.params, lr=lr)
 
     for _ in range(steps):
         gp.optimizer.zero_grad()
-        loss = gp.loss(X, Y, inducing)
+        loss = gp.loss(X, Y, inducing, cov_loss)
         loss.backward()
         gp.optimizer.step()
     print('trained for {} steps'.format(steps))
