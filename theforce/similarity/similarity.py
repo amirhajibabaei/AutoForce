@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 # coding: utf-8
 
 # In[ ]:
@@ -8,14 +8,15 @@
 from torch.nn import Module
 from torch import zeros, cat
 from theforce.util.util import iterable
+from theforce.regression.gp import Covariance
 
 
 class SimilarityKernel(Module):
 
-    def __init__(self, kernel):
+    def __init__(self, kernels):
         super().__init__()
-        self.kern = kernel
-        self.params = kernel.params
+        self.kern = Covariance(kernels)
+        self.params = self.kern.params
 
     def forward(self, first, second, operation='func'):
         return cat([cat([getattr(self, operation)(a, b) for a in iterable(first)], dim=0
@@ -24,8 +25,8 @@ class SimilarityKernel(Module):
 
 class PairSimilarity(SimilarityKernel):
 
-    def __init__(self, kernel, a, b):
-        super().__init__(kernel)
+    def __init__(self, kernels, a, b):
+        super().__init__([kern(dim=1) for kern in iterable(kernels)])
         self.a = a
         self.b = b
         self.double_count = 2
