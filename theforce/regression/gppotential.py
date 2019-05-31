@@ -119,8 +119,10 @@ class PosteriorPotential(Module):
                 Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
                 Q, R = torch.qr(A)
                 self.mu = R.inverse() @ Q.t() @ Y
-                self.X = copy.deepcopy(inducing)
+                self.X = inducing
                 self.inducing = 1
+                for sys, e in zip(*[inducing, M @ self.mu]):
+                    sys.energy = e
 
     def forward(self, test):
         with torch.no_grad():
@@ -139,9 +141,13 @@ class PosteriorPotential(Module):
 
 def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, cov_loss=False):
     if not hasattr(gp, 'optimizer'):
-        gp.optimizer = torch.optim.Adam(gp.params, lr=lr)
+        gp.optimizer = torch.optim.Adam([{'params': gp.params}], lr=lr)
+        if inducing is not None and type(inducing) != list:
+            gp.optimizer.add_param_group({'params': inducing.params})
 
     for _ in range(steps):
+        if inducing is not None and type(inducing) != list:
+            inducing.update_nl_if_requires_grad()
         gp.optimizer.zero_grad()
         loss = gp.loss(X, Y, inducing, cov_loss)
         loss.backward()

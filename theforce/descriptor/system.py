@@ -66,6 +66,7 @@ class System:
         if masks:
             for (a, b) in itertools.product(set(self.nums), set(self.nums)):
                 self.get_mask(a, b)
+        self.last_cutoff_used = cutoff
 
     def get_mask(self, a, b):
         try:
@@ -116,6 +117,39 @@ class System:
         cells = torch.from_numpy(np.einsum('ik,kj->ij', offset[m2], self.cell))
         r = self.xyz[j] + cells - self.xyz[i]
         return i, j, r
+
+
+class Inducing:
+
+    def __init__(self, X):
+        self.X = X
+
+    @property
+    def params(self):
+        return [s.xyz for s in self.X if s.xyz.requires_grad]
+
+    def __iter__(self):
+        for s in self.X:
+            yield s
+
+    def __getitem__(self, i):
+        return self.X[i]
+
+    def __len__(self):
+        return len(self.X)
+
+    def fix_params(self):
+        for s in self.X:
+            s.xyz.requires_grad = False
+
+    def free_params(self):
+        for s in self.X:
+            s.xyz.requires_grad = True
+
+    def update_nl_if_requires_grad(self):
+        for s in self.X:
+            if s.xyz.requires_grad:
+                s.build_nl(s.last_cutoff_used)
 
 
 def test():
