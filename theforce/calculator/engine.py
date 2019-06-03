@@ -56,41 +56,36 @@ class Engine(Calculator):
         self.results['forces'] = forces
 
 
-def _loss_function(eng, systems):
-    # data
+def _input(systems):
     energies = torch.tensor([atoms.get_potential_energy()
                              for atoms in systems])
     forces = torch.cat([torch.tensor(atoms.get_forces())
                         for atoms in systems]).view(-1)
+    return torch.cat([energies, forces])
 
-    # pred
-    _energies = []
-    _forces = []
+
+def _target(eng, systems):
+    energies = []
+    forces = []
     for atoms in systems:
         eng.calculate(atoms)
-        _energies += [eng.results['energy']]
-        _forces += [eng.results['forces']]
-    _energies = torch.tensor(_energies).view(-1)
-    _forces = torch.cat(_forces).view(-1)
-
-    # loss
-    loss = ((energies - _energies)**2).sum() + ((forces - _forces)**2).sum()
-    return loss
+        energies += [eng.results['energy']]
+        forces += [eng.results['forces']]
+    energies = torch.tensor(energies).view(-1)
+    forces = torch.cat(forces).view(-1)
+    return torch.cat([energies, forces])
 
 
-def _train_engine(eng, systems, steps=10, lr=0.01):
-    """
-    _loss_function and _train_engine are only created for testing
-    and most likely they will be useless in real applications.
-    gradient descent algorithms are very inefficient in this way.
-    """
+def train_engine(eng, systems, loss_function=torch.nn.MSELoss(), steps=10, lr=0.1):
     if not hasattr(eng, 'optimizer'):
         eng.optimizer = torch.optim.Adam(eng.params, lr=lr)
 
+    input = _input(systems)
     for _ in range(steps):
         def closure():
             eng.optimizer.zero_grad()
-            loss = _loss_function(eng, systems)
+            target = _target(eng, systems)
+            loss = loss_function(input, target)
             loss.backward()
             return loss
         eng.optimizer.step(closure)
