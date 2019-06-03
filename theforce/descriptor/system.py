@@ -59,8 +59,11 @@ class System:
         self.r = self.xyz[j] + cells - self.xyz[i]
         self.i = torch.as_tensor(i).long()
         self.j = torch.as_tensor(j).long()
-        self.d = (self.r**2).sum(dim=-1).sqrt().view(-1, 1)
-        self.dr = self.r / self.d
+        self.d2 = (self.r**2).sum(dim=-1).view(-1, 1)
+        self.d = self.d2.sqrt()
+        self.u = self.r / self.d
+        self.logd = self.d.log()
+        self.logd_deriv = self.u / self.d
 
         self.mask = {}
         if masks:

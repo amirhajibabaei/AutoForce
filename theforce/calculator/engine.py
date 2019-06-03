@@ -22,7 +22,7 @@ class Engine(Calculator):
             raise NotImplementedError('pass a cutoff!')
         self.terms = iterable(terms)
         self.params = [par for term in self.terms for par in term.parameters()]
-        self.with_grads = False
+        self.as_tensors_with_grads = False
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
@@ -44,9 +44,9 @@ class Engine(Calculator):
             r = xyz[neighbors] + cells - xyz[a]
             for pot in self.terms:
                 energy = energy + pot(nums[a], nums[neighbors], r)
-        forces, = grad(-energy, xyz, create_graph=self.with_grads)
+        forces, = grad(-energy, xyz, create_graph=self.as_tensors_with_grads)
 
-        if self.with_grads:
+        if self.as_tensors_with_grads:
             xyz.detach_()
         else:
             energy = energy.detach().numpy().reshape(1)[0]
