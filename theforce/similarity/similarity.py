@@ -111,5 +111,43 @@ class LogDSimilarity(SimilarityKernel):
                                  ).permute(0, 2, 1, 3).contiguous().view(first.natoms*3, second.natoms*3)
 
 
-PairSimilarity = LogDSimilarity
+class PairSimilarity(SimilarityKernel):
+
+    def __init__(self, kernels, a, b):
+        super().__init__([kern(dim=1) for kern in iterable(kernels)])
+        self.a = a
+        self.b = b
+
+    def func(self, first, second):
+        m1 = first.select(self.a, self.b, bothways=True)
+        m2 = second.select(self.a, self.b, bothways=True)
+        k = self.kern(first.d[m1], second.d[m2])
+        k = k / (first.d[m1]*second.d[m2].t())
+        return k.sum().view(1, 1) / 4
+
+    def leftgrad(self, first, second):
+        m1 = first.select(self.a, self.b, bothways=True)
+        m2 = second.select(self.a, self.b, bothways=True)
+        lg = self.kern.leftgrad(first.d[m1], second.d[m2])
+        lg = lg - (self.kern(first.d[m1], second.d[m2])
+                   / first.d[m1])
+        lg = lg / (first.d[m1]*second.d[m2].t())
+        lg = (lg[:, None] * first.u[m1][..., None]).sum(dim=-1)
+        return -zeros(first.natoms, 3).index_add(0, first.i[m1], lg
+                                                 ).view(first.natoms*3, 1) / 2
+
+    def rightgrad(self, first, second):
+        m1 = first.select(self.a, self.b, bothways=True)
+        m2 = second.select(self.a, self.b, bothways=True)
+        rg = self.kern.rightgrad(first.d[m1], second.d[m2])
+        rg = rg - (self.kern(first.d[m1], second.d[m2])
+                   / second.d[m2].t())
+        rg = rg / (first.d[m1]*second.d[m2].t())
+        rg = (rg[..., None] * second.u[m2]).sum(dim=0)
+        return - zeros(second.natoms, 3).index_add(0, second.i[m2], rg
+                                                   ).view(1, second.natoms*3) / 2
+
+    def gradgrad(self, first, second):
+        raise NotImplementedError(
+            'PairSimilarity: gradgrad is not implemented yet!')
 
