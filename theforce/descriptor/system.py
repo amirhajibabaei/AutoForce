@@ -19,9 +19,13 @@ class System:
 
     def __init__(self, atoms=None, positions=None, cell=None, pbc=None, numbers=None,
                  energy=None, forces=None, max_cutoff=None, cutoff=None):
-        """The idea is to store minimal information."""
+        """
+        The idea is to store minimal information.
+        max_cutoff is used in System.ijr.
+        If cutoff is not None, neighborlist will be built.
+        """
         if atoms:
-            self.xyz = torch.as_tensor(atoms.positions)
+            self.xyz = torch.from_numpy(atoms.positions)
             self.cell = atoms.cell
             self.pbc = atoms.pbc
             self.nums = atoms.get_atomic_numbers()
@@ -44,13 +48,14 @@ class System:
             self.energy = (torch.as_tensor(energy)
                            if energy is not None else None)
 
+        self.atoms = atoms
         self.natoms = self.xyz.size(0)
         self.max_cutoff = max_cutoff
 
         if cutoff is not None:
             self.build_nl(cutoff)
 
-    def build_nl(self, cutoff, self_interaction=False, masks=True):
+    def build_nl(self, cutoff, self_interaction=False):
         i, j, offset = primitive_neighbor_list('ijS', self.pbc, self.cell,
                                                self.xyz.detach().numpy(),
                                                cutoff, numbers=None,
@@ -64,26 +69,19 @@ class System:
         self.u = self.r / self.d
         self.logd = self.d.log()
         self.logd_deriv = self.u / self.d
-
-        self.mask = {}
-        if masks:
-            for (a, b) in itertools.product(set(self.nums), set(self.nums)):
-                self.get_mask(a, b)
         self.last_cutoff_used = cutoff
 
     def get_mask(self, a, b):
-        try:
-            return self.mask[(a, b)]
-        except KeyError:
-            mask = torch.tensor(np.logical_and(self.nums[self.i] == a,
-                                               self.nums[self.j] == b))
-            self.mask[(a, b)] = mask
-            return mask
+        mask = torch.tensor(np.logical_and(self.nums[self.i] == a,
+                                           self.nums[self.j] == b))
+        return mask
 
     def select(self, a, b, bothways=True):
         m = self.get_mask(a, b)
         if bothways and a != b:
             m = (m.byte() | self.get_mask(b, a).byte()).to(torch.bool)
+        if not bothways and a == b:
+            m = (m.byte() & (self.j > self.i).byte()).to(torch.bool)
         return m
 
     def ijr(self, cutoff=None, include=None, ignore_same_numbers=False, self_interaction=False):
@@ -184,15 +182,26 @@ def test_empty_nl():
 
 def test_multi():
     from ase import Atoms
-    xyz = np.random.uniform(0, 10., size=(15, 3))
-    nums = np.random.randint(1, 4, size=(15,))
+    xyz = np.random.uniform(0, 10., size=(20, 3))
+    nums = np.random.randint(1, 4, size=(20,))
     atoms = Atoms(positions=xyz, numbers=nums,
                   cell=[10, 10, 10], pbc=True)
     sys = System(atoms, cutoff=3.0)
     mask = sys.select(2, 1, bothways=False)
     assert (sys.nums[sys.i[mask]] == 2).all() and (
         sys.nums[sys.j[mask]] == 1).all()
-    mask = sys.select(2, 1, bothways=True)
+
+    mask = sys.select(1, 2, bothways=True)
+    # print(sys.i[mask].numpy())
+    # print(sys.j[mask].numpy())
+    # print(sys.nums[sys.i[mask]])
+    # print(sys.nums[sys.j[mask]])
+
+    mask = sys.select(1, 2, bothways=False)
+    # print(sys.i[mask].numpy())
+    # print(sys.j[mask].numpy())
+    # print(sys.nums[sys.i[mask]])
+    # print(sys.nums[sys.j[mask]])
 
 
 def test_ijr():
