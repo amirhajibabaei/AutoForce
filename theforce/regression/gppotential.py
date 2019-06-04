@@ -11,7 +11,6 @@ from theforce.regression.core import LazyWhite
 from theforce.regression.algebra import jitcholesky
 from theforce.util.util import iterable
 import copy
-import warnings
 
 
 class EnergyForceKernel(Module):
@@ -85,7 +84,7 @@ class GaussianProcessPotential(Module):
         return torch.cat([torch.tensor([sys.energy for sys in data])] +
                          [sys.forces.view(-1) for sys in data])
 
-    def loss(self, data, Y=None, inducing=None, cov_loss=False):
+    def loss(self, data, Y=None, inducing=None, logprob_loss=True, cov_loss=False):
         p = self(data, inducing=inducing)
         if hasattr(p, 'cov_factor'):
             if cov_loss:
@@ -93,11 +92,13 @@ class GaussianProcessPotential(Module):
                     'ij,ij', p.cov_factor, p.cov_factor))/self.noise.diag()
             else:
                 covariance_loss = 0
-                warnings.warn("""The trace term in Titsias's variational ELBO is being ignored, 
-                              set cov_loss=True to include it""")
         else:
             covariance_loss = 0
-        return -p.log_prob(self.Y(data) if Y is None else Y) + covariance_loss
+        if logprob_loss:
+            lp_loss = -p.log_prob(self.Y(data) if Y is None else Y)
+        else:
+            lp_loss = 0
+        return lp_loss + covariance_loss
 
 
 class PosteriorPotential(Module):
@@ -139,7 +140,10 @@ class PosteriorPotential(Module):
         return energy, forces.view(-1, 3)
 
 
-def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, cov_loss=False):
+def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True, cov_loss=False):
+    if not logprob_loss and not cov_loss:
+        raise RuntimeError('both loss terms are ignored!')
+
     if not hasattr(gp, 'optimizer'):
         gp.optimizer = torch.optim.Adam([{'params': gp.params}], lr=lr)
         if inducing is not None and type(inducing) != list:
@@ -149,8 +153,21 @@ def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, cov_loss=False):
         if inducing is not None and type(inducing) != list:
             inducing.update_nl_if_requires_grad()
         gp.optimizer.zero_grad()
-        loss = gp.loss(X, Y, inducing, cov_loss)
+        loss = gp.loss(X, Y, inducing, logprob_loss, cov_loss)
         loss.backward()
         gp.optimizer.step()
-    print('trained for {} steps'.format(steps))
+
+    report = []
+    if inducing is None:
+        report += ['Full']
+    else:
+        report += ['Sparse']
+        if cov_loss:
+            report += ['Variational-ELBO']
+            if not logprob_loss:
+                report += ['~only trace of Gram matrix considered']
+        else:
+            report += ['Projected-Process']
+    report = ' '.join(report)
+    print('trained for {} steps ({})'.format(steps, report))
 
