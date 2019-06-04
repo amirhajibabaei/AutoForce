@@ -36,10 +36,6 @@ class EnergyForceKernel(Module):
                 right = invchol @ getattr(self, 'energy_'+rcov)(inducing, sec)
             return left, right
 
-    def diag(self, data):
-        return torch.cat([self.energy_energy(sys, sys).view(1) for sys in data] +
-                         [self.forces_forces(sys, sys).diag() for sys in data])
-
     def energy_energy(self, first, second):
         return self.base_kerns(first, second, 'func')
 
@@ -51,6 +47,16 @@ class EnergyForceKernel(Module):
 
     def forces_forces(self, first, second):
         return self.base_kerns(first, second, 'gradgrad')
+
+    def diag(self, data):
+        return torch.cat([self.diag_energy(data), self.diag_forces(data)])
+
+    def diag_energy(self, data):
+        return torch.cat([self.energy_energy(sys, sys).view(1) for sys in iterable(data)])
+
+    def diag_forces(self, data):
+        # TODO: execute diagonal forces-forces covs in base kernels for speedup (N^2->N)
+        return torch.cat([self.forces_forces(sys, sys).diag() for sys in iterable(data)])
 
     def base_kerns(self, first, second, operation):
         return torch.stack([kern(first, second, operation)
@@ -111,6 +117,7 @@ class PosteriorPotential(Module):
             if inducing is None:
                 self.X = copy.deepcopy(data)
                 self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
+                self.sig = p.precision_matrix
             else:
                 K = torch.cat([gp.kern(data, inducing, cov='energy_energy'),
                                gp.kern(data, inducing, cov='forces_energy')], dim=0)
@@ -120,13 +127,17 @@ class PosteriorPotential(Module):
                 Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
                 Q, R = torch.qr(A)
                 self.mu = R.inverse() @ Q.t() @ Y
+                i = L.inverse()
+                W = K @ i.t() @ i
+                self.sig = W.t() @ p.precision_matrix @ W
+
                 self.X = inducing
                 self.inducing = 1
                 for sys, e in zip(*[inducing, M @ self.mu]):
                     sys.energy = e
 
-    def forward(self, test):
-        with torch.no_grad():
+    def predict(self, test, variance=False, enable_grad=False):
+        with torch.set_grad_enabled(enable_grad):
             A = self.gp.kern(test, self.X, cov='energy_energy')
             B = self.gp.kern(test, self.X, cov='forces_energy')
             if not hasattr(self, 'inducing'):
@@ -137,7 +148,17 @@ class PosteriorPotential(Module):
 
             energy = A @ self.mu
             forces = B @ self.mu
-        return energy, forces.view(-1, 3)
+
+            out = (energy, forces.view(-1, 3))
+
+            if variance:
+                energy_var = (self.gp.kern.diag_energy(test) -
+                              (A @ self.sig @ A.t()).diag())
+                forces_var = (self.gp.kern.diag_forces(test) -
+                              (B @ self.sig @ B.t()).diag())
+                out += (energy_var, forces_var.view(-1, 3))
+
+            return out
 
 
 def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True, cov_loss=False):
