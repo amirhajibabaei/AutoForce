@@ -5,7 +5,7 @@
 
 
 from theforce.similarity.similarity import SimilarityKernel
-from torch import zeros, cat
+from torch import zeros, cat, stack
 from theforce.util.util import iterable
 
 
@@ -47,6 +47,15 @@ class DistanceSimilarity(SimilarityKernel):
                                                         ).index_add(2, q.j[m2], -cc)
         return ccc.view(p.natoms*3, q.natoms*3)
 
+    def gradgraddiag(self, p):
+        m1 = p.select(self.a, self.b, bothways=True)
+        i, counts = p.i[m1].unique(return_counts=True)
+        _d = p.d[m1].split_with_sizes(counts.tolist())
+        _u = p.u[m1].split_with_sizes(counts.tolist())
+        c = stack([(self.kern.gradgrad(d, d)[..., None] * u[None, ] * u[:, None]).sum(dim=(0, 1))
+                   for d, u in zip(*[_d, _u])])
+        return zeros(p.natoms, 3).index_add(0, i, c).view(-1)
+
 
 class LogDistanceSimilarity(SimilarityKernel):
     """ Pair energy is assumed as: func(distance). """
@@ -85,6 +94,15 @@ class LogDistanceSimilarity(SimilarityKernel):
         ccc = zeros(p.natoms, 3, q.natoms, 3).index_add(2, q.i[m2], cc
                                                         ).index_add(2, q.j[m2], -cc)
         return ccc.view(p.natoms*3, q.natoms*3)
+
+    def gradgraddiag(self, p):
+        m1 = p.select(self.a, self.b, bothways=True)
+        i, counts = p.i[m1].unique(return_counts=True)
+        _d = p.logd[m1].split_with_sizes(counts.tolist())
+        _u = p.logd_deriv[m1].split_with_sizes(counts.tolist())
+        c = stack([(self.kern.gradgrad(d, d)[..., None] * u[None, ] * u[:, None]).sum(dim=(0, 1))
+                   for d, u in zip(*[_d, _u])])
+        return zeros(p.natoms, 3).index_add(0, i, c).view(-1)
 
 
 class CoulombPairSimilarity(SimilarityKernel):
