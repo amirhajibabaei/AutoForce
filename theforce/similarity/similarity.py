@@ -27,3 +27,18 @@ class SimilarityKernel(Module):
     def funcdiag(self, first):
         return self.func(first, first).view(1)
 
+    def func(self, p, q):
+        raise NotImplementedError('func!')
+
+    def leftgrad(self, p, q):
+        raise NotImplementedError('leftgrad!')
+
+    def rightgrad(self, p, q):
+        raise NotImplementedError('rightgrad!')
+
+    def gradgrad(self, p, q):
+        raise NotImplementedError('gradgrad!')
+
+    def gradgraddiag(self, p):
+        raise NotImplementedError('gradgraddiag!')
+
