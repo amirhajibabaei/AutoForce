@@ -48,18 +48,28 @@ class EnergyForceKernel(Module):
     def forces_forces(self, first, second):
         return self.base_kerns(first, second, 'gradgrad')
 
-    def diag(self, data):
-        return torch.cat([self.diag_energy(data), self.diag_forces(data)])
-
-    def diag_energy(self, data):
-        return torch.cat([self.energy_energy(sys, sys).view(1) for sys in iterable(data)])
-
-    def diag_forces(self, data):
-        # TODO: execute diagonal forces-forces covs in base kernels for speedup (N^2->N)
-        return torch.cat([self.forces_forces(sys, sys).diag() for sys in iterable(data)])
-
     def base_kerns(self, first, second, operation):
         return torch.stack([kern(first, second, operation)
+                            for kern in self.kernels]).sum(dim=0)
+
+    # diagonal elements:
+    def diag(self, data, operation='energy'):
+        return getattr(self, operation+'_diag')(data)
+
+    def full_diag(self, data):
+        return self.energy_forces_diag(data)
+
+    def energy_forces_diag(self, data):
+        return torch.cat([self.energy_diag(data), self.forces_diag(data)])
+
+    def energy_diag(self, data):
+        return self.base_kerns_diag(data, 'func')
+
+    def forces_diag(self, data):
+        return self.base_kerns_diag(data, 'gradgrad')
+
+    def base_kerns_diag(self, data, operation):
+        return torch.stack([kern.diag(data, operation)
                             for kern in self.kernels]).sum(dim=0)
 
 
@@ -94,8 +104,8 @@ class GaussianProcessPotential(Module):
         p = self(data, inducing=inducing)
         if hasattr(p, 'cov_factor'):
             if cov_loss:
-                covariance_loss = 0.5*(self.kern.diag(data).sum() - torch.einsum(
-                    'ij,ij', p.cov_factor, p.cov_factor))/self.noise.diag()
+                covariance_loss = 0.5*(self.kern.diag(data, 'full').sum() - torch.einsum(
+                                       'ij,ij', p.cov_factor, p.cov_factor))/self.noise.diag()
             else:
                 covariance_loss = 0
         else:
@@ -152,9 +162,9 @@ class PosteriorPotential(Module):
             out = (energy, forces.view(-1, 3))
 
             if variance:
-                energy_var = (self.gp.kern.diag_energy(test) -
+                energy_var = (self.gp.kern.diag(test, 'energy') -
                               (A @ self.sig @ A.t()).diag())
-                forces_var = (self.gp.kern.diag_forces(test) -
+                forces_var = (self.gp.kern.diag(test, 'forces') -
                               (B @ self.sig @ B.t()).diag())
                 out += (energy_var, forces_var.view(-1, 3))
 

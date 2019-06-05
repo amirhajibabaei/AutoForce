@@ -21,3 +21,9 @@ class SimilarityKernel(Module):
         return cat([cat([getattr(self, operation)(a, b) for a in iterable(first)], dim=0
                         ) for b in iterable(second)], dim=1)
 
+    def diag(self, first, operation='func'):
+        return cat([getattr(self, operation+'diag')(a) for a in iterable(first)])
+
+    def funcdiag(self, first):
+        return self.func(first, first).view(1)
+
