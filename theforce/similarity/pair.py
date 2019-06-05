@@ -39,13 +39,13 @@ class DistanceSimilarity(SimilarityKernel):
     def gradgrad(self, p, q):
         m1 = p.select(self.a, self.b, bothways=False)
         m2 = q.select(self.a, self.b, bothways=False)
-        c = (p.u[m1][:, None, :, None] * q.u[m2][None, :, None, :]
-             * self.kern.gradgrad(p.d[m1], q.d[m2])[..., None, None])
-        cc = zeros(p.natoms, q.i[m2].size(0), 3, 3).index_add(0, p.i[m1], c
+        c = (p.u[m1][..., None, None] * q.u[m2] *
+             self.kern.gradgrad(p.d[m1], q.d[m2])[:, None, :, None])
+        cc = zeros(p.natoms, 3, q.i[m2].size(0), 3).index_add(0, p.i[m1], c
                                                               ).index_add(0, p.j[m1], -c)
-        ccc = zeros(p.natoms, q.natoms, 3, 3).index_add(1, q.i[m2], cc
-                                                        ).index_add(1, q.j[m2], -cc)
-        return ccc.permute(0, 2, 1, 3).contiguous().view(p.natoms*3, q.natoms*3)
+        ccc = zeros(p.natoms, 3, q.natoms, 3).index_add(2, q.i[m2], cc
+                                                        ).index_add(2, q.j[m2], -cc)
+        return ccc.view(p.natoms*3, q.natoms*3)
 
 
 class LogDistanceSimilarity(SimilarityKernel):
@@ -78,13 +78,13 @@ class LogDistanceSimilarity(SimilarityKernel):
     def gradgrad(self, p, q):
         m1 = p.select(self.a, self.b, bothways=False)
         m2 = q.select(self.a, self.b, bothways=False)
-        c = (p.logd_deriv[m1][:, None, :, None] * q.logd_deriv[m2][None, :, None, :]
-             * self.kern.gradgrad(p.logd[m1], q.logd[m2])[..., None, None])
-        cc = zeros(p.natoms, q.i[m2].size(0), 3, 3).index_add(0, p.i[m1], c
+        c = (p.logd_deriv[m1][..., None, None] * q.logd_deriv[m2] *
+             self.kern.gradgrad(p.logd[m1], q.logd[m2])[:, None, :, None])
+        cc = zeros(p.natoms, 3, q.i[m2].size(0), 3).index_add(0, p.i[m1], c
                                                               ).index_add(0, p.j[m1], -c)
-        ccc = zeros(p.natoms, q.natoms, 3, 3).index_add(1, q.i[m2], cc
-                                                        ).index_add(1, q.j[m2], -cc)
-        return ccc.permute(0, 2, 1, 3).contiguous().view(p.natoms*3, q.natoms*3)
+        ccc = zeros(p.natoms, 3, q.natoms, 3).index_add(2, q.i[m2], cc
+                                                        ).index_add(2, q.j[m2], -cc)
+        return ccc.view(p.natoms*3, q.natoms*3)
 
 
 class CoulombPairSimilarity(SimilarityKernel):
