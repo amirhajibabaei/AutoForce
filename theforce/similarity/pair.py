@@ -140,3 +140,20 @@ class CoulombPairSimilarity(SimilarityKernel):
         raise NotImplementedError(
             'PairSimilarity: gradgrad is not implemented yet!')
 
+    def gradgraddiag(self, p):
+        m1 = p.select(self.a, self.b, bothways=True)
+        i, counts = p.i[m1].unique(return_counts=True)
+        _d = p.d[m1].split_with_sizes(counts.tolist())
+        _u = p.u[m1].split_with_sizes(counts.tolist())
+        c = []
+        for d, u in zip(*[_d, _u]):
+            ddt = d*d.t()
+            c += [((
+                (self.kern(d, d)/ddt
+                 - self.kern.rightgrad(d, d)/d
+                 - self.kern.leftgrad(d, d)/d.t()
+                 + self.kern.gradgrad(d, d))/ddt
+            )[..., None] * u[None, ] * u[:, None]).sum(dim=(0, 1))]
+        c = stack(c)
+        return zeros(p.natoms, 3).index_add(0, i, c).view(-1)
+
