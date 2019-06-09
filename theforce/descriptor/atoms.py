@@ -74,7 +74,7 @@ class LocalEnvirons(NeighborList, list):
         """
         self.atoms = atoms
         cutoffs = atoms.natoms*[setup.rc / 2]
-        super().__init__(cutoffs, self_interaction=False, bothways=True)
+        super().__init__(cutoffs, skin=0.0, self_interaction=False, bothways=True)
         self.descriptors = setup.descriptors
         self._copy = np.zeros_like(atoms.positions)
 
