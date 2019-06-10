@@ -97,8 +97,8 @@ class GaussianProcessPotential(Module):
                                              torch.ones(Q.size(0))*self.noise.diag())
 
     def Y(self, data):
-        return torch.cat([torch.tensor([sys.energy for sys in data])] +
-                         [sys.forces.view(-1) for sys in data])
+        return torch.cat([torch.tensor([sys.target_energy for sys in data])] +
+                         [sys.target_forces.view(-1) for sys in data])
 
     def loss(self, data, Y=None, inducing=None, logprob_loss=True, cov_loss=False):
         p = self(data, inducing=inducing)

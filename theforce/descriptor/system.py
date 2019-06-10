@@ -30,13 +30,13 @@ class System:
             self.pbc = atoms.pbc
             self.nums = atoms.get_atomic_numbers()
             try:
-                self.forces = torch.as_tensor(atoms.get_forces())
+                self.target_forces = torch.as_tensor(atoms.get_forces())
             except RuntimeError:
-                self.forces = None
+                self.target_forces = None
             try:
-                self.energy = torch.tensor(atoms.get_potential_energy())
+                self.target_energy = torch.tensor(atoms.get_potential_energy())
             except RuntimeError:
-                self.energy = None
+                self.target_energy = None
         else:
             self.xyz = torch.as_tensor(positions)
             self.cell = cell
@@ -170,7 +170,7 @@ def test():
     r2 = (sys.r**2).sum(dim=-1)
     energy = 2*((1.0/r2)**6-(1.0/r2)**3).sum()
     energy.backward()
-    print(torch.allclose(sys.forces, -sys.xyz.grad))
+    print(torch.allclose(sys.target_forces, -sys.xyz.grad))
 
 
 def test_empty_nl():

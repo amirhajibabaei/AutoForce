@@ -164,10 +164,8 @@ class DummyPairDistance:
     def calculate(self, loc):
         loc.select(self.a, self.b)
         d = (loc.r**2).sum(dim=-1).sqrt().view(-1, 1)
-        grad = loc.r/d
-        grad = cat([grad, -grad])
-        indices = cat([loc.j, loc.i])
-        return d, grad, indices
+        loc.d = d
+        loc.grad = loc.r/d
 
 
 def example():
