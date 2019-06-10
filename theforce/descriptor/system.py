@@ -119,6 +119,9 @@ class System:
         r = self.xyz[j] + cells - self.xyz[i]
         return i, j, r
 
+    def update(self):
+        self.build_nl(self.last_cutoff_used)
+
 
 class Inducing:
 
@@ -150,7 +153,7 @@ class Inducing:
     def update_nl_if_requires_grad(self):
         for s in self.X:
             if s.xyz.requires_grad:
-                s.build_nl(s.last_cutoff_used)
+                s.update()
 
 
 def test():

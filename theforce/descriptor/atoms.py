@@ -112,12 +112,13 @@ class LocalEnvirons(NeighborList, list):
 
 class TorchAtoms(Atoms):
 
-    def __init__(self, setup, ase_atoms=None, energy=None, forces=None, **kwargs):
+    def __init__(self, setup, ase_atoms=None, energy=None, forces=None, frozen=True, **kwargs):
         super().__init__(**kwargs)
 
         if ase_atoms:
             self.arrays = ase_atoms.arrays
         self.xyz = from_numpy(self.positions)
+        self.xyz.requires_grad = not frozen
 
         try:
             self.target_energy = as_tensor(energy)
@@ -155,23 +156,13 @@ class Setup:
             desc.name = 'desc_{}'.format(i)
 
 
-class DummyPairDistance:
-    def __init__(self, a, b, kernel=None):
-        self.a = a
-        self.b = b
-        self.kernel = kernel
-
-    def calculate(self, loc):
-        loc.select(self.a, self.b)
-        d = (loc.r**2).sum(dim=-1).sqrt().view(-1, 1)
-        loc.d = d
-        loc.grad = loc.r/d
-
-
 def example():
-    PairDistance = DummyPairDistance
-    setup = Setup(3.0, [PairDistance(10, 10), PairDistance(10, 18),
-                        PairDistance(18, 18)])
+    from theforce.similarity.pair import DistanceKernel
+    from theforce.regression.core import SquaredExp
+    kerns = [DistanceKernel(SquaredExp, 10, 10),
+             DistanceKernel(SquaredExp, 10, 18),
+             DistanceKernel(SquaredExp, 18, 18)]
+    setup = Setup(3.0, kerns)
     xyz = np.stack(np.meshgrid([0, 1.5], [0, 1.5], [0, 1.5])
                    ).reshape(3, -1).transpose()
     numbers = 4*[10] + 4*[18]
