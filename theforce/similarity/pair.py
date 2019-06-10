@@ -69,7 +69,7 @@ class PairSimilarityKernel(SimilarityKernel):
 
     def gradgraddiag(self, p):
         forces = []
-        for i, loc in enumerate(p.loc):
+        for i, loc in enumerate(iterable(p.loc)):
             d = self.saved(loc, 'diag_value')
             grad = self.saved(loc, 'diag_grad')
             c = (self.kern.gradgrad(d, d)[..., None] *

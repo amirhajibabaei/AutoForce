@@ -28,6 +28,7 @@ class Local:
         self._m = ones_like(self._i).to(torch.bool)
         for desc in descriptors:
             desc.calculate(self)
+        self.loc = self
 
     @property
     def i(self):
@@ -87,6 +88,8 @@ class LocalEnvirons(NeighborList, list):
                 r = self.atoms.xyz[n] - self.atoms.xyz[a] + cells
                 self.loc += [Local(a, n, types[a], types[n],
                                    r, self.descriptors)]
+            for loc in self.loc:
+                loc.natoms = self.atoms.natoms
 
     def select(self, a, b, bothways=False, in_place=True):
         return torch.cat([env.select(a, b, bothways=bothways, in_place=in_place)
@@ -136,6 +139,11 @@ class TorchAtoms(Atoms):
 
     def __getattr__(self, attr):
         return getattr(self.__dict__['loc'], attr)
+
+    def __iter__(self):
+        """This is a overloads the behavior of ase.Atoms."""
+        for env in self.loc:
+            yield env
 
 
 class Setup:
