@@ -27,10 +27,7 @@ class Local:
         self._r = r
         self._m = ones_like(self._i).to(torch.bool)
         for desc in descriptors:
-            value, grad, indices = desc.calculate(self)
-            setattr(self, desc.name+'_value', value)
-            setattr(self, desc.name+'_grad', grad)
-            setattr(self, desc.name+'_indices', indices)
+            desc.calculate(self)
 
     @property
     def i(self):
@@ -173,9 +170,6 @@ def example():
                    ).reshape(3, -1).transpose()
     numbers = 4*[10] + 4*[18]
     atoms = TorchAtoms(setup, positions=xyz, numbers=numbers)
-    j0 = atoms.desc_0_indices
-    j1 = atoms.desc_1_indices
-    j2 = atoms.desc_2_indices
 
 
 if __name__ == '__main__':
