@@ -29,16 +29,12 @@ class PairSimilarityKernel(SimilarityKernel):
         return getattr(atoms_or_loc, self.name+'_'+key)
 
     def calculate(self, loc):
-        loc.select(self.a, self.b, bothways=False)
-        d, grad = self.descriptor(loc.r)
-        grad = stack([grad, -grad], dim=-1)
-        indices = stack([loc.j, loc.i], dim=-1)
-        data = {'value': d, 'grad': grad, 'indices': indices}
-        self.save_for_later(loc, data)
-        # for gradgraddiag
         loc.select(self.a, self.b, bothways=True)
         d, grad = self.descriptor(loc.r)
         data = {'diag_value': d, 'diag_grad': grad}
+        self.save_for_later(loc, data)
+        m = loc.j > loc.i
+        data = {'value': d[m], 'grad': grad[m], 'i': loc.i[m], 'j': loc.j[m]}
         self.save_for_later(loc, data)
 
     def func(self, p, q):
@@ -47,24 +43,26 @@ class PairSimilarityKernel(SimilarityKernel):
         return self.kern(d, dd).sum().view(1, 1)
 
     def leftgrad(self, p, q):
-        ld = self.saved(p, 'value')
-        lgrad = self.saved(p, 'grad')
-        li = self.saved(p, 'indices').view(-1)
-        rd = self.saved(q, 'value')
-        c = (self.kern.leftgrad(ld, rd)[:, None, None] *
-             lgrad[..., None]).sum(dim=-1).permute(0, 2, 1).contiguous().view(-1, 3)
-        g = zeros(p.natoms, 3).index_add(0, li, c).view(-1, 1)
-        return g
+        d = self.saved(p, 'value')
+        grad = self.saved(p, 'grad')
+        i = self.saved(p, 'i')
+        j = self.saved(p, 'j')
+        dd = self.saved(q, 'value')
+        c = (self.kern.leftgrad(d, dd)[:, None] * grad[..., None]
+             ).sum(dim=-1).view(-1, 3)
+        g = zeros(p.natoms, 3).index_add(0, i, -c).index_add(0, j, c)
+        return g.view(-1, 1)
 
     def rightgrad(self, p, q):
-        ld = self.saved(p, 'value')
-        rd = self.saved(q, 'value')
-        rgrad = self.saved(q, 'grad')
-        ri = self.saved(q, 'indices').view(-1)
-        c = (self.kern.rightgrad(ld, rd)[..., None, None] * rgrad
-             ).sum(dim=0).permute(0, 2, 1).contiguous().view(-1, 3)
-        g = zeros(q.natoms, 3).index_add(0, ri, c).view(1, -1)
-        return g
+        d = self.saved(p, 'value')
+        dd = self.saved(q, 'value')
+        grad = self.saved(q, 'grad')
+        i = self.saved(q, 'i')
+        j = self.saved(q, 'j')
+        c = (self.kern.rightgrad(d, dd)[..., None] * grad
+             ).sum(dim=0).view(-1, 3)
+        g = zeros(q.natoms, 3).index_add(0, i, -c).index_add(0, j, c)
+        return g.view(1, -1)
 
     def gradgrad(self, p, q):
         raise NotImplementedError('Not defined yet')
