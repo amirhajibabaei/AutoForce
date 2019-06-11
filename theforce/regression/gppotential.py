@@ -200,7 +200,7 @@ def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True,
 
     for _ in range(steps):
         if inducing is not None and type(inducing) != list:
-            inducing.update_nl_if_requires_grad()
+            inducing.update_nl_if_requires_grad(descriptors=gp.kern.kernels)
         gp.optimizer.zero_grad()
         loss = gp.loss(X, Y, inducing, logprob_loss, cov_loss)
         loss.backward()

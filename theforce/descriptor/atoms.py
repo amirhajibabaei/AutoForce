@@ -171,6 +171,15 @@ class AtomsData:
     def set_gpp(self, gpp):
         self.apply('update', descriptors=gpp.kern.kernels, forced=True)
 
+    def update_nl_if_requires_grad(self, descriptors=[], forced=True):
+        for atoms in self.X:
+            if atoms.xyz.requires_grad:
+                atoms.update(descriptors=descriptors, forced=forced)
+
+    @property
+    def params(self):
+        return [atoms.xyz for atoms in self.X if atoms.xyz.requires_grad]
+
     @property
     def target_energy(self):
         return torch.tensor([atoms.target_energy for atoms in self])
