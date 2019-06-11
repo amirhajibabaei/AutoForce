@@ -74,6 +74,14 @@ class Covariance(Module):
         t = -self.base_kerns(x=x, xx=xx, operation='gradgrad')
         return t.view(t.size(0)*t.size(1), t.size(2)*t.size(3))
 
+    @property
+    def state_args(self):
+        return '[{}]'.format(', '.join([kern.state for kern in self.kernels]))
+
+    @property
+    def state(self):
+        return 'Covariance({})'.format(self.state_args)
+
 
 class Inducing(Covariance):
 

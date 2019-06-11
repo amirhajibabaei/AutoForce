@@ -13,9 +13,13 @@ from theforce.util.util import iterable
 class PairSimilarityKernel(SimilarityKernel):
 
     def __init__(self, kernels, a, b):
-        super().__init__([kern(dim=1) for kern in iterable(kernels)])
+        super().__init__([kern for kern in iterable(kernels)])
         self.a = a
         self.b = b
+
+    @property
+    def state_args(self):
+        return super().state_args + ', {}, {}'.format(self.a, self.b)
 
     def descriptor(self, r):
         raise NotImplementedError(
@@ -111,8 +115,8 @@ class PairSimilarityKernel(SimilarityKernel):
 
 
 class DistanceKernel(PairSimilarityKernel):
-    def __init__(self, kernels, a, b):
-        super().__init__(kernels, a, b)
+    def __init__(self, *args):
+        super().__init__(*args)
 
     def descriptor(self, r):
         d = (r**2).sum(dim=-1).sqrt().view(-1, 1)
@@ -121,8 +125,8 @@ class DistanceKernel(PairSimilarityKernel):
 
 
 class LogDistanceKernel(PairSimilarityKernel):
-    def __init__(self, kernels, a, b):
-        super().__init__(kernels, a, b)
+    def __init__(self, *args):
+        super().__init__(*args)
 
     def descriptor(self, r):
         d = (r**2).sum(dim=-1).sqrt().view(-1, 1)
@@ -131,12 +135,16 @@ class LogDistanceKernel(PairSimilarityKernel):
 
 
 class RepulsiveCoreKernel(DistanceKernel):
-    def __init__(self, kernels, a, b, eta=1):
-        super().__init__(kernels, a, b)
+    def __init__(self, *args, eta=1):
+        super().__init__(*args)
         self.eta = eta
 
     def factor(self, d):
         return 1./d**self.eta, -self.eta/d**(self.eta+1)
+
+    @property
+    def state_args(self):
+        return super().state_args + ', eta={}'.format(self.eta)
 
 
 # -------------------------------------------------------------- defined for Systems

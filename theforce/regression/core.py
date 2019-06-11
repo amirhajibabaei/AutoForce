@@ -4,7 +4,6 @@
 # In[ ]:
 
 
-""" experimental """
 import torch
 from torch.nn import Module, Parameter
 from theforce.regression.algebra import free_form, positive
@@ -61,12 +60,25 @@ class LazyWhite(Module):
             elif operation == 'gradgrad':
                 return positive(self._signal).pow(2)*torch.ones(x.numel())
 
+    @property
+    def signal(self):
+        return positive(self._signal)
+
+    @property
+    def state(self):
+        return (self.__class__.__name__ +
+                """(dim={}, signal={}, requires_grad={})""".format(
+                    self.dim, self.signal.data, self.signal.requires_grad))
+
 
 class Displacement(Module):
 
-    def __init__(self, dim=1):
+    def __init__(self, dim=1, scale=None):
         super().__init__()
-        self._scale = Parameter(free_form(torch.ones(dim)))
+        if scale is None:
+            self._scale = Parameter(free_form(torch.ones(dim)))
+        else:
+            self._scale = Parameter(free_form(scale))
 
     def x_xx(self, x=None, xx=None):
         if x is None and xx is None:
@@ -98,13 +110,17 @@ class Displacement(Module):
     def extra_repr(self):
         print('length scales: {}'.format(positive(self._scale)))
 
+    @property
+    def scale(self):
+        return positive(self._scale)
+
 
 class Stationary(Module):
     """ [dim=1, signal=1] """
 
-    def __init__(self, dim=1, signal=1.0):
+    def __init__(self, dim=1, signal=1.0, scale=None):
         super().__init__()
-        self.r = Displacement(dim=dim)
+        self.r = Displacement(dim=dim, scale=scale)
         self._signal = Parameter(free_form(torch.as_tensor(signal)))
         self.params = [self.r._scale, self._signal]
 
@@ -125,6 +141,15 @@ class Stationary(Module):
 
     def extra_repr(self):
         print('signal variance: {}'.format(positive(self._signal).pow(2)))
+
+    @property
+    def signal(self):
+        return positive(self._signal)
+
+    @property
+    def state(self):
+        return (self.__class__.__name__ + """(signal={}, scale={})""".format(
+            self.signal.data, self.r.scale.data))
 
 
 class SquaredExp(Stationary):

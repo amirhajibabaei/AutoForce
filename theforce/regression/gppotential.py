@@ -72,13 +72,21 @@ class EnergyForceKernel(Module):
         return torch.stack([kern.diag(data, operation)
                             for kern in self.kernels]).sum(dim=0)
 
+    @property
+    def state_args(self):
+        return '[{}]'.format(', '.join([kern.state for kern in self.kernels]))
+
+    @property
+    def state(self):
+        return 'EnergyForceKernel({})'.format(self.state_args)
+
 
 class GaussianProcessPotential(Module):
 
-    def __init__(self, kernels):
+    def __init__(self, kernels, noise=LazyWhite(signal=0.01, requires_grad=True)):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
-        self.noise = LazyWhite(signal=0.01, requires_grad=True)
+        self.noise = noise
         self.params = self.kern.params + self.noise.params
 
     def forward(self, data, inducing=None):
@@ -115,6 +123,14 @@ class GaussianProcessPotential(Module):
         else:
             lp_loss = 0
         return lp_loss + covariance_loss
+
+    @property
+    def state_args(self):
+        return ', '.join([self.kern.state_args, self.noise.state])
+
+    @property
+    def state(self):
+        return 'GaussianProcessPotential({})'.format(self.state_args)
 
 
 class PosteriorPotential(Module):

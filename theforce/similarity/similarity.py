@@ -42,3 +42,11 @@ class SimilarityKernel(Module):
     def gradgraddiag(self, p):
         raise NotImplementedError('gradgraddiag!')
 
+    @property
+    def state_args(self):
+        return self.kern.state_args
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
