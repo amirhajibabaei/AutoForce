@@ -64,20 +64,19 @@ class Local:
         self._m[:] = True
 
 
-class LocalEnvirons(NeighborList, list):
+class LocalEnvirons(NeighborList):
 
-    def __init__(self, atoms, setup):
+    def __init__(self, atoms, rc):
         """
         This can be used instead of Neighborlist in calculators.
         """
         self.atoms = atoms
-        cutoffs = atoms.natoms*[setup.rc / 2]
+        cutoffs = atoms.natoms*[rc / 2]
         super().__init__(cutoffs, skin=0.0, self_interaction=False, bothways=True)
-        self.descriptors = setup.descriptors
         self._copy = np.zeros_like(atoms.positions)
 
-    def update(self):
-        if not np.allclose(self.atoms.positions, self._copy):
+    def update(self, descriptors=[], forced=False):
+        if forced or not np.allclose(self.atoms.positions, self._copy):
             self._copy[:] = self.atoms.positions[:]
             super().update(self.atoms)
             self.loc = []
@@ -87,7 +86,7 @@ class LocalEnvirons(NeighborList, list):
                 cells = from_numpy(np.dot(off, self.atoms.cell))
                 r = self.atoms.xyz[n] - self.atoms.xyz[a] + cells
                 self.loc += [Local(a, n, types[a], types[n],
-                                   r, self.descriptors)]
+                                   r, descriptors)]
             for loc in self.loc:
                 loc.natoms = self.atoms.natoms
 
@@ -112,7 +111,8 @@ class LocalEnvirons(NeighborList, list):
 
 class TorchAtoms(Atoms):
 
-    def __init__(self, setup, ase_atoms=None, energy=None, forces=None, frozen=True, **kwargs):
+    def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
+                 descriptors=[], frozen=True, **kwargs):
         super().__init__(**kwargs)
 
         if ase_atoms:
@@ -131,8 +131,12 @@ class TorchAtoms(Atoms):
             except AttributeError or PropertyNotImplementedError:
                 pass
 
-        self.loc = LocalEnvirons(self, setup)
-        self.loc.update()
+        if cutoff is not None:
+            self.build_loc(cutoff)
+            self.update(descriptors=descriptors)
+
+    def build_loc(self, rc):
+        self.loc = LocalEnvirons(self, rc)
 
     @property
     def natoms(self):
@@ -141,32 +145,69 @@ class TorchAtoms(Atoms):
     def __getattr__(self, attr):
         return getattr(self.__dict__['loc'], attr)
 
+    def __getitem__(self, k):
+        """This is a overloads the behavior of ase.Atoms."""
+        return self.loc[k]
+
     def __iter__(self):
         """This is a overloads the behavior of ase.Atoms."""
         for env in self.loc:
             yield env
 
 
-class Setup:
+class AtomsData:
 
-    def __init__(self, rc, descriptors):
-        self.rc = rc
-        self.descriptors = descriptors
-        for i, desc in enumerate(self.descriptors):
-            desc.name = 'desc_{}'.format(i)
+    def __init__(self, X=[], traj=None, **kwargs):
+        self.X = X
+        if traj:
+            from ase.io import Trajectory
+            self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
+                       for atoms in Trajectory(traj)]
+
+    def apply(self, operation, *args, **kwargs):
+        for atoms in self.X:
+            getattr(atoms, operation)(*args, **kwargs)
+
+    def set_gpp(self, gpp):
+        self.apply('update', descriptors=gpp.kern.kernels, forced=True)
+
+    @property
+    def target_energy(self):
+        return torch.tensor([atoms.target_energy for atoms in self])
+
+    @property
+    def target_forces(self):
+        return torch.cat([atoms.target_forces for atoms in self])
+
+    def __iter__(self):
+        for atoms in self.X:
+            yield atoms
+
+    def __getitem__(self, k):
+        return self.X[k]
+
+    def __len__(self):
+        return len(self.X)
+
+
+def namethem(descriptors, base='D'):
+    for i, desc in enumerate(descriptors):
+        desc.name = base+'_{}'.format(i)
 
 
 def example():
     from theforce.similarity.pair import DistanceKernel
     from theforce.regression.core import SquaredExp
-    kerns = [DistanceKernel(SquaredExp, 10, 10),
-             DistanceKernel(SquaredExp, 10, 18),
-             DistanceKernel(SquaredExp, 18, 18)]
-    setup = Setup(3.0, kerns)
+    kerns = [DistanceKernel(SquaredExp(), 10, 10),
+             DistanceKernel(SquaredExp(), 10, 18),
+             DistanceKernel(SquaredExp(), 18, 18)]
+    namethem(kerns)
     xyz = np.stack(np.meshgrid([0, 1.5], [0, 1.5], [0, 1.5])
                    ).reshape(3, -1).transpose()
     numbers = 4*[10] + 4*[18]
-    atoms = TorchAtoms(setup, positions=xyz, numbers=numbers)
+    atoms = TorchAtoms(positions=xyz, numbers=numbers,
+                       cutoff=3.0, descriptors=kerns)
+    atoms.update(descriptors=kerns, forced=True)
 
 
 if __name__ == '__main__':

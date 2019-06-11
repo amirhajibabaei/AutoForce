@@ -88,6 +88,8 @@ class GaussianProcessPotential(Module):
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
         self.params = self.kern.params + self.noise.params
+        for i, kern in enumerate(self.kern.kernels):
+            kern.name = 'kern_{}'.format(i)
 
     def forward(self, data, inducing=None):
         if inducing is None:
