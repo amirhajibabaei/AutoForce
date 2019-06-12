@@ -112,11 +112,12 @@ def example():
             print(self.eps)
             print(self.sigma)
 
-    from ase import Atoms
+    from theforce.descriptor.atoms import TorchAtoms as Atoms
     from ase.optimize import BFGS
 
-    atoms = Atoms('ArAr', positions=[[0, 0, 0], [2., 0, 0]], cell=[
-                  9., 9., 9.], pbc=True)
+    atoms = Atoms(symbols='ArAr', positions=[[0, 0, 0], [2., 0, 0]], cell=[
+                  9., 9., 9.], pbc=True, cutoff=3.0)
+    atoms.update()
     calc = Engine(rc=3.0, terms=LJ())
     atoms.set_calculator(calc)
     BFGS(atoms).run(fmax=1e-5)
