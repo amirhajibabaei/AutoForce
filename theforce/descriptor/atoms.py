@@ -10,6 +10,7 @@ from torch import ones_like, as_tensor, from_numpy, cat
 from ase.atoms import Atoms
 from ase.neighborlist import NeighborList
 from ase.calculators.calculator import PropertyNotImplementedError
+import copy
 
 
 class Local:
@@ -71,6 +72,7 @@ class LocalEnvirons(NeighborList):
         This can be used instead of Neighborlist in calculators.
         """
         self.atoms = atoms
+        self.rc = rc
         cutoffs = atoms.natoms*[rc / 2]
         super().__init__(cutoffs, skin=0.0, self_interaction=False, bothways=True)
         self._copy = np.zeros_like(atoms.positions)
@@ -106,19 +108,22 @@ class LocalEnvirons(NeighborList):
             yield env
 
     def __getattr__(self, attr):
-        return torch.cat([getattr(env, attr) for env in self.__dict__['loc']])
+        try:
+            return torch.cat([getattr(env, attr) for env in self.__dict__['loc']])
+        except KeyError:
+            raise AttributeError('in LocalEnvirons')
 
 
 class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
-                 descriptors=[], frozen=True, **kwargs):
+                 descriptors=[], grad=False, **kwargs):
         super().__init__(**kwargs)
 
         if ase_atoms:
-            self.arrays = ase_atoms.arrays
+            self.__dict__ = ase_atoms.__dict__
         self.xyz = from_numpy(self.positions)
-        self.xyz.requires_grad = not frozen
+        self.xyz.requires_grad = grad
 
         try:
             self.target_energy = as_tensor(energy)
@@ -131,19 +136,30 @@ class TorchAtoms(Atoms):
             except AttributeError or PropertyNotImplementedError:
                 pass
 
+        self.descriptors = descriptors
         if cutoff is not None:
             self.build_loc(cutoff)
-            self.update(descriptors=descriptors)
+            self.update()
 
     def build_loc(self, rc):
         self.loc = LocalEnvirons(self, rc)
+
+    def update(self, cutoff=None, descriptors=None, forced=False):
+        if cutoff is not None:
+            self.build_loc(cutoff)
+        if descriptors is not None:
+            self.descriptors = descriptors
+        self.loc.update(descriptors=self.descriptors, forced=forced)
 
     @property
     def natoms(self):
         return self.get_number_of_atoms()
 
     def __getattr__(self, attr):
-        return getattr(self.__dict__['loc'], attr)
+        try:
+            return getattr(self.__dict__['loc'], attr)
+        except KeyError:
+            raise AttributeError('in TorchAtoms')
 
     def __getitem__(self, k):
         """This is a overloads the behavior of ase.Atoms."""
@@ -153,6 +169,18 @@ class TorchAtoms(Atoms):
         """This is a overloads the behavior of ase.Atoms."""
         for env in self.loc:
             yield env
+
+    def copy(self):
+        new = copy.deepcopy(self)
+        new.xyz = torch.from_numpy(new.positions)
+        new.xyz.requires_grad = self.xyz.requires_grad
+        new.descriptors = self.descriptors
+        try:
+            new.build_loc(self.loc.rc)
+            new.update()
+        except AttributeError:
+            pass
+        return new
 
 
 class AtomsData:
