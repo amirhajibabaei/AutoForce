@@ -118,12 +118,22 @@ class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
                  descriptors=[], grad=False, **kwargs):
+        """xyz, loc, descriptors added to Atoms object."""
         super().__init__(**kwargs)
 
         if ase_atoms:
             self.__dict__ = ase_atoms.__dict__
+
+        #------------------------------- gradly-tensors
         self.xyz = from_numpy(self.positions)
         self.xyz.requires_grad = grad
+        self.descriptors = descriptors
+        if cutoff is not None:
+            self.build_loc(cutoff)
+            self.update()
+        else:
+            self.loc = None
+        # ------------------------------------------
 
         try:
             self.target_energy = as_tensor(energy)
@@ -135,11 +145,6 @@ class TorchAtoms(Atoms):
                 self.target_forces = as_tensor(ase_atoms.get_forces())
             except AttributeError or PropertyNotImplementedError:
                 pass
-
-        self.descriptors = descriptors
-        if cutoff is not None:
-            self.build_loc(cutoff)
-            self.update()
 
     def build_loc(self, rc):
         self.loc = LocalEnvirons(self, rc)
@@ -171,15 +176,22 @@ class TorchAtoms(Atoms):
             yield env
 
     def copy(self):
+        xyz = self.xyz
+        loc = self.loc
+        descriptors = self.descriptors
+        del self.xyz, self.loc, self.descriptors
         new = copy.deepcopy(self)
         new.xyz = torch.from_numpy(new.positions)
-        new.xyz.requires_grad = self.xyz.requires_grad
-        new.descriptors = self.descriptors
+        new.xyz.requires_grad = xyz.requires_grad
+        new.descriptors = descriptors
         try:
-            new.build_loc(self.loc.rc)
+            new.build_loc(loc.rc)
             new.update()
         except AttributeError:
             pass
+        self.xyz = xyz
+        self.loc = loc
+        self.descriptors = descriptors
         return new
 
 
@@ -259,6 +271,11 @@ def example():
     atoms = TorchAtoms(positions=xyz, numbers=numbers,
                        cutoff=3.0, descriptors=kerns)
     atoms.update(descriptors=kerns, forced=True)
+
+    # copy
+    b = atoms.copy()
+    atoms.xyz.requires_grad = True
+    c = atoms.copy()
 
 
 if __name__ == '__main__':
