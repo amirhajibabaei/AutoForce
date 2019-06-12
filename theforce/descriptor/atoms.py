@@ -176,6 +176,20 @@ class AtomsData:
             if atoms.xyz.requires_grad:
                 atoms.update(descriptors=descriptors, forced=forced)
 
+    def set_per_atoms(self, quant, values):
+        vals = torch.split(values, split_size_or_sections=1)
+        for atoms, v in zip(*[self, vals]):
+            setattr(atoms, quant, v)
+
+    def set_per_atom(self, quant, values):
+        vals = torch.split(values, split_size_or_sections=self.natoms)
+        for atoms, v in zip(*[self, vals]):
+            setattr(atoms, quant, v)
+
+    @property
+    def natoms(self):
+        return [atoms.natoms for atoms in self]
+
     @property
     def params(self):
         return [atoms.xyz for atoms in self.X if atoms.xyz.requires_grad]
