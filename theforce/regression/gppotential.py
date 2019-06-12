@@ -146,10 +146,11 @@ class PosteriorPotential(Module):
                 self.X = copy.deepcopy(data)
                 self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
                 self.sig = p.precision_matrix
+                self.has_target_forces = True
             else:
                 K = torch.cat([gp.kern(data, inducing, cov='energy_energy'),
                                gp.kern(data, inducing, cov='forces_energy')], dim=0)
-                M = gp.kern.energy_energy(inducing, inducing)
+                M = gp.kern(inducing, inducing, cov='energy_energy')
                 L, _ = jitcholesky(M)
                 A = torch.cat([K, gp.noise.diag().sqrt()*L.t()], dim=0)
                 Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
@@ -160,15 +161,32 @@ class PosteriorPotential(Module):
                 self.sig = W.t() @ p.precision_matrix @ W
 
                 self.X = inducing
-                self.inducing = 1
-                for sys, e in zip(*[inducing, M @ self.mu]):
-                    sys.energy = e
+                inducing.set_per_atoms('target_energy', M @ self.mu)
+                F = gp.kern(inducing, inducing, cov='forces_energy')
+                F = (F @ self.mu).reshape(-1, 3)
+                inducing.set_per_atom('target_forces', F)
+                self.has_target_forces = False
+
+    def forward(self, test, quant='energy', variance=False, enable_grad=False):
+        shape = {'energy': (1,), 'forces': (-1, 3)}
+        with torch.set_grad_enabled(enable_grad):
+            A = self.gp.kern(test, self.X, cov=quant+'_energy')
+            if self.has_target_forces:
+                A = torch.cat([A, self.gp.kern(test, self.X, cov=quant+'_forces')],
+                              dim=1)
+            out = (A @ self.mu).view(*shape[quant])
+            if variance:
+                var = (self.gp.kern.diag(test, quant) -
+                       (A @ self.sig @ A.t()).diag()).view(*shape[quant])
+                return out, var
+            else:
+                return out
 
     def predict(self, test, variance=False, enable_grad=False):
         with torch.set_grad_enabled(enable_grad):
             A = self.gp.kern(test, self.X, cov='energy_energy')
             B = self.gp.kern(test, self.X, cov='forces_energy')
-            if not hasattr(self, 'inducing'):
+            if self.has_target_forces:
                 A = torch.cat([A, self.gp.kern(test, self.X, cov='energy_forces')],
                               dim=1)
                 B = torch.cat([B, self.gp.kern(test, self.X, cov='forces_forces')],
