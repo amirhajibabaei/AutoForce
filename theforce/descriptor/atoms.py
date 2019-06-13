@@ -208,8 +208,9 @@ class AtomsData:
         for atoms in self.X:
             getattr(atoms, operation)(*args, **kwargs)
 
-    def set_gpp(self, gpp):
-        self.apply('update', descriptors=gpp.kern.kernels, forced=True)
+    def set_gpp(self, gpp, cutoff=None):
+        self.apply('update', cutoff=cutoff,
+                   descriptors=gpp.kern.kernels, forced=True)
 
     def update_nl_if_requires_grad(self, descriptors=[], forced=True):
         for atoms in self.X:
@@ -241,6 +242,9 @@ class AtomsData:
     @property
     def target_forces(self):
         return torch.cat([atoms.target_forces for atoms in self])
+
+    def cat(self, attr):
+        return torch.cat([getattr(atoms, attr) for atoms in self])
 
     def __iter__(self):
         for atoms in self.X:

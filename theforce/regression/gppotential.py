@@ -168,7 +168,7 @@ class PosteriorPotential(Module):
                 self.has_target_forces = False
 
     def forward(self, test, quant='energy', variance=False, enable_grad=False):
-        shape = {'energy': (1,), 'forces': (-1, 3)}
+        shape = {'energy': (-1,), 'forces': (-1, 3)}
         with torch.set_grad_enabled(enable_grad):
             A = self.gp.kern(test, self.X, cov=quant+'_energy')
             if self.has_target_forces:
