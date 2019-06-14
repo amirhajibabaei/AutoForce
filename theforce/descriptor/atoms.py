@@ -58,11 +58,11 @@ class Local:
         if not bothways and a == b:
             m = (m & (self._j > self._i))
         if in_place:
-            self._m[:] = m.to(torch.bool)
+            self._m = m.to(torch.bool)
         return m.to(torch.bool)
 
     def unselect(self):
-        self._m[:] = True
+        self._m = ones_like(self._i).to(torch.bool)
 
 
 class LocalEnvirons(NeighborList):
@@ -85,7 +85,9 @@ class LocalEnvirons(NeighborList):
             types = self.atoms.get_atomic_numbers()
             for a in range(self.atoms.natoms):
                 n, off = self.nl.get_neighbors(a)
-                cells = from_numpy(np.dot(off, self.atoms.cell))
+                #cells = from_numpy(np.dot(off, self.atoms.cell))
+                cells = (from_numpy(off[..., None].astype(np.float)) *
+                         self.atoms.lll).sum(dim=1)
                 r = self.atoms.xyz[n] - self.atoms.xyz[a] + cells
                 self.loc += [Local(a, n, types[a], types[n],
                                    r, descriptors)]
@@ -118,7 +120,7 @@ class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
                  descriptors=[], grad=False, **kwargs):
-        """xyz, loc, descriptors added to Atoms object."""
+        """xyz, lll, loc, descriptors added to Atoms object."""
         super().__init__(**kwargs)
 
         if ase_atoms:
@@ -127,6 +129,8 @@ class TorchAtoms(Atoms):
         #------------------------------- gradly-tensors
         self.xyz = from_numpy(self.positions)
         self.xyz.requires_grad = grad
+        self.lll = from_numpy(self.cell)
+        self.lll.requires_grad = grad
         self.descriptors = descriptors
         if cutoff is not None:
             self.build_loc(cutoff)
@@ -177,12 +181,15 @@ class TorchAtoms(Atoms):
 
     def copy(self):
         xyz = self.xyz
+        lll = self.lll
         loc = self.loc
         descriptors = self.descriptors
-        del self.xyz, self.loc, self.descriptors
+        del self.xyz, self.loc, self.descriptors, self.lll
         new = copy.deepcopy(self)
         new.xyz = torch.from_numpy(new.positions)
         new.xyz.requires_grad = xyz.requires_grad
+        new.lll = torch.from_numpy(new.cell)
+        new.lll.requires_grad = lll.requires_grad
         new.descriptors = descriptors
         try:
             new.build_loc(loc.rc)
@@ -190,6 +197,7 @@ class TorchAtoms(Atoms):
         except AttributeError:
             pass
         self.xyz = xyz
+        self.lll = lll
         self.loc = loc
         self.descriptors = descriptors
         return new
