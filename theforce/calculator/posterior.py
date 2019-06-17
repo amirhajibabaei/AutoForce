@@ -9,10 +9,11 @@ from ase.calculators.calculator import Calculator, all_changes
 import torch
 from torch.autograd import grad
 from theforce.util.util import iterable
+import warnings
 
 
 class PosteriorCalculator(Calculator):
-    implemented_properties = ['energy', 'forces']
+    implemented_properties = ['energy', 'forces', 'free_energy']
 
     def __init__(self, potentials, **kwargs):
         Calculator.__init__(self, **kwargs)
@@ -20,10 +21,6 @@ class PosteriorCalculator(Calculator):
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
-
-        self.atoms.xyz.requires_grad = False
-        if 'numbers' in system_changes:
-            self.atoms.build_loc(self.atoms.loc.rc)
         self.atoms.update()
         energy = torch.stack([pot([self.atoms], 'energy') for pot in
                               self.potentials]).sum(dim=0)
@@ -31,4 +28,35 @@ class PosteriorCalculator(Calculator):
                               self.potentials]).sum(dim=0)
         self.results['energy'] = energy.detach().numpy()[0]
         self.results['forces'] = forces.detach().numpy()
+        # NOTE: check if this is correct!
+        self.results['free_energy'] = self.results['energy']
+
+
+class PosteriorStressCalculator(Calculator):
+    implemented_properties = ['energy', 'forces', 'free_energy', 'stress']
+
+    def __init__(self, potentials, **kwargs):
+        Calculator.__init__(self, **kwargs)
+        self.potentials = iterable(potentials)
+        warnings.warn('Stress is not mathematically worked out yet')
+
+    def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+        Calculator.calculate(self, atoms, properties, system_changes)
+        self.atoms.update(cellgrad=True, forced=True)
+        energy = torch.stack([pot([self.atoms], 'energy', enable_grad=True) for pot in
+                              self.potentials]).sum(dim=0)
+        forces = torch.stack([pot([self.atoms], 'forces') for pot in
+                              self.potentials]).sum(dim=0)
+
+        # stress
+        stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)*0
+        cellgrad, = grad(energy, self.atoms.lll)
+        stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
+        stress = 0.5*(stress1 + stress1.t() + stress2 + stress2.t()
+                      ).detach().numpy() / self.atoms.get_volume()
+
+        self.results['energy'] = energy.detach().numpy()[0]
+        self.results['forces'] = forces.detach().numpy()
+        self.results['free_energy'] = self.results['energy']
+        self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
 

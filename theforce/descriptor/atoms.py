@@ -15,11 +15,12 @@ import copy
 
 class Local:
 
-    def __init__(self, i, j, a, b, r, descriptors=[]):
+    def __init__(self, i, j, a, b, r, im, descriptors=[]):
         """
         i, j: indices
         a, b: atomic numbers
         r : r[j] - r[i]
+        im: image
         """
         self._i = from_numpy(np.full_like(j, i))
         self._j = from_numpy(j)
@@ -27,9 +28,13 @@ class Local:
         self._b = from_numpy(b)
         self._r = r
         self._m = ones_like(self._i).to(torch.bool)
+        self._im = from_numpy(im).byte()
+        self.loc = self
+        self.stage(descriptors)
+
+    def stage(self, descriptors):
         for desc in descriptors:
             desc.calculate(self)
-        self.loc = self
 
     @property
     def i(self):
@@ -51,12 +56,16 @@ class Local:
     def r(self):
         return self._r[self._m]
 
+    @property
+    def image(self):
+        return self._im[self._m]
+
     def select(self, a, b, bothways=False, in_place=True):
         m = (self._a == a) & (self._b == b)
         if bothways and a != b:
             m = (m | ((self._a == b) & (self._b == a)))
         if not bothways and a == b:
-            m = (m & (self._j > self._i))
+            m = (m & (self._im | (self._j > self._i)))
         if in_place:
             self._m = m.to(torch.bool)
         return m.to(torch.bool)
@@ -65,78 +74,70 @@ class Local:
         self._m = ones_like(self._i).to(torch.bool)
 
 
-class LocalEnvirons(NeighborList):
+class AtomsChanges:
 
-    def __init__(self, atoms, rc):
-        """
-        This can be used instead of Neighborlist in calculators.
-        """
-        self.atoms = atoms
-        self.rc = rc
-        cutoffs = atoms.natoms*[rc / 2]
-        super().__init__(cutoffs, skin=0.0, self_interaction=False, bothways=True)
-        self._copy = np.zeros_like(atoms.positions)
+    def __init__(self, atoms):
+        self._ref = atoms
+        self.update_references()
 
-    def update(self, descriptors=[], forced=False):
-        if forced or not np.allclose(self.atoms.positions, self._copy):
-            self._copy[:] = self.atoms.positions[:]
-            super().update(self.atoms)
-            self.loc = []
-            types = self.atoms.get_atomic_numbers()
-            for a in range(self.atoms.natoms):
-                n, off = self.nl.get_neighbors(a)
-                #cells = from_numpy(np.dot(off, self.atoms.cell))
-                cells = (from_numpy(off[..., None].astype(np.float)) *
-                         self.atoms.lll).sum(dim=1)
-                r = self.atoms.xyz[n] - self.atoms.xyz[a] + cells
-                self.loc += [Local(a, n, types[a], types[n],
-                                   r, descriptors)]
-            for loc in self.loc:
-                loc.natoms = self.atoms.natoms
+    def update_references(self):
+        self._natoms = self._ref.natoms
+        self._numbers = self._ref.numbers.copy()
+        self._positions = self._ref.positions.copy()
+        self._cell = self._ref.cell.copy()
+        self._pbc = self._ref.pbc.copy()
+        self._descriptors = [kern.state for kern in
+                             self._ref.descriptors]
 
-    def select(self, a, b, bothways=False, in_place=True):
-        return torch.cat([env.select(a, b, bothways=bothways, in_place=in_place)
-                          for env in self.loc])
+    @property
+    def natoms(self):
+        return self._ref.natoms != self._natoms
 
-    def unselect(self):
-        for env in self.loc:
-            env.unselect()
+    @property
+    def atomic_numbers(self):
+        return (self._ref.numbers != self._numbers).any()
 
-    def __getitem__(self, k):
-        return self.loc[k]
+    @property
+    def numbers(self):
+        return (self.natoms or self.atomic_numbers)
 
-    def __iter__(self):
-        for env in self.loc:
-            yield env
+    @property
+    def positions(self):
+        return not np.allclose(self._ref.positions, self._positions)
 
-    def __getattr__(self, attr):
-        try:
-            return torch.cat([getattr(env, attr) for env in self.__dict__['loc']])
-        except KeyError:
-            raise AttributeError('in LocalEnvirons')
+    @property
+    def cell(self):
+        return not np.allclose(self._ref.cell, self._cell)
+
+    @property
+    def pbc(self):
+        return (self._ref.pbc != self._pbc).any()
+
+    @property
+    def atoms(self):
+        return any([self.numbers, self.positions, self.cell, self.pbc])
+
+    @property
+    def descriptors(self):
+        return [c != r.state for c, r in zip(*[self._descriptors, self._ref.descriptors])]
 
 
 class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
-                 descriptors=[], grad=False, **kwargs):
-        """xyz, lll, loc, descriptors added to Atoms object."""
+                 descriptors=[], **kwargs):
         super().__init__(**kwargs)
 
         if ase_atoms:
             self.__dict__ = ase_atoms.__dict__
 
-        #------------------------------- gradly-tensors
-        self.xyz = from_numpy(self.positions)
-        self.xyz.requires_grad = grad
-        self.lll = from_numpy(self.cell)
-        self.lll.requires_grad = grad
+        # ------------------------------- ----------
+        self.cutoff = cutoff
         self.descriptors = descriptors
+        self.changes = AtomsChanges(self)
         if cutoff is not None:
-            self.build_loc(cutoff)
-            self.update()
-        else:
-            self.loc = None
+            self.build_nl(cutoff)
+            self.update(forced=True)
         # ------------------------------------------
 
         try:
@@ -150,15 +151,41 @@ class TorchAtoms(Atoms):
             except AttributeError or PropertyNotImplementedError:
                 pass
 
-    def build_loc(self, rc):
-        self.loc = LocalEnvirons(self, rc)
+    def build_nl(self, rc):
+        self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
+                               self_interaction=False, bothways=True)
+        self.cutoff = rc
 
-    def update(self, cutoff=None, descriptors=None, forced=False):
-        if cutoff is not None:
-            self.build_loc(cutoff)
-        if descriptors is not None:
+    def update(self, cutoff=None, descriptors=None, forced=False,
+               posgrad=False, cellgrad=False):
+        if cutoff or self.changes.numbers:
+            self.build_nl(cutoff if cutoff else self.cutoff)
+            forced = True
+        if descriptors:
             self.descriptors = descriptors
-        self.loc.update(descriptors=self.descriptors, forced=forced)
+            forced = True
+        if forced or self.changes.atoms:
+            self.nl.update(self)
+            self.loc = []
+            types = self.get_atomic_numbers()
+            xyz = torch.from_numpy(self.positions)
+            xyz.requires_grad = posgrad
+            cell = torch.from_numpy(self.cell)
+            cell.requires_grad = cellgrad
+            for a in range(self.natoms):
+                n, off = self.nl.get_neighbors(a)
+                image = (off != 0).any(axis=1)
+                cells = (from_numpy(off[..., None].astype(np.float)) *
+                         cell).sum(dim=1)
+                r = xyz[n] - xyz[a] + cells
+                self.loc += [Local(a, n, types[a], types[n],
+                                   r, image, self.descriptors)]
+            for loc in self.loc:
+                loc.natoms = self.natoms
+
+            self.changes.update_references()
+            self.xyz = xyz
+            self.lll = cell
 
     @property
     def natoms(self):
@@ -166,9 +193,9 @@ class TorchAtoms(Atoms):
 
     def __getattr__(self, attr):
         try:
-            return getattr(self.__dict__['loc'], attr)
+            return torch.cat([env.__dict__[attr] for env in self.loc])
         except KeyError:
-            raise AttributeError('in TorchAtoms')
+            raise AttributeError()
 
     def __getitem__(self, k):
         """This is a overloads the behavior of ase.Atoms."""
@@ -180,26 +207,12 @@ class TorchAtoms(Atoms):
             yield env
 
     def copy(self):
-        xyz = self.xyz
-        lll = self.lll
-        loc = self.loc
-        descriptors = self.descriptors
-        del self.xyz, self.loc, self.descriptors, self.lll
-        new = copy.deepcopy(self)
-        new.xyz = torch.from_numpy(new.positions)
-        new.xyz.requires_grad = xyz.requires_grad
-        new.lll = torch.from_numpy(new.cell)
-        new.lll.requires_grad = lll.requires_grad
-        new.descriptors = descriptors
-        try:
-            new.build_loc(loc.rc)
-            new.update()
-        except AttributeError:
-            pass
-        self.xyz = xyz
-        self.lll = lll
-        self.loc = loc
-        self.descriptors = descriptors
+        new = TorchAtoms(positions=self.positions.copy(),
+                         cell=self.cell.copy(),
+                         numbers=self.numbers.copy(),
+                         pbc=self.pbc.copy(),
+                         descriptors=self.descriptors,
+                         cutoff=self.cutoff)
         return new
 
 
@@ -273,6 +286,7 @@ def namethem(descriptors, base='D'):
 def example():
     from theforce.similarity.pair import DistanceKernel
     from theforce.regression.core import SquaredExp
+
     kerns = [DistanceKernel(SquaredExp(), 10, 10),
              DistanceKernel(SquaredExp(), 10, 18),
              DistanceKernel(SquaredExp(), 18, 18)]
@@ -282,12 +296,7 @@ def example():
     numbers = 4*[10] + 4*[18]
     atoms = TorchAtoms(positions=xyz, numbers=numbers,
                        cutoff=3.0, descriptors=kerns)
-    atoms.update(descriptors=kerns, forced=True)
-
-    # copy
-    b = atoms.copy()
-    atoms.xyz.requires_grad = True
-    c = atoms.copy()
+    atoms.copy()
 
 
 if __name__ == '__main__':

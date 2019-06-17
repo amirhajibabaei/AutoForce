@@ -37,7 +37,9 @@ class PairSimilarityKernel(SimilarityKernel):
         d, grad = self.descriptor(loc.r)
         data = {'diag_value': d, 'diag_grad': grad}
         self.save_for_later(loc, data)
-        m = loc.j > loc.i
+        m = (loc.j > loc.i)
+        if self.a == self.b:
+            m = m | loc.image
         data = {'value': d[m], 'grad': grad[m], 'i': loc.i[m], 'j': loc.j[m]}
         self.save_for_later(loc, data)
         if hasattr(self, 'factor'):
