@@ -38,7 +38,6 @@ class PosteriorStressCalculator(Calculator):
     def __init__(self, potentials, **kwargs):
         Calculator.__init__(self, **kwargs)
         self.potentials = iterable(potentials)
-        warnings.warn('Stress is not mathematically worked out yet')
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
@@ -49,11 +48,10 @@ class PosteriorStressCalculator(Calculator):
                               self.potentials]).sum(dim=0)
 
         # stress
-        stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)*0
+        stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
         cellgrad, = grad(energy, self.atoms.lll)
         stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
-        stress = 0.5*(stress1 + stress1.t() + stress2 + stress2.t()
-                      ).detach().numpy() / self.atoms.get_volume()
+        stress = (stress1 + stress2).detach().numpy() / self.atoms.get_volume()
 
         self.results['energy'] = energy.detach().numpy()[0]
         self.results['forces'] = forces.detach().numpy()
