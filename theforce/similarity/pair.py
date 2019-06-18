@@ -39,7 +39,7 @@ class PairSimilarityKernel(SimilarityKernel):
         self.save_for_later(loc, data)
         m = (loc.j > loc.i)
         if self.a == self.b:
-            m = m | loc.image
+            m = m | ((loc.j == loc.i) & loc.lex)
         data = {'value': d[m], 'grad': grad[m], 'i': loc.i[m], 'j': loc.j[m]}
         self.save_for_later(loc, data)
         if hasattr(self, 'factor'):

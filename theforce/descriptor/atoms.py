@@ -13,14 +13,25 @@ from ase.calculators.calculator import PropertyNotImplementedError
 import copy
 
 
+def lex3(x):
+    if x[0] != 0:
+        return x[0] > -x[0]
+    elif x[1] != 0:
+        return x[1] > -x[1]
+    elif x[2] != 0:
+        return x[2] > -x[2]
+    else:
+        return True  # True or False here shouldn't make any difference
+
+
 class Local:
 
-    def __init__(self, i, j, a, b, r, im, descriptors=[]):
+    def __init__(self, i, j, a, b, r, off, descriptors=[]):
         """
         i, j: indices
         a, b: atomic numbers
         r : r[j] - r[i]
-        im: image
+        off: offsets
         """
         self._i = from_numpy(np.full_like(j, i))
         self._j = from_numpy(j)
@@ -28,7 +39,7 @@ class Local:
         self._b = from_numpy(b)
         self._r = r
         self._m = ones_like(self._i).to(torch.bool)
-        self._im = from_numpy(im).byte()
+        self._lex = torch.tensor([lex3(a) for a in off]).byte()
         self.loc = self
         self.stage(descriptors)
 
@@ -57,15 +68,22 @@ class Local:
         return self._r[self._m]
 
     @property
-    def image(self):
-        return self._im[self._m]
+    def lex(self):
+        return self._lex[self._m]
 
     def select(self, a, b, bothways=False, in_place=True):
         m = (self._a == a) & (self._b == b)
-        if bothways and a != b:
-            m = (m | ((self._a == b) & (self._b == a)))
-        if not bothways and a == b:
-            m = (m & (self._im | (self._j > self._i)))
+        if a == b:
+            if bothways:
+                pass
+            else:
+                m = m & ((self._j > self._i) | ((self._j == self._i) &
+                                                self._lex))
+        elif a != b:
+            if bothways:
+                m = (m | ((self._a == b) & (self._b == a)))
+            else:
+                pass
         if in_place:
             self._m = m.to(torch.bool)
         return m.to(torch.bool)
@@ -174,12 +192,11 @@ class TorchAtoms(Atoms):
             cell.requires_grad = cellgrad
             for a in range(self.natoms):
                 n, off = self.nl.get_neighbors(a)
-                image = (off != 0).any(axis=1)
                 cells = (from_numpy(off[..., None].astype(np.float)) *
                          cell).sum(dim=1)
                 r = xyz[n] - xyz[a] + cells
                 self.loc += [Local(a, n, types[a], types[n],
-                                   r, image, self.descriptors)]
+                                   r, off, self.descriptors)]
             for loc in self.loc:
                 loc.natoms = self.natoms
 
