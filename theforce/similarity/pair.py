@@ -7,6 +7,8 @@
 from theforce.similarity.similarity import SimilarityKernel
 from torch import zeros, cat, stack
 from theforce.util.util import iterable
+import torch
+from torch.nn import Module
 
 
 class PairSimilarityKernel(SimilarityKernel):
@@ -146,4 +148,111 @@ class RepulsiveCoreKernel(DistanceKernel):
     @property
     def state_args(self):
         return super().state_args + ', eta={}'.format(self.eta)
+
+
+class PairKernel(DistanceKernel):
+    def __init__(self, *args, factor=None):
+        super().__init__(*args)
+        if factor is not None:
+            self.factor = factor
+
+    @property
+    def state_args(self):
+        return super().state_args + ', factor={}'.format(self.factor.state)
+
+
+class PairCut(Module):
+
+    def __init__(self, cutoff):
+        super().__init__()
+        self.rc = cutoff
+
+    @property
+    def state_args(self):
+        return '{}'.format(self.rc)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+    def forward(self, d):
+        step = torch.where(d < self.rc, torch.ones_like(d),
+                           torch.zeros_like(d))
+        f, g = self.func_and_grad(d)
+        return step*f, step*g
+
+    def func_and_grad(self, d):
+        raise NotImplementedError('func_and_grad')
+
+
+class PolyCut(PairCut):
+
+    def __init__(self, cutoff, n=2):
+        super().__init__(cutoff)
+        self.n = n
+
+    def func_and_grad(self, d):
+        return (d-self.rc)**self.n, self.n*(d-self.rc)**(self.n-1)
+
+    @property
+    def state_args(self):
+        return super().state_args + ', n={}'.format(self.n)
+
+
+class RepulsiveCore(Module):
+
+    def __init__(self, eta=1):
+        super().__init__()
+        self.eta = eta
+
+    def forward(self, d):
+        return 1./d**self.eta, -self.eta/d**(self.eta+1)
+
+    @property
+    def state_args(self):
+        return 'eta={}'.format(self.eta)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+
+class Product(Module):
+
+    def __init__(self, f, g):
+        super().__init__()
+        self.f = f
+        self.g = g
+
+    def forward(self, d):
+        f, df = self.f(d)
+        g, dg = self.g(d)
+        return f*g, df*g + f*dg
+
+    @property
+    def state_args(self):
+        return '{}, {}'.format(self.f.state, self.g.state)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+
+def example():
+    from torch import tensor
+    from theforce.regression.core import SquaredExp
+
+    factor = Product(PolyCut(1.0), RepulsiveCore(12))
+    kern = PairKernel(SquaredExp(), 1, 1, factor=factor)
+    k = eval(kern.state)
+    d = torch.arange(0.1, 1.5, 0.1).view(-1)
+    d.requires_grad = True
+    f = eval(factor.state)
+    a, b = f(d)
+    a.sum().backward()
+    print(d.grad.allclose(b))
+
+
+if __name__ == '__main__':
+    example()
 
