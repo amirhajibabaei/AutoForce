@@ -45,7 +45,7 @@ class Local:
 
     def stage(self, descriptors):
         for desc in descriptors:
-            desc.calculate(self)
+            desc.precalculate(self)
 
     @property
     def i(self):

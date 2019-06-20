@@ -5,10 +5,11 @@
 
 
 from theforce.similarity.similarity import SimilarityKernel
+from theforce.regression.algebra import positive, free_form
 from torch import zeros, cat, stack
 from theforce.util.util import iterable
 import torch
-from torch.nn import Module
+from torch.nn import Module, Parameter
 
 
 class PairSimilarityKernel(SimilarityKernel):
@@ -33,7 +34,7 @@ class PairSimilarityKernel(SimilarityKernel):
     def saved(self, atoms_or_loc, key):
         return getattr(atoms_or_loc, self.name+'_'+key)
 
-    def calculate(self, loc):
+    def precalculate(self, loc):
         loc.select(self.a, self.b, bothways=True)
         d, grad = self.descriptor(loc.r)
         data = {'diag_value': d, 'diag_grad': grad}
@@ -48,14 +49,34 @@ class PairSimilarityKernel(SimilarityKernel):
             self.save_for_later(loc, {'diag_fac': fac, 'diag_facgrad': facgrad,
                                       'fac': fac[m], 'facgrad': facgrad[m]})
             self.has_factor = True
+            if hasattr(self.factor, 'state'):
+                self.has_state = True
+                self.save_for_later(loc, {'m': m, 'state': self.factor.state})
+            else:
+                self.has_state = False
         else:
             self.has_factor = False
+
+    def recalculate(self, atoms_or_loc):
+        if self.has_factor:
+            if self.has_state:
+                state = self.factor.state
+                for loc in iterable(atoms_or_loc):
+                    if state != self.saved(loc, 'state'):
+                        d = self.saved(loc, 'diag_value')
+                        m = self.saved(loc, 'm')
+                        fac, facgrad = self.factor(d)
+                        self.save_for_later(loc, {'diag_fac': fac, 'diag_facgrad': facgrad,
+                                                  'fac': fac[m], 'facgrad': facgrad[m],
+                                                  'state': self.factor.state})
 
     def func(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         c = self.kern(d, dd)
         if self.has_factor:
+            self.recalculate(p)
+            self.recalculate(q)
             f = self.saved(p, 'fac')
             ff = self.saved(q, 'fac')
             c = c * (f*ff.t())
@@ -69,6 +90,8 @@ class PairSimilarityKernel(SimilarityKernel):
         dd = self.saved(q, 'value')
         c = self.kern.leftgrad(d, dd)
         if self.has_factor:
+            self.recalculate(p)
+            self.recalculate(q)
             f = self.saved(p, 'fac')
             fg = self.saved(p, 'facgrad')
             ff = self.saved(q, 'fac')
@@ -86,6 +109,8 @@ class PairSimilarityKernel(SimilarityKernel):
         j = self.saved(q, 'j')
         c = self.kern.rightgrad(d, dd)
         if self.has_factor:
+            self.recalculate(p)
+            self.recalculate(q)
             f = self.saved(p, 'fac')
             ff = self.saved(q, 'fac')
             ffg = self.saved(q, 'facgrad')
@@ -105,6 +130,7 @@ class PairSimilarityKernel(SimilarityKernel):
             grad = self.saved(loc, 'diag_grad')
             c = self.kern.gradgrad(d, d)
             if self.has_factor:
+                self.recalculate(loc)
                 f = self.saved(loc, 'diag_fac')
                 fg = self.saved(loc, 'diag_facgrad')
                 c = (c*(f*f.t()) + fg*fg.t()*self.kern(d, d) +
@@ -155,6 +181,8 @@ class PairKernel(DistanceKernel):
         super().__init__(*args)
         if factor is not None:
             self.factor = factor
+            if hasattr(factor, 'params'):
+                self.params += factor.params
 
     @property
     def state_args(self):
@@ -217,12 +245,62 @@ class RepulsiveCore(Module):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
 
+class ParamedRepulsiveCore(Module):
+
+    def __init__(self, z=1.0, lb=1.0, beta=1e-6):
+        """z/r**eta where eta=lb+beta and beta>0"""
+        super().__init__()
+        assert beta > 0
+        self.z = z
+        self.lb = lb
+        self.beta = beta
+
+    def forward(self, d):
+        return self.z/d**self.eta, -self.eta*self.z/d**(self.eta+1)
+
+    @property
+    def eta(self):
+        return self.lb + self.beta
+
+    @property
+    def beta(self):
+        return positive(self._beta)
+
+    @beta.setter
+    def beta(self, value):
+        self._beta = Parameter(free_form(torch.as_tensor(value)))
+
+    @property
+    def z(self):
+        return self._z
+
+    @z.setter
+    def z(self, value):
+        self._z = Parameter(torch.as_tensor(value))
+
+    @property
+    def params(self):
+        return [self._z, self._beta]
+
+    @property
+    def state_args(self):
+        return 'z={}, lb={}, beta={}'.format(self.z, self.lb, self.beta)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+
 class Product(Module):
 
     def __init__(self, f, g):
         super().__init__()
         self.f = f
         self.g = g
+        self.params = []
+        for a in [f, g]:
+            if hasattr(a, 'params'):
+                self.params += a.params
 
     def forward(self, d):
         f, df = self.f(d)
@@ -242,7 +320,7 @@ def example():
     from torch import tensor
     from theforce.regression.core import SquaredExp
 
-    factor = Product(PolyCut(1.0), RepulsiveCore(12))
+    factor = Product(PolyCut(1.0), ParamedRepulsiveCore())
     kern = PairKernel(SquaredExp(), 1, 1, factor=factor)
     k = eval(kern.state)
     d = torch.arange(0.1, 1.5, 0.1).view(-1)
@@ -253,6 +331,25 @@ def example():
     print(d.grad.allclose(b))
 
 
+def example_optim():
+    cut = 1.63
+    d = torch.linspace(0.1, cut*1.3, 50).view(-1, 1)
+    Y = (3.7/d**2.4)*(d-cut)**2
+    fac = Product(ParamedRepulsiveCore(), PolyCut(cut))
+    optimizer = torch.optim.Adam([{'params': fac.params}], lr=0.5)
+
+    for _ in range(1000):
+        optimizer.zero_grad()
+        a, b = fac(d)
+        loss = ((a-Y)**2).sum()
+        loss.backward()
+        optimizer.step()
+
+    print(fac.state)
+    print(fac.__class__.__name__)
+
+
 if __name__ == '__main__':
     example()
+    example_optim()
 
