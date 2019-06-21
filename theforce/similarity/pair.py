@@ -186,7 +186,9 @@ class PairKernel(DistanceKernel):
 
     @property
     def state_args(self):
-        return super().state_args + ', factor={}'.format(self.factor.state)
+        return super().state_args + ', factor={}'.format(
+            self.factor.state if hasattr(self, 'factor')
+            and hasattr(self.factor, 'state') else None)
 
 
 class PairCut(Module):
