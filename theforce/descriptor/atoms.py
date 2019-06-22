@@ -173,6 +173,8 @@ class TorchAtoms(Atoms):
         self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
                                self_interaction=False, bothways=True)
         self.cutoff = rc
+        self.xyz = torch.from_numpy(self.positions)
+        self.lll = torch.from_numpy(self.cell)
 
     def update(self, cutoff=None, descriptors=None, forced=False,
                posgrad=False, cellgrad=False):
@@ -186,23 +188,19 @@ class TorchAtoms(Atoms):
             self.nl.update(self)
             self.loc = []
             types = self.get_atomic_numbers()
-            xyz = torch.from_numpy(self.positions)
-            xyz.requires_grad = posgrad
-            cell = torch.from_numpy(self.cell)
-            cell.requires_grad = cellgrad
+            self.xyz.requires_grad = posgrad
+            self.lll.requires_grad = cellgrad
             for a in range(self.natoms):
                 n, off = self.nl.get_neighbors(a)
                 cells = (from_numpy(off[..., None].astype(np.float)) *
-                         cell).sum(dim=1)
-                r = xyz[n] - xyz[a] + cells
+                         self.lll).sum(dim=1)
+                r = self.xyz[n] - self.xyz[a] + cells
                 self.loc += [Local(a, n, types[a], types[n],
                                    r, off, self.descriptors)]
             for loc in self.loc:
                 loc.natoms = self.natoms
 
             self.changes.update_references()
-            self.xyz = xyz
-            self.lll = cell
 
     @property
     def natoms(self):
@@ -232,6 +230,14 @@ class TorchAtoms(Atoms):
                          cutoff=self.cutoff)
         return new
 
+    def set_cell(self, *args, **kwargs):
+        super().set_cell(*args, **kwargs)
+        self.lll = torch.from_numpy(self.cell)
+
+    def set_positions(self, *args, **kwargs):
+        super().set_positions(*args, **kwargs)
+        self.xyz = torch.from_numpy(self.positions)
+
 
 class AtomsData:
 
@@ -241,6 +247,8 @@ class AtomsData:
             from ase.io import Trajectory
             self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
                        for atoms in Trajectory(traj)]
+        self.posgrad = False
+        self.cellgrad = False
 
     def apply(self, operation, *args, **kwargs):
         for atoms in self.X:
@@ -250,10 +258,11 @@ class AtomsData:
         self.apply('update', cutoff=cutoff,
                    descriptors=gpp.kern.kernels, forced=True)
 
-    def update_nl_if_requires_grad(self, descriptors=[], forced=True):
-        for atoms in self.X:
-            if atoms.xyz.requires_grad:
-                atoms.update(descriptors=descriptors, forced=forced)
+    def update_nl_if_requires_grad(self, descriptors=None, forced=False):
+        if self.cellgrad or self.posgrad:
+            for atoms in self.X:
+                atoms.update(descriptors=descriptors, forced=forced,
+                             posgrad=self.posgrad, cellgrad=self.cellgrad)
 
     def set_per_atoms(self, quant, values):
         vals = torch.split(values, split_size_or_sections=1)
