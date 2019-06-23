@@ -241,6 +241,12 @@ class TorchAtoms(Atoms):
                       pbc=self.pbc, numbers=self.numbers)  # TODO: e, f
         return atoms
 
+    def shake(self, beta=0.05, update=True):
+        trans = np.random.laplace(0., beta, size=self.positions.shape)
+        self.translate(trans)
+        if update:
+            self.update()
+
 
 class AtomsData:
 
@@ -280,6 +286,10 @@ class AtomsData:
         vals = torch.split(values, split_size_or_sections=self.natoms)
         for atoms, v in zip(*[self, vals]):
             setattr(atoms, quant, v)
+
+    def shake(self, **kwargs):
+        for atoms in self.X:
+            atoms.shake(**kwargs)
 
     @property
     def natoms(self):
