@@ -162,12 +162,10 @@ class TorchAtoms(Atoms):
             self.target_energy = as_tensor(energy)
             self.target_forces = as_tensor(forces)
         except RuntimeError:
-            try:
+            if ase_atoms is not None and ase_atoms.get_calculator() is not None:
                 self.target_energy = as_tensor(
                     ase_atoms.get_potential_energy())
                 self.target_forces = as_tensor(ase_atoms.get_forces())
-            except AttributeError or PropertyNotImplementedError:
-                pass
 
     def build_nl(self, rc):
         self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
@@ -238,15 +236,24 @@ class TorchAtoms(Atoms):
         super().set_positions(*args, **kwargs)
         self.xyz = torch.from_numpy(self.positions)
 
+    def as_ase(self):
+        atoms = Atoms(positions=self.positions, cell=self.cell,
+                      pbc=self.pbc, numbers=self.numbers)  # TODO: e, f
+        return atoms
+
 
 class AtomsData:
 
-    def __init__(self, X=[], traj=None, **kwargs):
-        self.X = X
-        if traj:
+    def __init__(self, X=None, traj=None, **kwargs):
+        if X:
+            self.X = X
+        elif traj:
+            self.X = []
             from ase.io import Trajectory
+            t = Trajectory(traj, 'r')
             self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
-                       for atoms in Trajectory(traj)]
+                       for atoms in t]
+            t.close()
         self.posgrad = False
         self.cellgrad = False
 
@@ -302,6 +309,13 @@ class AtomsData:
 
     def __len__(self):
         return len(self.X)
+
+    def to_traj(self, trajname, mode='w'):
+        from ase.io import Trajectory
+        t = Trajectory(trajname, mode)
+        for atoms in self:
+            t.write(atoms)
+        t.close()
 
 
 def namethem(descriptors, base='D'):
