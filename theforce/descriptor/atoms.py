@@ -250,7 +250,7 @@ class TorchAtoms(Atoms):
 
 class AtomsData:
 
-    def __init__(self, X=None, traj=None, **kwargs):
+    def __init__(self, X=None, traj=None, posgrad=False, cellgrad=False, **kwargs):
         if X:
             self.X = X
         elif traj:
@@ -260,8 +260,8 @@ class AtomsData:
             self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
                        for atoms in t]
             t.close()
-        self.posgrad = False
-        self.cellgrad = False
+        self.posgrad = posgrad
+        self.cellgrad = cellgrad
 
     def apply(self, operation, *args, **kwargs):
         for atoms in self.X:
@@ -272,7 +272,7 @@ class AtomsData:
                    descriptors=gpp.kern.kernels, forced=True)
 
     def update_nl_if_requires_grad(self, descriptors=None, forced=False):
-        if self.cellgrad or self.posgrad:
+        if self.trainable:
             for atoms in self.X:
                 atoms.update(descriptors=descriptors, forced=forced,
                              posgrad=self.posgrad, cellgrad=self.cellgrad)
@@ -298,6 +298,10 @@ class AtomsData:
     @property
     def params(self):
         return [atoms.xyz for atoms in self.X if atoms.xyz.requires_grad]
+
+    @property
+    def trainable(self):
+        return self.posgrad or self.cellgrad
 
     @property
     def target_energy(self):

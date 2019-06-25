@@ -10,6 +10,7 @@ from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.core import LazyWhite
 from theforce.regression.algebra import jitcholesky
 from theforce.util.util import iterable
+from theforce.optimize.optimizers import AutoScaleSGD
 import copy
 
 
@@ -207,22 +208,28 @@ class PosteriorPotential(Module):
             return out
 
 
-def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True, cov_loss=False):
+def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True, cov_loss=False, shake=0):
     if not logprob_loss and not cov_loss:
         raise RuntimeError('both loss terms are ignored!')
 
     if not hasattr(gp, 'optimizer'):
         gp.optimizer = torch.optim.Adam([{'params': gp.params}], lr=lr)
-        if inducing is not None and type(inducing) != list:
-            gp.optimizer.add_param_group({'params': inducing.params})
+        if inducing is not None and inducing.trainable and not hasattr(inducing, 'optimizer'):
+            inducing.optimizer = AutoScaleSGD(
+                [{'params': inducing.params}], lr=0.1)
 
     for _ in range(steps):
-        if inducing is not None and type(inducing) != list:
+        if inducing is not None and inducing.trainable:
+            if shake > 0:
+                inducing.shake(update=False)
+            inducing.optimizer.zero_grad()
             inducing.update_nl_if_requires_grad(descriptors=gp.kern.kernels)
         gp.optimizer.zero_grad()
         loss = gp.loss(X, Y, inducing, logprob_loss, cov_loss)
         loss.backward()
         gp.optimizer.step()
+        if inducing is not None and inducing.trainable:
+            inducing.optimizer.step()
 
     report = []
     if inducing is None:
