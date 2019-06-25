@@ -10,7 +10,7 @@ from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.core import LazyWhite
 from theforce.regression.algebra import jitcholesky
 from theforce.util.util import iterable
-from theforce.optimize.optimizers import AutoScaleSGD
+from theforce.optimize.optimizers import ClampedSGD
 import copy
 
 
@@ -208,15 +208,16 @@ class PosteriorPotential(Module):
             return out
 
 
-def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True, cov_loss=False, shake=0):
+def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True, cov_loss=False,
+              move=0.1, shake=0):
     if not logprob_loss and not cov_loss:
         raise RuntimeError('both loss terms are ignored!')
 
     if not hasattr(gp, 'optimizer'):
         gp.optimizer = torch.optim.Adam([{'params': gp.params}], lr=lr)
         if inducing is not None and inducing.trainable and not hasattr(inducing, 'optimizer'):
-            inducing.optimizer = AutoScaleSGD(
-                [{'params': inducing.params}], lr=0.1)
+            inducing.optimizer = ClampedSGD(
+                [{'params': inducing.params}], lr=move)
 
     for _ in range(steps):
         if inducing is not None and inducing.trainable:
