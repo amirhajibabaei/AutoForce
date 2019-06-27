@@ -260,6 +260,7 @@ class AtomsData:
             self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
                        for atoms in t]
             t.close()
+        self._X = self.X
         self.posgrad = posgrad
         self.cellgrad = cellgrad
 
@@ -330,6 +331,9 @@ class AtomsData:
         for atoms in self:
             t.write(atoms)
         t.close()
+
+    def pick_random(self, n):
+        self.X = [self._X[k] for k in torch.randperm(len(self._X))[:n]]
 
 
 def namethem(descriptors, base='D'):
