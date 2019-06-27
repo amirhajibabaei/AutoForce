@@ -42,6 +42,13 @@ class SimilarityKernel(Module):
     def gradgraddiag(self, p):
         raise NotImplementedError('gradgraddiag!')
 
+    def save_for_later(self, loc, keyvals):
+        for key, val in keyvals.items():
+            setattr(loc, self.name+'_'+key, val)
+
+    def saved(self, atoms_or_loc, key):
+        return getattr(atoms_or_loc, self.name+'_'+key)
+
     @property
     def state_args(self):
         return self.kern.state_args
