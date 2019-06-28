@@ -135,6 +135,11 @@ class GaussianProcessPotential(Module):
     def state(self):
         return 'GaussianProcessPotential({})'.format(self.state_args)
 
+    def to_file(self, file, flag='', mode='a'):
+        with open(file, mode) as f:
+            f.write('\n\n\n#flag: {}\n'.format(flag))
+            f.write(self.state)
+
 
 class PosteriorPotential(Module):
 
