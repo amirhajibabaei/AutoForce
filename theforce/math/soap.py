@@ -7,9 +7,10 @@
 import torch
 from theforce.math.ylm import Ylm
 from torch.nn import Module
+from math import factorial as fac
 
 
-class SeriesSoap(Module):
+class AbsSeriesSoap(Module):
 
     def __init__(self, lmax, nmax, radial):
         super().__init__()
@@ -48,9 +49,71 @@ class SeriesSoap(Module):
                     dc[None, ]*c[:, None, ..., None, None])
             dp = ((dnnp*self.Yr[..., None, None]).sum(dim=-3) +
                   (dnnp*self.Yi[..., None, None]).sum(dim=-4))
-            return p.permute(2, 0, 1), dp.permute(2, 0, 1, 3, 4)
+            return p, dp
         else:
-            return p.permute(2, 0, 1)
+            return p
+
+
+class SeriesSoap(Module):
+
+    def __init__(self, lmax, nmax, radial, scale=None, actual=False, normalize=False,
+                 cutcorners=0, symm=False):
+        super().__init__()
+        self.abs = AbsSeriesSoap(lmax, nmax, radial)
+
+        if scale:
+            self.scale = scale
+        else:
+            self.scale = radial.rc/3  # Note: a more thorough consideration is needed
+
+        if actual:
+            a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
+                               for l in range(lmax+1)] for n in range(nmax+1)])
+            self.nnl = a[None]*a[:, None]
+        else:
+            self.nnl = torch.ones(nmax+1, nmax+1, lmax+1)
+
+        n = torch.arange(nmax+1)
+        self.mask = ((n[:, None]-n[None]).abs() <= nmax-cutcorners).byte()
+        if not symm:
+            self.mask = (self.mask & (n[:, None] >= n[None]).byte())
+
+        self.normalize = normalize
+
+        self.kwargs = 'actual={}, normalize={}, cutcorners={}, symm={}'.format(
+            actual, normalize, cutcorners, symm)
+
+    def forward(self, xyz, grad=True):
+        p = self.abs(xyz/self.scale, grad=grad)
+        if grad:
+            p, q = p
+            p = p*self.nnl
+            q = q*self.nnl[..., None, None]/self.scale
+
+        p = p[self.mask].view(-1)
+        if grad:
+            q = q[self.mask].view(-1, *xyz.size())
+
+        if self.normalize:
+            norm = p.norm()
+            p = p/norm
+            if grad:
+                q = q/norm
+                q = q - p[..., None, None] * (p[..., None, None] * q
+                                              ).sum(dim=(0))
+        if grad:
+            return p, q
+        else:
+            return p
+
+    @property
+    def state_args(self):
+        return "{}, scale={}, {}".format(
+            self.abs.state_args, self.scale, self.kwargs)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
 
 
 def test_validity():
@@ -74,19 +137,30 @@ def test_validity():
                             [0.18307552, 0.22340802, 0.26811937],
                             [0.20443194, 0.26811937, 0.34109511]]])
 
-    s = SeriesSoap(2, 2, PolyCut(3.0))
+    s = AbsSeriesSoap(2, 2, PolyCut(3.0))
     p, dp = s(xyz)
+    p = p.permute(2, 0, 1)
     print('fits pre-calculated values: {}'.format(p.allclose(target)))
 
     p.sum().backward()
     print('fits gradients calculated by autograd: {}'.format(
         xyz.grad.allclose(dp.sum(dim=(0, 1, 2)))))
 
+    # test with normalization turned on
+    s = SeriesSoap(3, 7, PolyCut(3.0), scale=1., normalize=True)
+    xyz.grad *= 0
+    p, dp = s(xyz)
+    p.sum().backward()
+    print('fits gradients calculated by autograd (normalize=True):{}'.format(
+        xyz.grad.allclose(dp.sum(dim=(0)))))
+
+    assert s.state == eval(s.state).state
+
 
 def test_speed(N=100):
     from theforce.math.cutoff import PolyCut
     import time
-    s = SeriesSoap(5, 5, PolyCut(3.0))
+    s = AbsSeriesSoap(5, 5, PolyCut(3.0))
     start = time.time()
     for _ in range(N):
         xyz = torch.rand(30, 3)
