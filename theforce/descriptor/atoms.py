@@ -340,13 +340,8 @@ def diatomic(numbers, distances, pbc=False, cell=None):
     from theforce.util.util import iterable
     from itertools import combinations
     if not hasattr(numbers[0], '__iter__'):
-        if len(numbers) > 2:
-            nums = ([(a, b) for a, b in combinations(set(numbers), 2)] +
-                    [(a, a) for a in set(numbers)])
-        elif len(numbers) == 2:
-            nums = [numbers]
-        else:
-            raise RuntimeError()
+        nums = ([(a, b) for a, b in combinations(set(numbers), 2)] +
+                [(a, a) for a in set(numbers)])
     else:
         nums = numbers
     X = [TorchAtoms(positions=[[0., 0., 0.], [d, 0., 0.]], numbers=n, cell=cell, pbc=pbc)
