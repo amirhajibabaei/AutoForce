@@ -15,7 +15,7 @@ def atleast2d(t, force2d=False):
         return _t.view(-1, 1)
     elif _t.dim() >= 2:
         if force2d:
-            return _t.view(t.size(0), -1)
+            return _t.view(_t.size(0), torch.tensor(_t.size()[1:]).prod())
         else:
             return _t
 
@@ -47,7 +47,7 @@ class Kernel(Module):
         t, tt, s = self.checkout_inputs(x, xx, diag)
         k = getattr(self, 'get_'+method)(t, tt)
         if k.size(-1) == 1 or (not diag and k.size(-2) == 1):
-            k = torch.ones_like(t)*k  # TODO: use .expand instead
+            k = torch.ones_like(t[0])*k  # TODO: use .expand instead
         return k
 
     def func(self, x, xx=None, diag=False):
@@ -421,6 +421,10 @@ def test():
         x, xx).permute(2, 0, 3, 1).reshape(x.numel(), xx.numel()))
     print('Squared-Exponential kernel with two different methods: \n{}\n{}\n{}\n{}'.format(
         func, leftgrad, rightgrad, gradgrad))
+
+    # try empty tensor
+    x = torch.rand(0, 7)
+    new(x, xx)
 
 
 if __name__ == '__main__':
