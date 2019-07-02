@@ -7,7 +7,7 @@
 import torch
 from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
-from theforce.regression.core import LazyWhite
+from theforce.regression.kernel import White
 from theforce.regression.algebra import jitcholesky
 from theforce.util.util import iterable
 from theforce.optimize.optimizers import ClampedSGD
@@ -84,7 +84,7 @@ class EnergyForceKernel(Module):
 
 class GaussianProcessPotential(Module):
 
-    def __init__(self, kernels, noise=LazyWhite(signal=0.01, requires_grad=True)):
+    def __init__(self, kernels, noise=White(signal=0.01, requires_grad=True)):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
@@ -100,12 +100,12 @@ class GaussianProcessPotential(Module):
                            self.kern(data, cov='forces_forces')], dim=0)
             return MultivariateNormal(torch.zeros(L.size(0)),
                                       covariance_matrix=torch.cat([L, R], dim=1) +
-                                      torch.eye(L.size(0))*self.noise.diag())
+                                      torch.eye(L.size(0))*self.noise.signal**2)
         else:
             Q = torch.cat([self.kern(data, cov='energy_energy', inducing=inducing)[0],
                            self.kern(data, cov='forces_forces', inducing=inducing)[0]], dim=0)
             return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q,
-                                             torch.ones(Q.size(0))*self.noise.diag())
+                                             torch.ones(Q.size(0))*self.noise.signal**2)
 
     def Y(self, data):
         return torch.cat([torch.tensor([sys.target_energy for sys in data])] +
@@ -116,7 +116,7 @@ class GaussianProcessPotential(Module):
         if hasattr(p, 'cov_factor'):
             if cov_loss:
                 covariance_loss = 0.5*(self.kern.diag(data, 'full').sum() - torch.einsum(
-                                       'ij,ij', p.cov_factor, p.cov_factor))/self.noise.diag()
+                                       'ij,ij', p.cov_factor, p.cov_factor))/self.noise.signal**2
             else:
                 covariance_loss = 0
         else:
@@ -158,7 +158,7 @@ class PosteriorPotential(Module):
                                gp.kern(data, inducing, cov='forces_energy')], dim=0)
                 M = gp.kern(inducing, inducing, cov='energy_energy')
                 L, _ = jitcholesky(M)
-                A = torch.cat([K, gp.noise.diag().sqrt()*L.t()], dim=0)
+                A = torch.cat([K, gp.noise.signal*L.t()], dim=0)
                 Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
                 Q, R = torch.qr(A)
                 self.mu = R.inverse() @ Q.t() @ Y

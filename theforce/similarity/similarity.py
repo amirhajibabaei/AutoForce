@@ -6,15 +6,14 @@
 
 from torch.nn import Module
 from torch import cat
-from theforce.regression.gp import Covariance
 from theforce.util.util import iterable
 
 
 class SimilarityKernel(Module):
 
-    def __init__(self, kernels):
+    def __init__(self, kernel):
         super().__init__()
-        self.kern = Covariance(kernels)
+        self.kern = kernel
         self.params = self.kern.params
 
     def forward(self, first, second, operation='func'):
@@ -51,7 +50,7 @@ class SimilarityKernel(Module):
 
     @property
     def state_args(self):
-        return self.kern.state_args
+        return self.kern.state
 
     @property
     def state(self):

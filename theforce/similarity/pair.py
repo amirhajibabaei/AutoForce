@@ -14,8 +14,8 @@ from torch.nn import Module, Parameter
 
 class PairSimilarityKernel(SimilarityKernel):
 
-    def __init__(self, kernels, a, b):
-        super().__init__([kern for kern in iterable(kernels)])
+    def __init__(self, kernel, a, b):
+        super().__init__(kernel)
         self.a = a
         self.b = b
 
@@ -88,7 +88,7 @@ class PairSimilarityKernel(SimilarityKernel):
         i = self.saved(p, 'i')
         j = self.saved(p, 'j')
         dd = self.saved(q, 'value')
-        c = self.kern.leftgrad(d, dd)
+        c = self.kern.leftgrad(d, dd).squeeze(0)
         if self.has_factor:
             self.recalculate(p)
             self.recalculate(q)
@@ -107,7 +107,7 @@ class PairSimilarityKernel(SimilarityKernel):
         grad = self.saved(q, 'grad')
         i = self.saved(q, 'i')
         j = self.saved(q, 'j')
-        c = self.kern.rightgrad(d, dd)
+        c = self.kern.rightgrad(d, dd).squeeze(0)
         if self.has_factor:
             self.recalculate(p)
             self.recalculate(q)
@@ -128,7 +128,7 @@ class PairSimilarityKernel(SimilarityKernel):
         for i, loc in enumerate(iterable(p.loc)):
             d = self.saved(loc, 'diag_value')
             grad = self.saved(loc, 'diag_grad')
-            c = self.kern.gradgrad(d, d)
+            c = self.kern.gradgrad(d, d).squeeze(0).squeeze(1)
             if self.has_factor:
                 self.recalculate(loc)
                 f = self.saved(loc, 'diag_fac')
@@ -193,13 +193,14 @@ class PairKernel(DistanceKernel):
 
 def example():
     from torch import tensor
-    from theforce.regression.core import SquaredExp
+    from theforce.regression.stationary import RBF
     from theforce.math.cutoff import PolyCut
     from theforce.math.radial import Product, ParamedRepulsiveCore
 
     factor = Product(PolyCut(1.0), ParamedRepulsiveCore())
-    kern = PairKernel(SquaredExp(), 1, 1, factor=factor)
-    k = eval(kern.state)
+    kern = PairKernel(RBF(), 1, 1, factor=factor)
+    print(kern.state == eval(kern.state).state)
+
     d = torch.arange(0.1, 1.5, 0.1).view(-1)
     d.requires_grad = True
     f = eval(factor.state)
