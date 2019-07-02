@@ -92,15 +92,16 @@ class SeriesSoap(Module):
 
         p = p[self.mask].view(-1)
         if grad:
-            q = q[self.mask].view(-1, *xyz.size())
+            q = q[self.mask].view(p.size(0), *xyz.size())
 
         if self.normalize:
             norm = p.norm()
-            p = p/norm
-            if grad:
-                q = q/norm
-                q = q - p[..., None, None] * (p[..., None, None] * q
-                                              ).sum(dim=(0))
+            if norm > 0.0:
+                p = p/norm
+                if grad:
+                    q = q/norm
+                    q = q - p[..., None, None] * (p[..., None, None] * q
+                                                  ).sum(dim=(0))
         if grad:
             return p, q
         else:
@@ -155,6 +156,9 @@ def test_validity():
         xyz.grad.allclose(dp.sum(dim=(0)))))
 
     assert s.state == eval(s.state).state
+
+    # test if works with empty tensors
+    s(torch.rand(0, 3))
 
 
 def test_speed(N=100):
