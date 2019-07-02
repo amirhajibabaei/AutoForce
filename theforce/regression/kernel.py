@@ -315,6 +315,40 @@ class Positive(Kernel):
         return torch.zeros((x.dim()+1)*[1])
 
 
+class White(Kernel):
+
+    def __init__(self, signal=1e-3, requires_grad=False):
+        super().__init__()
+        self.signal = signal
+        self.requires_grad = requires_grad
+
+    @property
+    def signal(self):
+        return positive(self._signal)
+
+    @signal.setter
+    def signal(self, value):
+        v = torch.as_tensor(value)
+        assert v > 0
+        self._signal = Parameter(free_form(v))
+        self.params.append(self._signal)
+
+    @property
+    def requires_grad(self):
+        return self._signal.requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, value):
+        self._signal.requires_grad = value
+
+    @property
+    def state_args(self):
+        return 'signal={}, requires_grad={}'.format(self.signal.data, self.requires_grad)
+
+    def get_func(self, x, xx):
+        return self.signal*x.isclose(xx).all(dim=0).type(x.type())
+
+
 class SqD(Kernel):
 
     def __init__(self):
