@@ -52,8 +52,10 @@ class SoapKernel(SimilarityKernel):
             grad = grad/norm
             grad = (grad - d[..., None, None] *
                     (d[..., None, None] * grad).sum(dim=0))
+        grad = torch.cat([grad, -grad.sum(dim=1, keepdim=True)], dim=1)
+        j = torch.cat([loc._j, loc._i.unique()])
         # save
-        data = {'value': d[None], 'grad': grad, 'j': loc._j}
+        data = {'value': d[None], 'grad': grad, 'j': j}
         self.save_for_later(loc, data)
 
     def func(self, p, q):
@@ -66,28 +68,24 @@ class SoapKernel(SimilarityKernel):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         c = self.kern.leftgrad(d, dd)
-        g = []
+        g = torch.zeros(p.natoms, 3)
         for i, loc in enumerate(p):
             grad = self.saved(loc, 'grad')
             j = self.saved(loc, 'j')
-            t = ((c[:, j, :][..., None]*grad[..., None, :]).sum(dim=(0, 1, 2)) -
-                 (c[:, i, :][..., None]*grad.sum(dim=1)[..., None, :]).sum(dim=(0, 1)))
-            g += [t]
-        g = torch.stack(g)
+            t = (c[:, i][..., None, None]*grad[:, None]).sum(dim=(0, 1))
+            g = g.index_add(0, j, t)
         return g.view(-1, 1)
 
     def rightgrad(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         c = self.kern.rightgrad(d, dd)
-        g = []
+        g = torch.zeros(p.natoms, 3)
         for i, loc in enumerate(q):
             grad = self.saved(loc, 'grad')
             j = self.saved(loc, 'j')
-            t = ((c[:, :, j][..., None]*grad[:, None, :]).sum(dim=(0, 1, 2)) -
-                 (c[:, :, i][..., None]*grad.sum(dim=1)[:, None, :]).sum(dim=(0, 1)))
-            g += [t]
-        g = torch.stack(g)
+            t = (c[..., i][..., None, None]*grad[:, None]).sum(dim=(0, 1))
+            g = g.index_add(0, j, t)
         return g.view(1, -1)
 
     def gradgrad(self, p, q):
@@ -95,6 +93,45 @@ class SoapKernel(SimilarityKernel):
 
     def gradgraddiag(self, p):
         raise NotImplementedError('Not defined yet')
+
+
+def test_grad():
+    from theforce.descriptor.atoms import namethem
+    from theforce.math.cutoff import PolyCut
+    from theforce.regression.kernel import Positive, DotProd
+    from theforce.descriptor.atoms import TorchAtoms, AtomsData
+    import numpy as np
+    torch.set_default_tensor_type(torch.DoubleTensor)
+
+    # create kernel
+    kern = Positive(1.0) * (DotProd()+Positive(0.01))**4
+    soap = SoapKernel(kern, 10, (18, 10), 2, 2, PolyCut(3.0))
+    namethem([soap])
+
+    # create to atomic systems
+    # Note that when one of the displacement vectors becomes is exactly along the z-axis
+    # because of singularity some inconsistensies exist with autograd.
+    # For this reason we add a small random number to positions, until that bug is fixed.
+    cell = np.ones(3)*10
+    positions = np.array([(-1., 0., 0.), (1., 0., 0.),
+                          (0., -1., 0.), (0., 1., 0.),
+                          (0., 0., -1.), (0., 0., 1.),
+                          (0., 0., 0.)]) + cell/2 + np.random.uniform(-0.1, 0.1, size=(7, 3))
+
+    b = TorchAtoms(positions=positions, numbers=3*[10]+3*[18]+[10], cell=cell,
+                   pbc=True, cutoff=3.0, descriptors=[soap])
+    a = TorchAtoms(positions=positions, numbers=2*[10, 18, 10]+[18], cell=cell,
+                   pbc=True, cutoff=3.0, descriptors=[soap])
+    a.update(posgrad=True, forced=True)
+    b.update(posgrad=True, forced=True)
+    soap([a], [b]).backward()
+
+    test_left = a.xyz.grad.allclose(soap.leftgrad(a, b).view(-1, 3))
+    max_left = (a.xyz.grad - soap.leftgrad(a, b).view(-1, 3)).max()
+    print("leftgrad: {}  \t max diff: {}".format(test_left, max_left))
+    test_right = b.xyz.grad.allclose(soap.rightgrad(a, b).view(-1, 3))
+    max_right = (b.xyz.grad - soap.rightgrad(a, b).view(-1, 3)).max()
+    print("rightgrad: {} \t max diff: {}".format(test_right, max_right))
 
 
 def example():
@@ -107,4 +144,5 @@ def example():
 
 if __name__ == '__main__':
     example()
+    test_grad()
 
