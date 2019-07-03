@@ -70,8 +70,8 @@ class SoapKernel(SimilarityKernel):
         for i, loc in enumerate(p):
             grad = self.saved(loc, 'grad')
             j = self.saved(loc, 'j')
-            t = ((c[:, i, j][..., None]*grad).sum(dim=(0, 1)) -
-                 (c[:, i, i][..., None]*grad.sum(dim=1)).sum(dim=0))
+            t = ((c[:, j, :][..., None]*grad[..., None, :]).sum(dim=(0, 1, 2)) -
+                 (c[:, i, :][..., None]*grad.sum(dim=1)[..., None, :]).sum(dim=(0, 1)))
             g += [t]
         g = torch.stack(g)
         return g.view(-1, 1)
@@ -84,8 +84,8 @@ class SoapKernel(SimilarityKernel):
         for i, loc in enumerate(q):
             grad = self.saved(loc, 'grad')
             j = self.saved(loc, 'j')
-            t = ((c[:, j, i][..., None]*grad).sum(dim=(0, 1)) -
-                 (c[:, i, i][..., None]*grad.sum(dim=1)).sum(dim=0))
+            t = ((c[:, :, j][..., None]*grad[:, None, :]).sum(dim=(0, 1, 2)) -
+                 (c[:, :, i][..., None]*grad.sum(dim=1)[:, None, :]).sum(dim=(0, 1)))
             g += [t]
         g = torch.stack(g)
         return g.view(1, -1)
