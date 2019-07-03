@@ -152,7 +152,7 @@ class Ylm(Module):
             else:
                 cart = sph_vec_to_cart(sin_theta, cos_theta, sin_phi, cos_phi, Y_r,
                                        Y_theta/r, Y_phi/(r*sin_theta))
-                return Y, torch.stack(cart, dim=-1)
+                return Y, nan_to_num(torch.stack(cart, dim=-1))  # Note: nan
         else:
             return Y
 
