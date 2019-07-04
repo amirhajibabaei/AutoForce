@@ -12,27 +12,33 @@ from math import factorial as fac
 
 class AbsSeriesSoap(Module):
 
-    def __init__(self, lmax, nmax, radial):
+    def __init__(self, lmax, nmax, radial, unit=None):
         super().__init__()
         self.ylm = Ylm(lmax)
         self.nmax = nmax
         self.radial = radial
+        if unit:
+            self.unit = unit
+        else:
+            self.unit = radial.rc/3
         one = torch.ones(lmax+1, lmax+1)
         self.Yr = 2*torch.torch.tril(one) - torch.eye(lmax+1)
         self.Yi = 2*torch.torch.triu(one, diagonal=1)
 
     @property
     def state_args(self):
-        return "{}, {}, {}".format(self.ylm.lmax, self.nmax, self.radial.state)
+        return "{}, {}, {}, unit={}".format(self.ylm.lmax, self.nmax, self.radial.state, self.unit)
 
     @property
     def state(self):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
-    def forward(self, xyz, grad=True):
+    def forward(self, coo, grad=True):
+        xyz = coo/self.unit
         d = xyz.pow(2).sum(dim=-1).sqrt()
         n = 2*torch.arange(self.nmax+1).type(xyz.type())
-        r, dr = self.radial(d)
+        r, dr = self.radial(self.unit*d)
+        dr = self.unit*dr
         f = (r*d[None]**n[:, None])
         Y = self.ylm(xyz, grad=grad)
         if grad:
@@ -49,25 +55,20 @@ class AbsSeriesSoap(Module):
                     dc[None, ]*c[:, None, ..., None, None])
             dp = ((dnnp*self.Yr[..., None, None]).sum(dim=-3) +
                   (dnnp*self.Yi[..., None, None]).sum(dim=-4))
-            return p, dp
+            return p, dp/self.unit
         else:
             return p
 
 
 class SeriesSoap(Module):
 
-    def __init__(self, lmax, nmax, radial, scale=None, actual=False, normalize=False,
+    def __init__(self, lmax, nmax, radial, unit=None, modify=None, normalize=False,
                  cutcorners=0, symm=False):
         super().__init__()
-        self.abs = AbsSeriesSoap(lmax, nmax, radial)
+        self.abs = AbsSeriesSoap(lmax, nmax, radial, unit=unit)
 
-        if scale:
-            self.scale = scale
-        else:
-            self.scale = radial.rc/3  # Note: a more thorough consideration is needed
-
-        if actual:
-            a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
+        if modify:
+            a = torch.tensor([[modify**(2*n+l)/((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
                                for l in range(lmax+1)] for n in range(nmax+1)])
             self.nnl = a[None]*a[:, None]
         else:
@@ -80,15 +81,15 @@ class SeriesSoap(Module):
 
         self.normalize = normalize
 
-        self.kwargs = 'actual={}, normalize={}, cutcorners={}, symm={}'.format(
-            actual, normalize, cutcorners, symm)
+        self.kwargs = 'modify={}, normalize={}, cutcorners={}, symm={}'.format(
+            modify, normalize, cutcorners, symm)
 
     def forward(self, xyz, grad=True):
-        p = self.abs(xyz/self.scale, grad=grad)
+        p = self.abs(xyz, grad=grad)
         if grad:
             p, q = p
             p = p*self.nnl
-            q = q*self.nnl[..., None, None]/self.scale
+            q = q*self.nnl[..., None, None]
 
         p = p[self.mask].view(-1)
         if grad:
@@ -109,8 +110,7 @@ class SeriesSoap(Module):
 
     @property
     def state_args(self):
-        return "{}, scale={}, {}".format(
-            self.abs.state_args, self.scale, self.kwargs)
+        return "{}, {}".format(self.abs.state_args, self.kwargs)
 
     @property
     def state(self):
@@ -148,7 +148,7 @@ def test_validity():
         xyz.grad.allclose(dp.sum(dim=(0, 1, 2)))))
 
     # test with normalization turned on
-    s = SeriesSoap(3, 7, PolyCut(3.0), scale=1., normalize=True)
+    s = SeriesSoap(3, 7, PolyCut(3.0), normalize=True)
     xyz.grad *= 0
     p, dp = s(xyz)
     p.sum().backward()
@@ -159,6 +159,22 @@ def test_validity():
 
     # test if works with empty tensors
     s(torch.rand(0, 3))
+
+
+def test_units():
+    from theforce.math.cutoff import PolyCut
+    xyz = torch.tensor([[0.175, 0.884, -0.87, 0.354, -0.082, 3.1],
+                        [-0.791, 0.116, 0.19, -0.832, 0.184, 0.],
+                        [0.387, 0.761, 0.655, -0.528, 0.973, 0.]]).t()
+    xyz = xyz*3
+    cutoff = 3.0*3
+    xyz.requires_grad = True
+
+    s = SeriesSoap(3, 3, PolyCut(cutoff), normalize=True)
+    p, dp = s(xyz)
+    p.sum().backward()
+    print('grads are consistent with larger length scale: {}'.format(
+        xyz.grad.allclose(dp.sum(dim=(0)))))
 
 
 def test_speed(N=100):
@@ -174,7 +190,22 @@ def test_speed(N=100):
     print("speed of {}: {} sec".format(s.state, delta))
 
 
+def example():
+    from theforce.math.cutoff import PolyCut
+
+    lengthscale = 2.
+    cutoff = 8.
+    xyz = torch.tensor([[1., 0, 0], [-1., 0, 0],
+                        [0, 1., 0], [0, -1., 0],
+                        [0, 0, 1.], [0, 0, -1.]]) * lengthscale
+    xyz.requires_grad = True
+    s = SeriesSoap(2, 2, PolyCut(cutoff), normalize=True)
+    p, dp = s(xyz)
+    print(p)
+
+
 if __name__ == '__main__':
     test_validity()
+    test_units()
     test_speed()
 
