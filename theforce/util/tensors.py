@@ -8,9 +8,12 @@ import torch
 import warnings
 
 
-def nan_to_num(t, num=0):
-    t[torch.isnan(t)] = num
-    return t
+def nan_to_num(t, num=0.):
+    return torch.where(torch.isnan(t), torch.as_tensor(num), t)
+
+
+def zero_to_tiny(t, tiny=1e-6):
+    return torch.where(t == 0., torch.as_tensor(tiny), t)
 
 
 def cat(tensors, dim=0):
