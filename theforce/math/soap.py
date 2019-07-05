@@ -88,8 +88,8 @@ class SeriesSoap(Module):
         p = self.abs(xyz, grad=grad)
         if grad:
             p, q = p
-            p = p*self.nnl
             q = q*self.nnl[..., None, None]
+        p = p*self.nnl
 
         p = p[self.mask].view(-1)
         if grad:
@@ -107,6 +107,10 @@ class SeriesSoap(Module):
             return p, q
         else:
             return p
+
+    @property
+    def dim(self):
+        return self.mask.sum()*(self.abs.ylm.lmax+1)
 
     @property
     def state_args(self):
