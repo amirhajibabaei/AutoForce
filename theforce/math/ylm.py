@@ -10,21 +10,30 @@ from math import pi as math_pi
 pi = torch.tensor(math_pi)
 
 
-def nan_to_num(t, num=0):
-    t[torch.isnan(t)] = num
-    return t
+def split_and_rotate_tiny_if_too_close_to_zaxis(xyz, tiny_angle=1e-2):
+    """
+    tiny_angle is chosen such that the calculated gradients (in Ylm) are 
+    consistent with torch.autograd.
+    This depends both on precision and scale of xyz.
+    """
+    tol = tiny_angle*xyz[:, 2].abs()
+    if ((xyz[:, 0].abs() < tol) & (xyz[:, 1].abs() < tol)).any():
+        x = xyz[:, 0]
+        y = xyz[:, 1] - tiny_angle*xyz[:, 2]
+        z = tiny_angle*xyz[:, 1] + xyz[:, 2]
+        return x, y, z, tiny_angle
+    else:
+        return xyz[:, 0], xyz[:, 1], xyz[:, 2], 0
 
 
-def cart_coord_to_trig(xyz):
-    "if xyz = [[0., 0., 0.]], backward pass results in nan"
-    x, y, z = xyz[:, 0], xyz[:, 1], xyz[:, 2]
+def cart_coord_to_trig(x, y, z):
     rxy_sq = x*x + y*y
     rxy = rxy_sq.sqrt()
     r = (rxy_sq + z*z).sqrt()
-    sin_theta = nan_to_num(rxy/r, num=0.0)
-    cos_theta = nan_to_num(z/r, num=1.0)
-    sin_phi = nan_to_num(y/rxy, num=0.0)
-    cos_phi = nan_to_num(x/rxy, num=1.0)
+    sin_theta = rxy/r
+    cos_theta = z/r
+    sin_phi = y/rxy
+    cos_phi = x/rxy
     return r, sin_theta, cos_theta, sin_phi, cos_phi
 
 
@@ -92,9 +101,9 @@ class Ylm(Module):
         To eliminate r**l factor set with_r=1.
         If grad=True, gradient of Y wrt xyz will be calculated.
         The imaginary componenst are stored in the upper diagonal of array Y.
-        l = 0, ..., lmax 
-        m = 0, ..., l 
-        r: real part 
+        l = 0, ..., lmax
+        m = 0, ..., l
+        r: real part
         i: imaginary part
 
         with lmax=3 this arrangement looks like
@@ -102,12 +111,18 @@ class Ylm(Module):
             0 1 2 3       0 1 2 3        r i i i
         l = 1 1 2 3   m = 1 0 1 2    Y = r r i i
             2 2 2 3       2 1 0 1        r r r i
-            3 3 3 3       3 2 1 0        r r r r 
+            3 3 3 3       3 2 1 0        r r r r
 
-        the full harmonic with l, m (m>0): Y[l,l-m] + 1.0j*Y[l-m,l] 
+        the full harmonic with l, m (m>0): Y[l,l-m] + 1.0j*Y[l-m,l]
                                     (m=0): Y[l,l]
+        ------------------------------------------------------------
+        Note: if one of vectors becomes too close to z_axis, the entire system
+        will be rotated slightly, and in turn, the calculated gradients will be
+        rotated by an inverse rotation.
+        This way the returned gradients are consistent with torch.autograd.
         """
-        r, sin_theta, cos_theta, sin_phi, cos_phi = cart_coord_to_trig(xyz)
+        x, y, z, angle = split_and_rotate_tiny_if_too_close_to_zaxis(xyz)
+        r, sin_theta, cos_theta, sin_phi, cos_phi = cart_coord_to_trig(x, y, z)
         _r = r if with_r is None else torch.as_tensor(with_r).type(xyz.type())
         r2 = _r*_r
         r_sin_theta = _r*sin_theta
@@ -145,14 +160,19 @@ class Ylm(Module):
             else:
                 Y_r = torch.zeros_like(Y)
             Y_theta = cos_theta * self.l_float * Y / sin_theta
-            Y_theta[1:, 1:] -= _r * Y[:-1, :-1] * self.coef / sin_theta  # NOTE
+            Y_theta[1:, 1:] -= _r * Y[:-1, :-1] * self.coef / sin_theta
             Y_phi = Y.clone().permute(1, 0, 2) * self.sign * self.m_float
             if spherical_grads:
                 return Y, torch.stack([Y_r, Y_theta, Y_phi], dim=-1)
             else:
                 cart = sph_vec_to_cart(sin_theta, cos_theta, sin_phi, cos_phi, Y_r,
                                        Y_theta/r, Y_phi/(r*sin_theta))
-                return Y, nan_to_num(torch.stack(cart, dim=-1))  # Note: nan
+                if angle > 0:
+                    dY = torch.stack(
+                        [cart[0], cart[1]+angle*cart[2], -angle*cart[1]+cart[2]], dim=-1)
+                else:
+                    dY = torch.stack(cart, dim=-1)
+                return Y, dY
         else:
             return Y
 
@@ -206,6 +226,8 @@ def compare_with_numpy_version():
 
 
 def compare_grads_with_autograd():
+    torch.set_default_tensor_type(torch.DoubleTensor)
+
     sph = Ylm(3)
     xyz = torch.rand(10, 3, requires_grad=True)
     Y, grad = sph(xyz, grad=True, with_r=1)
@@ -215,6 +237,13 @@ def compare_grads_with_autograd():
     print(a, ea)
 
     xyz = torch.rand(10, 3, requires_grad=True)
+    Y, grad = sph(xyz, grad=True, with_r=None)
+    Y.sum().backward()
+    a = xyz.grad.allclose(grad.sum(dim=(0, 1)))
+    ea = (xyz.grad-grad.sum(dim=(0, 1))).abs().max().data
+    print(a, ea)
+
+    xyz = torch.tensor([[0, 0, 1.0]], requires_grad=True)
     Y, grad = sph(xyz, grad=True, with_r=None)
     Y.sum().backward()
     a = xyz.grad.allclose(grad.sum(dim=(0, 1)))
