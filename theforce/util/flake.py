@@ -1,13 +1,102 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 import numpy as np
+import torch
+
+
+class Flake:
+    def __init__(self):
+        self.o = [[0, 0, 0]]
+        pass
+
+    @property
+    def coordination(self):
+        return len(self.coo)
+
+    def _coo(self, o=False):
+        t = type(self.coo)
+        if t == list:
+            coo = self.coo
+        elif t == np.ndarray or t == torch.Tensor:
+            coo = self.coo.tolist()
+        else:
+            raise RuntimeError('unknown type in Flake')
+        if o:
+            return self.o + coo
+        else:
+            return coo
+
+    def tensor(self, a=1., o=False):
+        return torch.as_tensor(self._coo(o=o)).type(torch.zeros(1).type()) * a
+
+    def array(self, a=1., o=False):
+        return np.asarray(self._coo(o=o), dtype=np.zeros((1,)).dtype) * a
+
+    def show(self):
+        from theforce.util.flake import show_flake
+        show_flake(self.array(), batch=False)
+
+
+class SC(Flake):
+    def __init__(self):
+        super().__init__()
+        self.coo = [[1, 0, 0], [-1, 0, 0],
+                    [0, 1, 0], [0, -1, 0],
+                    [0, 0, 1], [0, 0, -1]]
+
+
+class BCC(Flake):
+    def __init__(self):
+        super().__init__()
+        self.coo = [[1, 1, 1], [-1, -1, -1],
+                    [1, 1, -1], [-1, -1, 1],
+                    [1, -1, 1], [-1, 1, -1],
+                    [-1, 1, 1], [1, -1, -1]]
+
+
+class FCC(Flake):
+    def __init__(self):
+        super().__init__()
+        self.coo = [[1, 0, 0], [-1, 0, 0],
+                    [0, 1, 0], [0, -1, 0],
+                    [0, 0, 1], [0, 0, -1],
+                    [1, 1, 1], [-1, -1, -1],
+                    [1, 1, -1], [-1, -1, 1],
+                    [1, -1, 1], [-1, 1, -1],
+                    [-1, 1, 1], [1, -1, -1]]
+
+
+class Hex(Flake):
+    def __init__(self):
+        super().__init__()
+        a = 1.0
+        c = a * np.sqrt(2/3)
+        cell = np.array([[a, 0, 0],
+                         [a/2, a*np.sqrt(3)/2, 0],
+                         [0, 0, c]])
+        coo = [[1, 0, 0], [0, 1, 0], [-1, 1, 0], [-1, 0, 0], [0, -1, 0], [1, -1, 0],
+               [1./3, 1./3, 1], [-2./3, 1./3, 1], [1./3, -2./3, 1],
+               [1./3, 1./3, -1], [-2./3, 1./3, -1], [1./3, -2./3, -1]]
+        self.coo = np.einsum('ij,jk->ik', np.array(coo), cell)
+
+
+class ZB(Flake):
+    def __init__(self):
+        super().__init__()
+        self.coo = [[-1, -1, 1], [1, 1, 1],
+                    [1, -1, -1], [-1, 1, -1]]
+
+
+AllMyFlakes = [SC, BCC, FCC, Hex, ZB]
 
 
 # ------------------------------------------ potentials
+
+
 def lennard_jones(xyz, sigma=1.0):
     r = np.sqrt((xyz**2).sum(axis=1)) / sigma
     pot = 4*(1/r**12 - 1/r**6).sum()
