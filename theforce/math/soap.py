@@ -7,8 +7,9 @@
 from theforce.util.util import iterable
 import torch
 from theforce.math.ylm import Ylm
-from torch.nn import Module
+from torch.nn import Module, Parameter
 from math import factorial as fac
+from theforce.regression.algebra import positive, free_form
 
 
 class AbsSeriesSoap(Module):
@@ -120,6 +121,7 @@ class TailoredSoap(Module):
             self.mask = (self.mask & (n[:, None] >= n[None]).byte())
 
         self._state_args = "corners={}, symm={}".format(corners, symm)
+        self.params = []
 
     def forward(self, xyz, grad=True):
         p = self.soap(xyz, grad=grad)
@@ -152,6 +154,7 @@ class MultiSoap(Module):
     def __init__(self, soaps):
         super().__init__()
         self.soaps = iterable(soaps)
+        self.params = [par for soap in self.soaps for par in soap.params]
 
     def forward(self, xyz, masks, grad=True):
         p = [soap(xyz[m], grad=grad) for soap, m in zip(*[self.soaps, masks])]
@@ -181,11 +184,64 @@ class MultiSoap(Module):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
 
+class ScaledSoap(Module):
+
+    def __init__(self, soap, scales=None):
+        super().__init__()
+        self.soap = soap
+        self.params = [par for par in soap.params]
+        self.scales = scales
+
+    @property
+    def scales(self):
+        return positive(self._scales)
+
+    @scales.setter
+    def scales(self, value):
+        if value is None:
+            v = torch.ones(self.soap.dim)
+        else:
+            v = torch.as_tensor(value).view(-1)
+        assert (v > 0).all()
+        self._scales = Parameter(free_form(v))
+        self.params.append(self._scales)
+
+    def forward(self, *args, **kwargs):
+        if 'grad' in kwargs:
+            grad = kwargs['grad']
+        else:
+            grad = True
+
+        p = self.soap(*args, **kwargs)
+        if grad:
+            p, q = p
+            q = q/self.scales[..., None, None]
+        p = p/self.scales
+
+        if grad:
+            return p, q
+        else:
+            return p
+
+    @property
+    def dim(self):
+        return self.soap.dim
+
+    @property
+    def state_args(self):
+        return "{}, scales={}".format(self.soap.state, self.scales.data)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+
 class NormalizedSoap(Module):
 
     def __init__(self, soap):
         super().__init__()
         self.soap = soap
+        self.params = [par for par in soap.params]
 
     def forward(self, *args, **kwargs):
         if 'grad' in kwargs:
@@ -396,6 +452,7 @@ def test_realseriessoap():
 
 def test_multisoap():
     from theforce.math.cutoff import PolyCut
+    from torch import tensor
     xyz = torch.tensor([[0.175, 0.884, -0.87, 0.354, -0.082, 3.1],
                         [-0.791, 0.116, 0.19, -0.832, 0.184, 0.],
                         [0.387, 0.761, 0.655, -0.528, 0.973, 0.]]).t()
@@ -405,7 +462,7 @@ def test_multisoap():
 
     soaps = [TailoredSoap(RealSeriesSoap(2, 2, PolyCut(cutoff))),
              TailoredSoap(RealSeriesSoap(3, 2, PolyCut(cutoff)))]
-    ms = NormalizedSoap(MultiSoap(soaps))
+    ms = NormalizedSoap(ScaledSoap(MultiSoap(soaps)))
 
     masks = [xyz[:, 0] >= 0., xyz[:, 0] < 0.]
     a, b = ms(xyz, masks)
