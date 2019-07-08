@@ -73,8 +73,10 @@ class RealSeriesSoap(Module):
     Cutoff is controlled from outside this function through radial.
     """
 
-    def __init__(self, lmax, nmax, radial, atomic_unit=0.5):
-
+    def __init__(self, lmax, nmax, radial, atomic_unit=1.5):
+        """
+        The optimum value of atomic_unit depends on the radial function.
+        """
         super().__init__()
         self.abs = AbsSeriesSoap(lmax, nmax, radial, unit=atomic_unit)
 
@@ -98,6 +100,83 @@ class RealSeriesSoap(Module):
     def state_args(self):
         return "{}, {}, {}, atomic_unit={}".format(self.abs.ylm.lmax, self.abs.nmax,
                                                    self.abs.radial.state, self.abs.unit)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+
+class TailoredSoap(Module):
+
+    def __init__(self, soap, corners=0, symm=False):
+        super().__init__()
+        self.soap = soap
+        n = torch.arange(soap.abs.nmax+1)
+        self.mask = ((n[:, None]-n[None]).abs() <=
+                     soap.abs.nmax-corners).byte()
+
+        if not symm:
+            self.mask = (self.mask & (n[:, None] >= n[None]).byte())
+
+        self._state_args = "corners={}, symm={}".format(corners, symm)
+
+    def forward(self, xyz, grad=True):
+        p = self.soap(xyz, grad=grad)
+        if grad:
+            p, q = p
+
+        p = p[self.mask].view(-1)
+        if grad:
+            q = q[self.mask].view(p.size(0), *xyz.size())
+
+        if grad:
+            return p, q
+        else:
+            return p
+
+    @property
+    def dim(self):
+        return self.mask.sum()*(self.soap.abs.ylm.lmax+1)
+
+    @property
+    def state_args(self):
+        return "{}, {}".format(self.soap.state, self._state_args)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+
+class NormalizedSoap(Module):
+
+    def __init__(self, soap):
+        super().__init__()
+        self.soap = soap
+
+    def forward(self, xyz, grad=True):
+        p = self.soap(xyz, grad=grad)
+        if grad:
+            p, q = p
+
+        norm = p.norm()
+        if norm > 0.0:
+            p = p/norm
+            if grad:
+                q = q/norm
+                q = q - p[..., None, None] * (p[..., None, None] * q
+                                              ).sum(dim=(0))
+        if grad:
+            return p, q
+        else:
+            return p
+
+    @property
+    def dim(self):
+        return self.soap.dim
+
+    @property
+    def state_args(self):
+        return "{}".format(self.soap.state)
 
     @property
     def state(self):
@@ -265,17 +344,19 @@ def test_realseriessoap():
     cutoff = 3.0*3
     xyz.requires_grad = True
 
-    s = RealSeriesSoap(2, 2, PolyCut(cutoff), atomic_unit=1.5)
+    s = NormalizedSoap(TailoredSoap(RealSeriesSoap(2, 2, PolyCut(cutoff),
+                                                   atomic_unit=1.5)))
+
     p, dp = s(xyz)
     p.sum().backward()
-    test_grad = xyz.grad.allclose(dp.sum(dim=(0, 1, 2)))
-    err_grad = (xyz.grad-dp.sum(dim=(0, 1, 2))).abs().max()
+    test_grad = xyz.grad.allclose(dp.sum(dim=(0)))
+    err_grad = (xyz.grad-dp.sum(dim=(0))).abs().max()
     print('RealSeriesSoap: grads are consistent with autograd: {} ({})'.format(
         test_grad, err_grad))
     assert eval(s.state).state == s.state
 
 
-if __name__ == '__main__':
+if __name__ == '__main__' and True:
     test_validity()
     test_units()
     test_realseriessoap()
