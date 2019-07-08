@@ -70,7 +70,7 @@ class SeriesSoap(Module):
         if modify:
             a = torch.tensor([[modify**(2*n+l)/((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
                                for l in range(lmax+1)] for n in range(nmax+1)])
-            self.nnl = a[None]*a[:, None]
+            self.nnl = (a[None]*a[:, None]).sqrt()
         else:
             self.nnl = torch.ones(nmax+1, nmax+1, lmax+1)
 
