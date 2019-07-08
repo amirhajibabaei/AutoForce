@@ -4,6 +4,7 @@
 # In[ ]:
 
 
+from theforce.util.util import iterable
 import torch
 from theforce.math.ylm import Ylm
 from torch.nn import Module
@@ -147,14 +148,51 @@ class TailoredSoap(Module):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
 
+class MultiSoap(Module):
+    def __init__(self, soaps):
+        super().__init__()
+        self.soaps = iterable(soaps)
+
+    def forward(self, xyz, masks, grad=True):
+        p = [soap(xyz[m], grad=grad) for soap, m in zip(*[self.soaps, masks])]
+        if grad:
+            p, _q = zip(*p)
+            n = xyz.size(0)
+            i = torch.arange(n).long()
+            q = torch.cat([torch.zeros(soap.dim, n, 3).index_add(1, i[m], qq)
+                           for soap, m, qq in zip(*[self.soaps, masks, _q])])
+        p = torch.cat(p)
+
+        if grad:
+            return p, q
+        else:
+            return p
+
+    @property
+    def dim(self):
+        return sum([soap.dim for soap in self.soaps])
+
+    @property
+    def state_args(self):
+        return "[" + ", ".join("{}".format(soap.state) for soap in self.soaps) + "]"
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+
 class NormalizedSoap(Module):
 
     def __init__(self, soap):
         super().__init__()
         self.soap = soap
 
-    def forward(self, xyz, grad=True):
-        p = self.soap(xyz, grad=grad)
+    def forward(self, *args, **kwargs):
+        if 'grad' in kwargs:
+            grad = kwargs['grad']
+        else:
+            grad = True
+        p = self.soap(*args, **kwargs)
         if grad:
             p, q = p
 
@@ -356,9 +394,34 @@ def test_realseriessoap():
     assert eval(s.state).state == s.state
 
 
+def test_multisoap():
+    from theforce.math.cutoff import PolyCut
+    xyz = torch.tensor([[0.175, 0.884, -0.87, 0.354, -0.082, 3.1],
+                        [-0.791, 0.116, 0.19, -0.832, 0.184, 0.],
+                        [0.387, 0.761, 0.655, -0.528, 0.973, 0.]]).t()
+    xyz = xyz*3
+    cutoff = 3.0*3
+    xyz.requires_grad = True
+
+    soaps = [TailoredSoap(RealSeriesSoap(2, 2, PolyCut(cutoff))),
+             TailoredSoap(RealSeriesSoap(3, 2, PolyCut(cutoff)))]
+    ms = NormalizedSoap(MultiSoap(soaps))
+
+    masks = [xyz[:, 0] >= 0., xyz[:, 0] < 0.]
+    a, b = ms(xyz, masks)
+    a.sum().backward()
+    err = (xyz.grad-b.sum(dim=0)).abs().max()
+    test = xyz.grad.allclose(b.sum(dim=0))
+    assert ms.dim == a.size(0)
+    assert ms.state == eval(ms.state).state
+    print('MultiSoap: grads are consistent with autograd: {} ({})'.format(
+        test, err))
+
+
 if __name__ == '__main__' and True:
     test_validity()
     test_units()
     test_realseriessoap()
+    test_multisoap()
     test_speed()
 
