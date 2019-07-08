@@ -60,7 +60,52 @@ class AbsSeriesSoap(Module):
             return p
 
 
+class RealSeriesSoap(Module):
+    """
+    Let s = atomic_unit,
+    if radial is e^{-0.5*(r/s)^2}, then this function will return 
+    the exact descriptor vector (with indices n, n', l) obtained from
+    series expansion of the modified Bessel function of the first kind
+    in smooth overlap of atomic positions (SOAP).
+    We call this approach "Series Expansion SOAP" or SE-SOAP.
+    To understand meaning of atomic_unit, density of an atom (centered 
+    at x) in space (at r) is described as: e^(-(|r-x|/s)^2)
+    Cutoff is controlled from outside this function through radial.
+    """
+
+    def __init__(self, lmax, nmax, radial, atomic_unit=0.5):
+
+        super().__init__()
+        self.abs = AbsSeriesSoap(lmax, nmax, radial, unit=atomic_unit)
+
+        a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
+                           for l in range(lmax+1)] for n in range(nmax+1)])
+        self.nnl = (a[None]*a[:, None]).sqrt()
+
+    def forward(self, xyz, grad=True):
+        p = self.abs(xyz, grad=grad)
+        if grad:
+            p, q = p
+            q = q*self.nnl[..., None, None]
+        p = p*self.nnl
+
+        if grad:
+            return p, q
+        else:
+            return p
+
+    @property
+    def state_args(self):
+        return "{}, {}, {}, atomic_unit={}".format(self.abs.ylm.lmax, self.abs.nmax,
+                                                   self.abs.radial.state, self.abs.unit)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+
 class SeriesSoap(Module):
+    """deprecated"""
 
     def __init__(self, lmax, nmax, radial, unit=None, modify=None, normalize=False,
                  cutcorners=0, symm=False):
@@ -83,6 +128,9 @@ class SeriesSoap(Module):
 
         self.kwargs = 'modify={}, normalize={}, cutcorners={}, symm={}'.format(
             modify, normalize, cutcorners, symm)
+
+        import warnings
+        warnings.warn("class {} is Deprecated".format(self.__class__.__name__))
 
     def forward(self, xyz, grad=True):
         p = self.abs(xyz, grad=grad)
@@ -208,8 +256,28 @@ def example():
     print(p)
 
 
+def test_realseriessoap():
+    from theforce.math.cutoff import PolyCut
+    xyz = torch.tensor([[0.175, 0.884, -0.87, 0.354, -0.082, 3.1],
+                        [-0.791, 0.116, 0.19, -0.832, 0.184, 0.],
+                        [0.387, 0.761, 0.655, -0.528, 0.973, 0.]]).t()
+    xyz = xyz*3
+    cutoff = 3.0*3
+    xyz.requires_grad = True
+
+    s = RealSeriesSoap(2, 2, PolyCut(cutoff), atomic_unit=1.5)
+    p, dp = s(xyz)
+    p.sum().backward()
+    test_grad = xyz.grad.allclose(dp.sum(dim=(0, 1, 2)))
+    err_grad = (xyz.grad-dp.sum(dim=(0, 1, 2))).abs().max()
+    print('RealSeriesSoap: grads are consistent with autograd: {} ({})'.format(
+        test_grad, err_grad))
+    assert eval(s.state).state == s.state
+
+
 if __name__ == '__main__':
     test_validity()
     test_units()
+    test_realseriessoap()
     test_speed()
 
