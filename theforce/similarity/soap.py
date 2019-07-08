@@ -5,58 +5,31 @@
 
 
 from theforce.similarity.similarity import SimilarityKernel
-from theforce.math.soap import SeriesSoap
+from theforce.math.soap import RealSeriesSoap, TailoredSoap, NormalizedSoap, MultiSoap
 from theforce.util.util import iterable
 import torch
 
 
 class SoapKernel(SimilarityKernel):
-    """
-    Notes:
-    1. the descriptor vectors for all the species will be concatenated, 
-       and then will be normalized (if "normalize=True" in init).  
-       Thus always "normalize=False" when constructing the descriptor 
-       for a single species.
-    2. "unit" and "modify" keywords in the SeriesSoap control the resolution.
-    3. Each species can have its own SeriesSoap object.
-    4. Normalization leads to discontinuities in gradients when separation 
-       of a pair is equal to cutoff.
-    """
 
-    def __init__(self, kernel, a, b, lmax, nmax, radial, normalize=True):
+    def __init__(self, kernel, a, b, lmax, nmax, radial, atomic_unit=1.5):
         super().__init__(kernel)
         self.a = a
         self.b = sorted(iterable(b))
-        self.descriptor = SeriesSoap(lmax, nmax, radial, unit=None, modify=None, normalize=False,
-                                     cutcorners=0, symm=False)
-        self.normalize = normalize
-        self.soapdim = self.descriptor.mask.sum()*(lmax+1)
-        self.dim = len(self.b)*self.soapdim
+        self.descriptor = NormalizedSoap(MultiSoap([TailoredSoap(
+            RealSeriesSoap(lmax, nmax, radial, atomic_unit=atomic_unit)) for _ in self.b]))
+        self.dim = self.descriptor.dim
+        self._args = '{}, {}, {}, {}, {}, atomic_unit={}'.format(
+            a, b, lmax, nmax, radial.state, atomic_unit)
 
     @property
     def state_args(self):
-        return super().state_args + ', {}, {}, {}, {}, {}, normalize={}'.format(
-            self.a, self.b, self.descriptor.abs.ylm.lmax, self.descriptor.abs.nmax,
-            self.descriptor.abs.radial.state, self.normalize)
+        return super().state_args + ', ' + self._args
 
     def precalculate(self, loc):
         if (self.a == loc._a.unique()).all():
-            idx = torch.arange(loc._j.size(0)).long()
-            zero = torch.zeros(self.soapdim, loc._j.size(0), 3)
-            dat = []
-            for b in self.b:
-                loc.select(self.a, b, bothways=True, in_place=True)
-                d, _grad = self.descriptor(loc.r)
-                grad = zero.index_add(1, idx[loc._m], _grad)
-                dat += [(d, grad)]
-            d, grad = (torch.cat(a) for a in zip(*dat))
-            if self.normalize:
-                norm = d.norm()
-                if norm > 0.0:
-                    d = d/norm
-                    grad = grad/norm
-                    grad = (grad - d[..., None, None] *
-                            (d[..., None, None] * grad).sum(dim=0))
+            masks = [loc.select(self.a, b, bothways=True) for b in self.b]
+            d, grad = self.descriptor(loc._r, masks, grad=True)
             grad = torch.cat([grad, -grad.sum(dim=1, keepdim=True)], dim=1)
             j = torch.cat([loc._j, loc._i.unique()])
             a = torch.ones(1)
@@ -127,7 +100,7 @@ def test_grad():
     # create kernel
     kern = Positive(1.0) * (DotProd()+Positive(0.01))**0.1
     #kern = RBF()
-    soap = SoapKernel(kern, 10, (18, 10), 2, 2, PolyCut(3.0), normalize=True)
+    soap = SoapKernel(kern, 10, (18, 10), 2, 2, PolyCut(3.0))
     namethem([soap])
 
     # create atomic systems
@@ -157,11 +130,12 @@ def test_grad():
 
 
 def example():
-    from theforce.regression.kernel import Positive, DotProd
+    from theforce.regression.kernel import Positive, DotProd, Mul, Add, Pow
     from theforce.math.cutoff import PolyCut
     kern = (Positive(1.0, requires_grad=True) *
             (DotProd() + Positive(0.01, requires_grad=True))**0.1)
     soap = SoapKernel(kern, 10, (18, 10), 2, 2, PolyCut(3.0))
+    assert eval(soap.state).state == soap.state
 
 
 if __name__ == '__main__':
