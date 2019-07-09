@@ -399,6 +399,119 @@ class DotProd(Kernel):
         return torch.eye(d).view(d, d, *(len(trail)*[1]))
 
 
+class Normed(Kernel):
+
+    def __init__(self, kern):
+        super().__init__()
+        self.kern = kern
+
+    @property
+    def state_args(self):
+        return self.kern.state
+
+    def get_func(self, x, xx):
+        n = x.norm(dim=0)
+        nn = xx.norm(dim=0)
+        return self.kern.get_func(x/n, xx/nn)
+
+    def get_leftgrad(self, x, xx):
+        n = x.norm(dim=0)
+        nn = xx.norm(dim=0)
+        y = x/n
+        yy = xx/nn
+        f = self.kern.get_leftgrad(y, yy)
+        return f/n - (f*x).sum(dim=0)*x/n**3
+
+    def get_rightgrad(self, x, xx):
+        n = x.norm(dim=0)
+        nn = xx.norm(dim=0)
+        y = x/n
+        yy = xx/nn
+        f = self.kern.get_rightgrad(y, yy)
+        return f/nn - (f*xx).sum(dim=0)*xx/nn**3
+
+    def get_gradgrad(self, x, xx):
+        n = x.norm(dim=0)
+        nn = xx.norm(dim=0)
+        y = x/n
+        yy = xx/nn
+        f = self.kern.get_gradgrad(y, yy)
+        gg = (f/(n*nn) - (f*x[:, None]).sum(dim=0)*x[:, None]/(n**3*nn) -
+              (f*xx[None]).sum(dim=1, keepdim=True)*xx/(n*nn**3) +
+              (f*x[:, None]*xx[None]).sum(dim=(0, 1)) * x[:, None]*xx[None]/(n**3*nn**3))
+        return gg
+
+
+class ScaledInput(Kernel):
+
+    def __init__(self, kern, scale=1.0):
+        super().__init__()
+        self.kern = kern
+        self.scale = scale
+
+    @property
+    def state_args(self):
+        return '{}, scale={}'.format(self.kern.state, self.scale.data)
+
+    @property
+    def scale(self):
+        return positive(self._scale)
+
+    @scale.setter
+    def scale(self, value):
+        v = torch.as_tensor(value).view(-1)
+        assert (v > 0).all()
+        self._scale = Parameter(free_form(v))
+        self.params.append(self._scale)
+
+    def get_func(self, x, xx):
+        scale = self.scale
+        while scale.dim() < x.dim():
+            scale = scale[..., None]
+        return self.kern.get_func(x/scale, xx/scale)
+
+    def get_leftgrad(self, x, xx):
+        scale = self.scale
+        while scale.dim() < x.dim():
+            scale = scale[..., None]
+        return self.kern.get_leftgrad(x/scale, xx/scale)/scale
+
+    def get_rightgrad(self, x, xx):
+        scale = self.scale
+        while scale.dim() < x.dim():
+            scale = scale[..., None]
+        return self.kern.get_rightgrad(x/scale, xx/scale)/scale
+
+    def get_gradgrad(self, x, xx):
+        scale = self.scale
+        while scale.dim() < x.dim():
+            scale = scale[..., None]
+        return self.kern.get_gradgrad(x/scale, xx/scale)/(scale[:, None]*scale[None])
+
+
+def test_kernel_gradients(kern, dim=3):
+
+    x = torch.rand(7, dim, requires_grad=True)
+    xx = torch.rand(11, dim, requires_grad=True)
+
+    kern(x, xx).sum().backward()
+    g = kern.leftgrad(x, xx).sum(dim=(2)).t()
+    print(g.allclose(x.grad), (g-x.grad).abs().max().data)
+
+    g = kern.rightgrad(x, xx).sum(dim=(1)).t()
+    print(g.allclose(xx.grad), (g-xx.grad).abs().max().data)
+
+    x.grad *= 0
+    kern.rightgrad(x, xx).sum().backward()
+    g = kern.gradgrad(x, xx).sum(dim=(1, 3)).t()
+    print(g.allclose(x.grad), (g-x.grad).abs().max().data)
+
+    xx.grad *= 0
+    kern.leftgrad(x, xx).sum().backward()
+    g = kern.gradgrad(x, xx).sum(dim=(0, 2)).t()
+    print(g.allclose(xx.grad), (g-xx.grad).abs().max().data)
+
+
 def example():
     polynomial = Positive(requires_grad=True) *         (DotProd() + Positive(1e-4, requires_grad=True))**2
     squaredexp = (SqD()*Real(-0.5)).exp()
@@ -425,6 +538,13 @@ def test():
     # try empty tensor
     x = torch.rand(0, 7)
     new(x, xx)
+
+    # test kernels gradients
+    kern = Normed(ScaledInput(DotProd(), scale=torch.rand(3)))
+    print('test gradients of kernel: {}'.format(kern.state))
+    test_kernel_gradients(kern)
+    from torch import tensor
+    assert eval(kern.state).state == kern.state
 
 
 if __name__ == '__main__':
