@@ -198,6 +198,7 @@ class Pow(Kernel):
         super().__init__()
         self.kern = kern
         self.eta = eta
+        self.params = kern.params
 
     @property
     def state_args(self):
@@ -227,6 +228,7 @@ class Exp(Kernel):
     def __init__(self, kern):
         super().__init__()
         self.kern = kern
+        self.params = kern.params
 
     @property
     def state_args(self):
@@ -404,6 +406,7 @@ class Normed(Kernel):
     def __init__(self, kern):
         super().__init__()
         self.kern = kern
+        self.params = kern.params
 
     @property
     def state_args(self):
@@ -447,6 +450,7 @@ class ScaledInput(Kernel):
     def __init__(self, kern, scale=1.0):
         super().__init__()
         self.kern = kern
+        self.params = kern.params
         self.scale = scale
 
     @property
@@ -540,7 +544,7 @@ def test():
     new(x, xx)
 
     # test kernels gradients
-    kern = Normed(ScaledInput(DotProd(), scale=torch.rand(3)))
+    kern = ScaledInput(Normed(DotProd()), scale=torch.rand(3))
     print('test gradients of kernel: {}'.format(kern.state))
     test_kernel_gradients(kern)
     from torch import tensor
