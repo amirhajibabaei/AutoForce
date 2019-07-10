@@ -167,11 +167,15 @@ class PosteriorPotential(Module):
                 self.sig = W.t() @ p.precision_matrix @ W
 
                 self.X = inducing
-                inducing.set_per_atoms('target_energy', M @ self.mu)
-                F = gp.kern(inducing, inducing, cov='forces_energy')
-                F = (F @ self.mu).reshape(-1, 3)
-                inducing.set_per_atom('target_forces', F)
                 self.has_target_forces = False
+
+                # Following lines are commented because:
+                # 1) they are unnecessary, 2) maybe Loc objects are passed as inducing,
+                # but are not eliminated because I find them meaningful.
+                #inducing.set_per_atoms('target_energy', M @ self.mu)
+                #F = gp.kern(inducing, inducing, cov='forces_energy')
+                #F = (F @ self.mu).reshape(-1, 3)
+                #inducing.set_per_atom('target_forces', F)
 
     def forward(self, test, quant='energy', variance=False, enable_grad=False):
         shape = {'energy': (-1,), 'forces': (-1, 3)}
