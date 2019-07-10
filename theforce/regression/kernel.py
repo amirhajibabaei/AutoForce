@@ -407,35 +407,36 @@ class Normed(Kernel):
         super().__init__()
         self.kern = kern
         self.params = kern.params
+        self.eps = torch.finfo().eps
 
     @property
     def state_args(self):
         return self.kern.state
 
     def get_func(self, x, xx):
-        n = x.norm(dim=0)
-        nn = xx.norm(dim=0)
+        n = x.norm(dim=0).clamp(min=self.eps)
+        nn = xx.norm(dim=0).clamp(min=self.eps)
         return self.kern.get_func(x/n, xx/nn)
 
     def get_leftgrad(self, x, xx):
-        n = x.norm(dim=0)
-        nn = xx.norm(dim=0)
+        n = x.norm(dim=0).clamp(min=self.eps)
+        nn = xx.norm(dim=0).clamp(min=self.eps)
         y = x/n
         yy = xx/nn
         f = self.kern.get_leftgrad(y, yy)
         return f/n - (f*x).sum(dim=0)*x/n**3
 
     def get_rightgrad(self, x, xx):
-        n = x.norm(dim=0)
-        nn = xx.norm(dim=0)
+        n = x.norm(dim=0).clamp(min=self.eps)
+        nn = xx.norm(dim=0).clamp(min=self.eps)
         y = x/n
         yy = xx/nn
         f = self.kern.get_rightgrad(y, yy)
         return f/nn - (f*xx).sum(dim=0)*xx/nn**3
 
     def get_gradgrad(self, x, xx):
-        n = x.norm(dim=0)
-        nn = xx.norm(dim=0)
+        n = x.norm(dim=0).clamp(min=self.eps)
+        nn = xx.norm(dim=0).clamp(min=self.eps)
         y = x/n
         yy = xx/nn
         f = self.kern.get_gradgrad(y, yy)
