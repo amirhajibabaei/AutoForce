@@ -16,8 +16,8 @@ class SoapKernel(SimilarityKernel):
         super().__init__(kernel)
         self.a = a
         self.b = sorted(iterable(b))
-        self.descriptor = NormalizedSoap(MultiSoap([TailoredSoap(
-            RealSeriesSoap(lmax, nmax, radial, atomic_unit=atomic_unit)) for _ in self.b]))
+        self.descriptor = MultiSoap([TailoredSoap(RealSeriesSoap(
+            lmax, nmax, radial, atomic_unit=atomic_unit)) for _ in self.b])
         self.dim = self.descriptor.dim
         self._args = '{}, {}, {}, {}, {}, atomic_unit={}'.format(
             a, b, lmax, nmax, radial.state, atomic_unit)
@@ -91,14 +91,14 @@ class SoapKernel(SimilarityKernel):
 def test_grad():
     from theforce.descriptor.atoms import namethem
     from theforce.math.cutoff import PolyCut
-    from theforce.regression.kernel import Positive, DotProd
+    from theforce.regression.kernel import Positive, DotProd, Normed
     from theforce.regression.stationary import RBF
     from theforce.descriptor.atoms import TorchAtoms, AtomsData
     import numpy as np
     torch.set_default_tensor_type(torch.DoubleTensor)
 
     # create kernel
-    kern = Positive(1.0) * (DotProd()+Positive(0.01))**0.1
+    kern = Positive(1.0) * Normed(DotProd())**4
     #kern = RBF()
     soap = SoapKernel(kern, 10, (18, 10), 2, 2, PolyCut(3.0))
     namethem([soap])
