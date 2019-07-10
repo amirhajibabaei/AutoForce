@@ -26,7 +26,7 @@ def lex3(x):
 
 class Local:
 
-    def __init__(self, i, j, a, b, r, off, descriptors=[]):
+    def __init__(self, i, j, a, b, r, off=None, descriptors=[]):
         """
         i, j: indices
         a, b: atomic numbers
@@ -39,7 +39,10 @@ class Local:
         self._b = from_numpy(b)
         self._r = r
         self._m = ones_like(self._i).to(torch.bool)
-        self._lex = torch.tensor([lex3(a) for a in off]).byte()
+        if off is None:
+            self._lex = ones_like(self._i).byte()
+        else:
+            self._lex = torch.tensor([lex3(a) for a in off]).byte()
         self.loc = self
         self.stage(descriptors)
 
@@ -90,6 +93,11 @@ class Local:
 
     def unselect(self):
         self._m = ones_like(self._i).to(torch.bool)
+
+    def as_atoms(self):
+        atoms = (TorchAtoms(numbers=self._a.unique().detach().numpy(), positions=[(0, 0, 0)]) +
+                 TorchAtoms(numbers=self._b.detach().numpy(), positions=self._r.detach().numpy()))
+        return atoms
 
 
 class AtomsChanges:
@@ -324,6 +332,12 @@ class AtomsData:
 
     def __len__(self):
         return len(self.X)
+
+    def atoms_to_firstloc(self):
+        self.X = [atoms[0] for atoms in self.X]
+
+    def firstloc_to_atoms(self):
+        self.X = [loc.as_atoms() for loc in self.X]
 
     def to_traj(self, trajname, mode='w'):
         from ase.io import Trajectory
