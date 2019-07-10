@@ -30,55 +30,61 @@ class SoapKernel(SimilarityKernel):
         if (self.a == loc._a.unique()).all():
             masks = [loc.select(self.a, b, bothways=True) for b in self.b]
             d, grad = self.descriptor(loc._r, masks, grad=True)
+            d = d[None]
             grad = torch.cat([grad, -grad.sum(dim=1, keepdim=True)], dim=1)
             j = torch.cat([loc._j, loc._i.unique()])
-            a = torch.ones(1)
+            if j.numel() > 0:
+                empty = torch.tensor([False])
+            else:
+                empty = torch.tensor([True])
+                del d, grad
+                d = torch.zeros(0, self.dim)
+                grad = torch.zeros(self.dim, 0, 3)
         else:
-            d = torch.zeros(self.dim)
+            empty = torch.tensor([True])
+            d = torch.zeros(0, self.dim)
             grad = torch.zeros(self.dim, 0, 3)
             j = torch.empty(0).long()
-            a = torch.zeros(1)
         # save
-        data = {'value': d[None], 'grad': grad, 'j': j, 'a': a}
+        data = {'value': d, 'grad': grad, 'j': j, 'empty': empty}
         self.save_for_later(loc, data)
 
     def func(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
-        a = self.saved(p, 'a')
-        aa = self.saved(q, 'a')
-        zo = a[:, None]*aa[None]
-        c = self.kern(d, dd) * zo
+        c = self.kern(d, dd)
         return c.sum().view(1, 1)
 
     def leftgrad(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
-        a = self.saved(p, 'a')
-        aa = self.saved(q, 'a')
-        zo = a[:, None]*aa[None]
-        c = self.kern.leftgrad(d, dd) * zo
+        empty = self.saved(p, 'empty')
+        c = self.kern.leftgrad(d, dd)
         g = torch.zeros(p.natoms, 3)
+        _i = 0
         for i, loc in enumerate(p):
-            grad = self.saved(loc, 'grad')
-            j = self.saved(loc, 'j')
-            t = (c[:, i][..., None, None]*grad[:, None]).sum(dim=(0, 1))
-            g = g.index_add(0, j, t)
+            if not empty[i]:
+                grad = self.saved(loc, 'grad')
+                j = self.saved(loc, 'j')
+                t = (c[:, _i][..., None, None]*grad[:, None]).sum(dim=(0, 1))
+                g = g.index_add(0, j, t)
+                _i += 1
         return g.view(-1, 1)
 
     def rightgrad(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
-        a = self.saved(p, 'a')
-        aa = self.saved(q, 'a')
-        zo = a[:, None]*aa[None]
-        c = self.kern.rightgrad(d, dd) * zo
-        g = torch.zeros(p.natoms, 3)
+        empty = self.saved(q, 'empty')
+        c = self.kern.rightgrad(d, dd)
+        g = torch.zeros(q.natoms, 3)
+        _i = 0
         for i, loc in enumerate(q):
-            grad = self.saved(loc, 'grad')
-            j = self.saved(loc, 'j')
-            t = (c[..., i][..., None, None]*grad[:, None]).sum(dim=(0, 1))
-            g = g.index_add(0, j, t)
+            if not empty[i]:
+                grad = self.saved(loc, 'grad')
+                j = self.saved(loc, 'j')
+                t = (c[..., _i][..., None, None]*grad[:, None]).sum(dim=(0, 1))
+                g = g.index_add(0, j, t)
+                _i += 1
         return g.view(1, -1)
 
     def gradgrad(self, p, q):
@@ -115,7 +121,9 @@ def test_grad():
 
     b = TorchAtoms(positions=positions, numbers=3*[10]+3*[18]+[10], cell=cell,
                    pbc=True, cutoff=3.0, descriptors=[soap])
-    a = TorchAtoms(positions=positions, numbers=2*[10, 18, 10]+[18], cell=cell,
+    # make natoms different in a, b. P.S. add an isolated atom.
+    _pos = np.concatenate([positions, [[0., 0, 0]]])
+    a = TorchAtoms(positions=_pos, numbers=2*[10, 18, 10]+[18, 10], cell=cell,
                    pbc=True, cutoff=3.0, descriptors=[soap])
     a.update(posgrad=True, forced=True)
     b.update(posgrad=True, forced=True)
