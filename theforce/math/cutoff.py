@@ -22,13 +22,17 @@ class PairCut(Module):
     def state(self):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
-    def forward(self, d):
+    def forward(self, d, grad=True):
         step = torch.where(d < self.rc, torch.ones_like(d),
                            torch.zeros_like(d))
-        f, g = self.func_and_grad(d)
-        return step*f, step*g
+        f = self.func_and_grad(d, grad=grad)
+        if grad:
+            f, g = f
+            return step*f, step*g
+        else:
+            return step*f
 
-    def func_and_grad(self, d):
+    def func_and_grad(self, d, grad=True):
         raise NotImplementedError('func_and_grad')
 
 
@@ -38,8 +42,11 @@ class PolyCut(PairCut):
         super().__init__(cutoff)
         self.n = n
 
-    def func_and_grad(self, d):
-        return (1.-d/self.rc)**self.n, -self.n*(1.-d/self.rc)**(self.n-1)/self.rc
+    def func_and_grad(self, d, grad=True):
+        if grad:
+            return (1.-d/self.rc)**self.n, -self.n*(1.-d/self.rc)**(self.n-1)/self.rc
+        else:
+            return (1.-d/self.rc)**self.n
 
     @property
     def state_args(self):

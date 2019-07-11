@@ -15,8 +15,11 @@ class RepulsiveCore(Module):
         super().__init__()
         self.eta = eta
 
-    def forward(self, d):
-        return 1./d**self.eta, -self.eta/d**(self.eta+1)
+    def forward(self, d, grad=True):
+        if grad:
+            return 1./d**self.eta, -self.eta/d**(self.eta+1)
+        else:
+            return 1./d**self.eta
 
     @property
     def state_args(self):
@@ -37,8 +40,11 @@ class ParamedRepulsiveCore(Module):
         self.lb = lb
         self.beta = beta
 
-    def forward(self, d):
-        return self.z/d**self.eta, -self.eta*self.z/d**(self.eta+1)
+    def forward(self, d, grad=True):
+        if grad:
+            return self.z/d**self.eta, -self.eta*self.z/d**(self.eta+1)
+        else:
+            return self.z/d**self.eta
 
     @property
     def eta(self):
@@ -84,10 +90,15 @@ class Product(Module):
             if hasattr(a, 'params'):
                 self.params += a.params
 
-    def forward(self, d):
-        f, df = self.f(d)
-        g, dg = self.g(d)
-        return f*g, df*g + f*dg
+    def forward(self, d, grad=True):
+        f = self.f(d, grad=grad)
+        g = self.g(d, grad=grad)
+        if grad:
+            f, df = f
+            g, dg = g
+            return f*g, df*g + f*dg
+        else:
+            return f*g
 
     @property
     def state_args(self):
