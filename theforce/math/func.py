@@ -157,7 +157,7 @@ class Div(Func):
 
 class Real(Func):
 
-    def __init__(self, r=0.0, rg=False):
+    def __init__(self, r=1e-6, rg=False):
         super().__init__()
         self.r = torch.as_tensor(r)
         self.r.requires_grad = rg

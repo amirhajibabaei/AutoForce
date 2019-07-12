@@ -5,10 +5,9 @@
 
 
 import torch
-from torch.nn import Module
+from theforce.math.func import Func
 
-
-class PairCut(Module):
+class PairCut(Func):
 
     def __init__(self, cutoff):
         super().__init__()
