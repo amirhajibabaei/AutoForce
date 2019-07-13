@@ -30,6 +30,9 @@ class Func(Module):
     def state(self):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
+    def __repr__(self):
+        return self.state
+
     def __add__(self, other):
         return Add(self, other)
 
@@ -85,6 +88,10 @@ class Add(Func):
     def state_args(self):
         return '{}, {}'.format(self.f.state, self.g.state)
 
+    @property
+    def state(self):
+        return '({}+{})'.format(self.f.state, self.g.state)
+
 
 class Sub(Func):
 
@@ -107,6 +114,10 @@ class Sub(Func):
     @property
     def state_args(self):
         return '{}, {}'.format(self.f.state, self.g.state)
+
+    @property
+    def state(self):
+        return '({}-{})'.format(self.f.state, self.g.state)
 
 
 class Mul(Func):
@@ -131,6 +142,10 @@ class Mul(Func):
     def state_args(self):
         return '{}, {}'.format(self.f.state, self.g.state)
 
+    @property
+    def state(self):
+        return '{}*{}'.format(self.f.state, self.g.state)
+
 
 class Div(Func):
 
@@ -153,6 +168,10 @@ class Div(Func):
     @property
     def state_args(self):
         return '{}, {}'.format(self.f.state, self.g.state)
+
+    @property
+    def state(self):
+        return '{}/{}'.format(self.f.state, self.g.state)
 
 
 class Real(Func):
@@ -214,7 +233,7 @@ class Negative(Func):
         return '{}, rg={}'.format(-_positive(self._r.data), self._r.requires_grad)
 
 
-class Pow(Func):
+class Pow(Func):  # TODO: Func**Func
 
     def __init__(self, f=I(), n=1):
         super().__init__()
@@ -233,6 +252,13 @@ class Pow(Func):
     @property
     def state_args(self):
         return 'f={}, n={}'.format(self.f.state, self.n)
+
+    @property
+    def state(self):
+        if self.n < 0:
+            return '{}**({})'.format(self.f.state, self.n)
+        else:
+            return '{}**{}'.format(self.f.state, self.n)
 
 
 class Exp(Func):
@@ -262,6 +288,7 @@ def test():
     a, b = f(x)
     a.sum().backward()
     print(x.grad.allclose(b))
+    print(eval(f.state).state == f.state)
 
 
 if __name__ == '__main__':
