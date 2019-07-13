@@ -174,13 +174,28 @@ class Div(Func):
         return '{}/{}'.format(self.f.state, self.g.state)
 
 
+class Param:
+    """example: Param(Real, 1.0, 'x')"""
+    _params = {}
+
+    def __new__(cls, _class, r, name, rg=True):
+        try:
+            return Param._params[name]
+        except KeyError:
+            c = _class(r, rg=rg, name=name)
+            Param._params[name] = c
+            return c
+# In Real, Positive, and Negative the "name" kw is included for the benefit pf Param.
+
+
 class Real(Func):
 
-    def __init__(self, r=1e-6, rg=False):
+    def __init__(self, r=1e-6, rg=False, name=None):
         super().__init__()
         self.r = torch.as_tensor(r)
         self.r.requires_grad = rg
         self.params = [self.r]
+        self.name = name
 
     def forward(self, x, grad=True):
         if grad:
@@ -192,15 +207,23 @@ class Real(Func):
     def state_args(self):
         return '{}, rg={}'.format(self.r.data, self.r.requires_grad)
 
+    @property
+    def state(self):
+        if self.name:
+            return "Param({}, {}, name='{}')".format(self.__class__.__name__, self.state_args, self.name)
+        else:
+            return super().state
+
 
 class Positive(Func):
 
-    def __init__(self, r=1.0, rg=False):
+    def __init__(self, r=1.0, rg=False, name=None):
         super().__init__()
         assert r > 0.0
         self._r = _free(torch.as_tensor(r))
         self._r.requires_grad = rg
         self.params = [self._r]
+        self.name = name
 
     def forward(self, x, grad=True):
         if grad:
@@ -212,15 +235,23 @@ class Positive(Func):
     def state_args(self):
         return '{}, rg={}'.format(_positive(self._r.data), self._r.requires_grad)
 
+    @property
+    def state(self):
+        if self.name:
+            return "Param({}, {}, name='{}')".format(self.__class__.__name__, self.state_args, self.name)
+        else:
+            return super().state
+
 
 class Negative(Func):
 
-    def __init__(self, r=-1.0, rg=False):
+    def __init__(self, r=-1.0, rg=False, name=None):
         super().__init__()
         assert r < 0.0
         self._r = _free(torch.as_tensor(-r))
         self._r.requires_grad = rg
         self.params = [self._r]
+        self.name = name
 
     def forward(self, x, grad=True):
         if grad:
@@ -231,6 +262,13 @@ class Negative(Func):
     @property
     def state_args(self):
         return '{}, rg={}'.format(-_positive(self._r.data), self._r.requires_grad)
+
+    @property
+    def state(self):
+        if self.name:
+            return "Param({}, {}, name='{}')".format(self.__class__.__name__, self.state_args, self.name)
+        else:
+            return super().state
 
 
 class Pow(Func):  # TODO: Func**Func
@@ -289,6 +327,14 @@ def test():
     a.sum().backward()
     print(x.grad.allclose(b))
     print(eval(f.state).state == f.state)
+
+    d = Real(1.)
+    print(id(eval(d.state)) != id(d))
+
+    a = Param(Real, 1.0, 'x')
+    b = Param(Positive, 1.0, 'y')
+    c = Param(Negative, -1.0, 'z')
+    print([id(eval(v.state)) == id(v) for v in (a, b, c)])
 
 
 if __name__ == '__main__':
