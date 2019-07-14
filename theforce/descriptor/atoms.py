@@ -349,6 +349,14 @@ class AtomsData:
     def pick_random(self, n):
         self.X = [self._X[k] for k in torch.randperm(len(self._X))[:n]]
 
+    def __add__(self, other):
+        if other.__class__ == AtomsData:
+            return AtomsData(X=self.X+other.X)
+        elif other.__class__ == TorchAtoms or other.__class__ == Local:
+            return AtomsData(X=self.X+[other])
+        elif other.__class__ == list:
+            return AtomsData(X=self.X+other)
+
 
 def diatomic(numbers, distances, pbc=False, cell=None):
     from theforce.util.util import iterable
