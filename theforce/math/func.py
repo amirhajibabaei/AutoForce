@@ -43,17 +43,22 @@ class Func(Module):
         if issubclass(type(other), Func):
             return Mul(self, other)
         else:
-            """numbers, tensors, etc"""
-            return Times(self, other)
+            if isinstance(self, Times):
+                return Times(self.f, self.r*other)
+            else:
+                return Times(self, other)
 
     def __rmul__(self, other):
-        return self*other
+        return self.__mul__(other)
 
     def __truediv__(self, other):
         if issubclass(type(other), Func):
             return Div(self, other)
         else:
-            return Times(self, 1./other)
+            if isinstance(self, Times):
+                return Times(self.f, self.r/other)
+            else:
+                return Times(self, 1./other)
 
     def __pow__(self, n):
         return Pow(f=self, n=n)
@@ -175,8 +180,8 @@ class Times(Func):
             return f*self.r
 
     @property
-    def state_args(self):
-        return '{}, {}'.format(self.f.state, self.r)
+    def state(self):
+        return '{}*{}'.format(self.r, self.f.state)
 
 
 class Div(Func):
@@ -356,13 +361,14 @@ def test_func(f):
     x = torch.arange(-1, 3, 0.1, requires_grad=True)
     a, b = f(x)
     a.sum().backward()
+    print(f.state)
     print(x.grad.allclose(b))
     print(eval(f.state).state == f.state)
 
 
 def test():
     test_func(Exp((I()-Real(1.0))**2/Negative(-1/3)))
-    test_func(2*Exp((I()-0.5*Real(1.0))**2)/0.3)
+    test_func(2*Exp((I()-0.5*Real(1.0))**2/0.5))
 
     d = Real(1.)
     print(id(eval(d.state)) != id(d))
