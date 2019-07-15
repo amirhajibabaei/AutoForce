@@ -40,10 +40,20 @@ class Func(Module):
         return Sub(self, other)
 
     def __mul__(self, other):
-        return Mul(self, other)
+        if issubclass(type(other), Func):
+            return Mul(self, other)
+        else:
+            """numbers, tensors, etc"""
+            return Times(self, other)
+
+    def __rmul__(self, other):
+        return self*other
 
     def __truediv__(self, other):
-        return Div(self, other)
+        if issubclass(type(other), Func):
+            return Div(self, other)
+        else:
+            return Times(self, 1./other)
 
     def __pow__(self, n):
         return Pow(f=self, n=n)
@@ -145,6 +155,28 @@ class Mul(Func):
     @property
     def state(self):
         return '{}*{}'.format(self.f.state, self.g.state)
+
+
+class Times(Func):
+    """func*number"""
+
+    def __init__(self, f, r):
+        super().__init__()
+        self.f = f
+        self.params = f.params
+        self.r = r
+
+    def forward(self, x, grad=True):
+        f = self.f(x, grad=grad)
+        if grad:
+            f, g = f
+            return f*self.r, g*self.r
+        else:
+            return f*self.r
+
+    @property
+    def state_args(self):
+        return '{}, {}'.format(self.f.state, self.r)
 
 
 class Div(Func):
@@ -320,13 +352,17 @@ class Exp(Func):
         return 'f={}'.format(self.f.state)
 
 
-def test():
-    f = Exp((I()-Real(1.0))**2/Negative(-1/3))
+def test_func(f):
     x = torch.arange(-1, 3, 0.1, requires_grad=True)
     a, b = f(x)
     a.sum().backward()
     print(x.grad.allclose(b))
     print(eval(f.state).state == f.state)
+
+
+def test():
+    test_func(Exp((I()-Real(1.0))**2/Negative(-1/3)))
+    test_func(2*Exp((I()-0.5*Real(1.0))**2)/0.3)
 
     d = Real(1.)
     print(id(eval(d.state)) != id(d))
