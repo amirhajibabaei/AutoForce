@@ -10,6 +10,7 @@ from theforce.math.ylm import Ylm
 from torch.nn import Module, Parameter
 from math import factorial as fac
 from theforce.regression.algebra import positive, free_form
+from theforce.math.func import I, Exp
 
 
 class AbsSeriesSoap(Module):
@@ -63,24 +64,16 @@ class AbsSeriesSoap(Module):
 
 
 class RealSeriesSoap(Module):
-    """
-    Let s = atomic_unit,
-    if radial is e^{-0.5*(r/s)^2}, then this function will return 
-    the exact descriptor vector (with indices n, n', l) obtained from
-    series expansion of the modified Bessel function of the first kind
-    in smooth overlap of atomic positions (SOAP).
-    We call this approach "Series Expansion SOAP" or SE-SOAP.
-    To understand meaning of atomic_unit, density of an atom (centered 
-    at x) in space (at r) is described as: e^(-(|r-x|/s)^2)
-    Cutoff is controlled from outside this function through radial.
-    """
 
-    def __init__(self, lmax, nmax, radial, atomic_unit=1.5):
-        """
-        The optimum value of atomic_unit depends on the radial function.
-        """
+    def __init__(self, lmax, nmax, radial, atomic_unit=None):
+        """radial: usually a cutoff function, should have an rc attr."""
         super().__init__()
-        self.abs = AbsSeriesSoap(lmax, nmax, radial, unit=atomic_unit)
+
+        self.radial = radial
+        if atomic_unit is None:
+            atomic_unit = radial.rc/3
+        R = Exp(-0.5*I()**2/atomic_unit**2)*radial
+        self.abs = AbsSeriesSoap(lmax, nmax, R, unit=atomic_unit)
 
         a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
                            for l in range(lmax+1)] for n in range(nmax+1)])
@@ -101,7 +94,7 @@ class RealSeriesSoap(Module):
     @property
     def state_args(self):
         return "{}, {}, {}, atomic_unit={}".format(self.abs.ylm.lmax, self.abs.nmax,
-                                                   self.abs.radial.state, self.abs.unit)
+                                                   self.radial.state, self.abs.unit)
 
     @property
     def state(self):

@@ -12,7 +12,7 @@ import torch
 
 class SoapKernel(SimilarityKernel):
 
-    def __init__(self, kernel, a, b, lmax, nmax, radial, atomic_unit=1.5):
+    def __init__(self, kernel, a, b, lmax, nmax, radial, atomic_unit=None):
         super().__init__(kernel)
         self.a = a
         self.b = sorted(iterable(b))
