@@ -94,6 +94,13 @@ class SoapKernel(SimilarityKernel):
         raise NotImplementedError('Not defined yet')
 
 
+class NormedSoapKernel(SoapKernel):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.descriptor = NormalizedSoap(self.descriptor)
+
+
 def test_grad():
     from theforce.descriptor.atoms import namethem
     from theforce.math.cutoff import PolyCut
@@ -106,7 +113,8 @@ def test_grad():
     # create kernel
     kern = Positive(1.0) * Normed(DotProd())**4
     #kern = RBF()
-    soap = SoapKernel(kern, 10, (18, 10), 2, 2, PolyCut(3.0))
+    #soap = SoapKernel(kern, 10, (18, 10), 2, 2, PolyCut(3.0))
+    soap = NormedSoapKernel(DotProd()**4, 10, (18, 10), 2, 2, PolyCut(3.0))
     namethem([soap])
 
     # create atomic systems
