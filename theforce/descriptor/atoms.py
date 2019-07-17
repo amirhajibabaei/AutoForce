@@ -11,6 +11,7 @@ from ase.atoms import Atoms
 from ase.neighborlist import NeighborList
 from ase.calculators.calculator import PropertyNotImplementedError
 import copy
+import warnings
 
 
 def lex3(x):
@@ -403,6 +404,8 @@ def sample_atoms(file, size=-1, seed=None, chp=None):
         if chp:
             with open(chp, 'w') as ch:
                 ch.write('{} {} {}'.format(file, size, seed))
+        if size > len(traj):
+            warnings.warn('size > len({})'.format(file))
         shuffle = _np.random.permutation(len(traj))[:size]
         return AtomsData(X=[TorchAtoms(ase_atoms=traj[k]) for k in shuffle])
 
@@ -419,6 +422,7 @@ def sample_locals(file, cutoff=None, size=-1, seed=None, chp=None):
     same as sample_atoms with additional cutoff keyword.
     cutoff is required unless file is '.chp' file.
     """
+    warnings.warn('sample_locals should not be used because it is inefficient!')
     import numpy as _np
     from ase.io import Trajectory
     from theforce.descriptor.atoms import AtomsData, TorchAtoms
