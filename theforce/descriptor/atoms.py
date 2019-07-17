@@ -414,6 +414,37 @@ def sample_atoms(file, size=-1, seed=None, chp=None):
         raise NotImplementedError('format {} is not recognized'.format(file))
 
 
+def sample_locals(file, cutoff=None, size=-1, seed=None, chp=None):
+    """
+    same as sample_atoms with additional cutoff keyword.
+    cutoff is required unless file is '.chp' file.
+    """
+    import numpy as _np
+    from ase.io import Trajectory
+    from theforce.descriptor.atoms import AtomsData, TorchAtoms
+    if file.endswith('.traj'):
+        traj = Trajectory(file)
+        if not seed:
+            seed = _np.random.randint(2**32)
+        _np.random.seed(seed)
+        if chp:
+            with open(chp, 'w') as ch:
+                ch.write('{} {} {} {}'.format(file, cutoff, size, seed))
+        shuffle = _np.random.permutation(len(traj))[:size]
+        locs = []
+        for k in shuffle:
+            atoms = TorchAtoms(ase_atoms=traj[k], cutoff=cutoff)
+            locs += [_np.random.choice(atoms).detach()]
+            del atoms
+        return AtomsData(X=locs)
+    elif file.endswith('.chp'):
+        with open(file, 'r') as ch:
+            file, cutoff, size, seed = ch.readline().split()
+        return sample_locals(file, eval(cutoff), size=eval(size), seed=eval(seed))
+    else:
+        raise NotImplementedError('format {} is not recognized'.format(file))
+
+
 def diatomic(numbers, distances, pbc=False, cell=None):
     from theforce.util.util import iterable
     from itertools import combinations
