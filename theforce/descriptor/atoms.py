@@ -249,6 +249,13 @@ class TorchAtoms(Atoms):
                       pbc=self.pbc, numbers=self.numbers)  # TODO: e, f
         return atoms
 
+    def as_local(self):
+        r = self.positions[1:] - self.positions[0]
+        a, b = np.broadcast_arrays(self.numbers[0], self.numbers[1:])
+        _i = np.arange(self.natoms)
+        i, j = np.broadcast_arrays(_i[0], _i[1:])
+        return Local(i, j, a, b, r)
+
     def shake(self, beta=0.05, update=True):
         trans = np.random.laplace(0., beta, size=self.positions.shape)
         self.translate(trans)
