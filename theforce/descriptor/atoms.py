@@ -99,6 +99,23 @@ class Local:
                  TorchAtoms(numbers=self._b.detach().numpy(), positions=self._r.detach().numpy()))
         return atoms
 
+    def detach(self, keepids=False):
+        a = self._a.detach().numpy()
+        b = self._b.detach().numpy()
+        r = self._r.clone()
+        if keepids:
+            i = self._i.detach().numpy()
+            j = self._j.detach().numpy()
+        else:
+            i = np.zeros(a.shape[0], dtype=np.int)
+            j = np.arange(1, a.shape[0]+1, dtype=np.int)
+        return Local(i, j, a, b, r)
+
+    def __eq__(self, other):
+        return all([(self._i == other._i).all(), (self._j == other._j).all(),
+                    (self._a == other._a).all(), (self._b == other._b).all(),
+                    (self._r == other._r).all(), (self._lex == other._lex).all()])
+
 
 class AtomsChanges:
 
@@ -250,7 +267,9 @@ class TorchAtoms(Atoms):
         return atoms
 
     def as_local(self):
-        r = self.positions[1:] - self.positions[0]
+        """ As the inverse of Local.as_atoms """
+        # positions[0] should to be [0, 0, 0]
+        r = torch.as_tensor(self.positions[1:])
         a, b = np.broadcast_arrays(self.numbers[0], self.numbers[1:])
         _i = np.arange(self.natoms)
         i, j = np.broadcast_arrays(_i[0], _i[1:])
@@ -341,7 +360,7 @@ class AtomsData:
         return len(self.X)
 
     def atoms_to_firstloc(self):
-        self.X = [atoms[0] for atoms in self.X]
+        self.X = [atoms[0].detach() for atoms in self.X]
 
     def firstloc_to_atoms(self):
         self.X = [loc.as_atoms() for loc in self.X]
@@ -400,6 +419,12 @@ def example():
     atoms = TorchAtoms(positions=xyz, numbers=numbers,
                        cutoff=3.0, descriptors=kerns)
     atoms.copy()
+
+    for loc in atoms:
+        print(loc.as_atoms().as_local() == loc.detach())
+
+    empty = TorchAtoms(positions=[(0, 0, 0)], cutoff=3.)
+    empty[0].detach()._r
 
 
 if __name__ == '__main__':
