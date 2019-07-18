@@ -295,7 +295,6 @@ class AtomsData:
             self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
                        for atoms in t]
             t.close()
-        self._X = self.X
         self.posgrad = posgrad
         self.cellgrad = cellgrad
 
@@ -374,7 +373,9 @@ class AtomsData:
         t.close()
 
     def pick_random(self, n):
-        self.X = [self._X[k] for k in torch.randperm(len(self._X))[:n]]
+        if n > len(self):
+            warnings.warn('n > len(AtomsData) in pick_random')
+        return AtomsData(X=[self[k] for k in torch.randperm(len(self))[:n]])
 
     def __add__(self, other):
         if other.__class__ == AtomsData:
