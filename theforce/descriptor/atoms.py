@@ -288,6 +288,7 @@ class AtomsData:
     def __init__(self, X=None, traj=None, posgrad=False, cellgrad=False, **kwargs):
         if X:
             self.X = X
+            assert self.check_content()
         elif traj:
             self.X = []
             from ase.io import Trajectory
@@ -297,6 +298,9 @@ class AtomsData:
             t.close()
         self.posgrad = posgrad
         self.cellgrad = cellgrad
+
+    def check_content(self):
+        return all([atoms.__class__ == TorchAtoms for atoms in self])
 
     def apply(self, operation, *args, **kwargs):
         for atoms in self.X:
@@ -359,12 +363,6 @@ class AtomsData:
     def __len__(self):
         return len(self.X)
 
-    def atoms_to_firstloc(self):
-        self.X = [atoms[0].detach() for atoms in self.X]
-
-    def firstloc_to_atoms(self):
-        self.X = [loc.as_atoms() for loc in self.X]
-
     def to_traj(self, trajname, mode='w'):
         from ase.io import Trajectory
         t = Trajectory(trajname, mode)
@@ -380,10 +378,9 @@ class AtomsData:
     def __add__(self, other):
         if other.__class__ == AtomsData:
             return AtomsData(X=self.X+other.X)
-        elif other.__class__ == TorchAtoms or other.__class__ == Local:
-            return AtomsData(X=self.X+[other])
-        elif other.__class__ == list:
-            return AtomsData(X=self.X+other)
+        else:
+            raise NotImplementedError(
+                'AtomsData + {} is not implemented'.format(other.__class__))
 
 
 def sample_atoms(file, size=-1, chp=None, indices=None):
