@@ -385,34 +385,38 @@ class AtomsData:
             return AtomsData(X=self.X+other)
 
 
-def sample_atoms(file, size=-1, seed=None, chp=None):
+def sample_atoms(file, size=-1, chp=None, indices=None):
     """
     If 
-        A = sample_atomsdata('___.traj', size=_, chp='data.chp')
+        A = sample_atomsdata('atoms.traj', size=n, chp='data.chp')
         B = sample_atomsdata('data.chp')
     then,
-        A = B
+        B = A
     """
-    import numpy as _np
     from ase.io import Trajectory
-    from theforce.descriptor.atoms import AtomsData, TorchAtoms
+
+    # from traj
     if file.endswith('.traj'):
         traj = Trajectory(file)
-        if not seed:
-            seed = _np.random.randint(2**32)
-        _np.random.seed(seed)
-        if chp:
-            with open(chp, 'w') as ch:
-                ch.write('{} {} {}'.format(file, size, seed))
         if size > len(traj):
             warnings.warn('size > len({})'.format(file))
-        shuffle = _np.random.permutation(len(traj))[:size]
-        return AtomsData(X=[TorchAtoms(ase_atoms=traj[k]) for k in shuffle])
+        if indices is None:
+            indices = np.random.permutation(len(traj))[:size].tolist()
+        if chp:
+            with open(chp, 'w') as ch:
+                ch.write(file+'\n')
+                for k in indices:
+                    ch.write('{} '.format(k))
+        return AtomsData(X=[TorchAtoms(ase_atoms=traj[k]) for k in indices])
 
+    # from checkpoint
     elif file.endswith('.chp'):
         with open(file, 'r') as ch:
-            file, size, seed = ch.readline().split()
-        return sample_atoms(file, size=eval(size), seed=eval(seed))
+            _file = ch.readline().strip()
+            _indices = [int(i) for i in ch.readline().split()]
+        return sample_atoms(_file, indices=_indices)
+
+    # other
     else:
         raise NotImplementedError('format {} is not recognized'.format(file))
 
