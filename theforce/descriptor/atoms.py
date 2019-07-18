@@ -13,6 +13,7 @@ from ase.calculators.calculator import PropertyNotImplementedError
 import copy
 import warnings
 from theforce.util.util import iterable
+import random
 
 
 def lex3(x):
@@ -401,16 +402,42 @@ class AtomsData:
         return self
 
     def to_locals(self, keepids=False):
-        return LocalsData([loc.detach(keepids=False) for atoms in self for loc in atoms])
+        return LocalsData([loc.detach(keepids=keepids) for atoms in self for loc in atoms])
+
+    def sample_locals(self, size, keepids=False):
+        return LocalsData([random.choice(random.choice(self)).detach(keepids=keepids)
+                           for _ in range(size)])
 
 
 class LocalsData:
 
-    def __init__(self, X):
-        self.X = []
-        for loc in X:
-            assert loc.__class__ == Local
-            self.X += [loc]
+    def __init__(self, X=None, traj=None):
+        if X:
+            self.X = []
+            for loc in X:
+                assert loc.__class__ == Local
+                self.X += [loc]
+        elif traj:
+            from ase.io import Trajectory
+            t = Trajectory(traj, 'r')
+            self.X = []
+            for atoms in t:
+                tatoms = TorchAtoms(ase_atoms=atoms)
+                if not np.allclose(tatoms.positions[0], np.zeros((3,))):
+                    raise RuntimeError
+                self.X += [tatoms.as_local()]
+            t.close()
+
+    def stage(self, descriptors):
+        for loc in self:
+            loc.stage(descriptors)
+
+    def to_traj(self, trajname, mode='w'):
+        from ase.io import Trajectory
+        t = Trajectory(trajname, mode)
+        for loc in self:
+            t.write(loc.as_atoms())
+        t.close()
 
     def __iter__(self):
         for locs in self.X:
@@ -422,16 +449,14 @@ class LocalsData:
     def __len__(self):
         return len(self.X)
 
-    def append(self, others):
+    def append(self, others, detach=False):
         if id(self) == id(others):
             _others = others.X[:]
-        # elif others.__class__ == TorchAtoms:
-        #    _others = [loc.detach() for loc in others]
         else:
             _others = iterable(others)
-        for locs in _others:
-            assert locs.__class__ == Local
-            self.X += [locs]
+        for loc in _others:
+            assert loc.__class__ == Local
+            self.X += [loc.detach() if detach else loc]
 
     def __add__(self, other):
         if other.__class__ == LocalsData:
