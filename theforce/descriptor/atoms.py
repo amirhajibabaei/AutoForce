@@ -311,6 +311,10 @@ class AtomsData:
         self.apply('update', cutoff=cutoff,
                    descriptors=gpp.kern.kernels, forced=True)
 
+    def update(self, *args, **kwargs):
+        for atoms in self.X:
+            atoms.update(*args, **kwargs)
+
     def update_nl_if_requires_grad(self, descriptors=None, forced=False):
         if self.trainable:
             for atoms in self.X:
@@ -388,6 +392,50 @@ class AtomsData:
     def __add__(self, other):
         if other.__class__ == AtomsData:
             return AtomsData(X=self.X+other.X)
+        else:
+            raise NotImplementedError(
+                'AtomsData + {} is not implemented'.format(other.__class__))
+
+    def __iadd__(self, others):
+        self.append(others)
+        return self
+
+    def to_locals(self, keepids=False):
+        return LocalsData([loc.detach(keepids=False) for atoms in self for loc in atoms])
+
+
+class LocalsData:
+
+    def __init__(self, X):
+        self.X = []
+        for loc in X:
+            assert loc.__class__ == Local
+            self.X += [loc]
+
+    def __iter__(self):
+        for locs in self.X:
+            yield locs
+
+    def __getitem__(self, k):
+        return self.X[k]
+
+    def __len__(self):
+        return len(self.X)
+
+    def append(self, others):
+        if id(self) == id(others):
+            _others = others.X[:]
+        # elif others.__class__ == TorchAtoms:
+        #    _others = [loc.detach() for loc in others]
+        else:
+            _others = iterable(others)
+        for locs in _others:
+            assert locs.__class__ == Local
+            self.X += [locs]
+
+    def __add__(self, other):
+        if other.__class__ == LocalsData:
+            return LocalsData(X=self.X+other.X)
         else:
             raise NotImplementedError(
                 'AtomsData + {} is not implemented'.format(other.__class__))
