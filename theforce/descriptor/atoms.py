@@ -12,6 +12,7 @@ from ase.neighborlist import NeighborList
 from ase.calculators.calculator import PropertyNotImplementedError
 import copy
 import warnings
+from theforce.util.util import iterable
 
 
 def lex3(x):
@@ -375,12 +376,25 @@ class AtomsData:
             warnings.warn('n > len(AtomsData) in pick_random')
         return AtomsData(X=[self[k] for k in torch.randperm(len(self))[:n]])
 
+    def append(self, others):
+        if id(self) == id(others):
+            _others = others.X[:]
+        else:
+            _others = iterable(others, ignore=TorchAtoms)
+        for atoms in _others:
+            assert atoms.__class__ == TorchAtoms
+            self.X += [atoms]
+
     def __add__(self, other):
         if other.__class__ == AtomsData:
             return AtomsData(X=self.X+other.X)
         else:
             raise NotImplementedError(
                 'AtomsData + {} is not implemented'.format(other.__class__))
+
+    def __iadd__(self, others):
+        self.append(others)
+        return self
 
 
 def sample_atoms(file, size=-1, chp=None, indices=None):
