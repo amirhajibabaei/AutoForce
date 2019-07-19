@@ -9,8 +9,6 @@ import os
 import random
 import numpy as np
 import torch
-torch.set_default_tensor_type(torch.DoubleTensor)
-torch.set_default_dtype(torch.double)
 
 
 def read_params(**kwargs):
@@ -79,10 +77,12 @@ def potential_energy_surface(data=None, inducing=None, train=[0], **kwargs):
     if data is None:
         data = sample_atoms(params['path_data'], size=params['ndata'],
                             chp=params['path_data_chp'])
+    params['ndata'] = len(data)
     data.update(cutoff=params['cutoff'])
     if inducing is None:
         inducing = data.sample_locals(params['nlocals'])
     inducing.to_traj(params['path_inducing'])
+    params['nlocals'] = len(inducing)
 
     # numbers and pairs
     if params['numbers'] is None:
