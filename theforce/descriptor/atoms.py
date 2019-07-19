@@ -427,6 +427,7 @@ class LocalsData:
                     raise RuntimeError
                 self.X += [tatoms.as_local()]
             t.close()
+        self.trainable = False
 
     def stage(self, descriptors):
         for loc in self:
