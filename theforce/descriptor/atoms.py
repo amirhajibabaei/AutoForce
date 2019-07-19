@@ -304,6 +304,14 @@ class AtomsData:
     def check_content(self):
         return all([atoms.__class__ == TorchAtoms for atoms in self])
 
+    def numbers_set(self):
+        _num = set()
+        for atoms in self:
+            for n in set(atoms.numbers):
+                _num.add(n)
+        numbers = sorted(list(_num))
+        return numbers
+
     def apply(self, operation, *args, **kwargs):
         for atoms in self.X:
             getattr(atoms, operation)(*args, **kwargs)
