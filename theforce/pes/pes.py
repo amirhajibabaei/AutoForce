@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 import itertools
@@ -62,7 +62,7 @@ def read_params(**kwargs):
     return params
 
 
-def potential_energy_surface(train=[0], **kwargs):
+def potential_energy_surface(data=None, inducing=None, train=[0], **kwargs):
     from theforce.descriptor.atoms import AtomsData, LocalsData, sample_atoms
     from theforce.regression.gppotential import GaussianProcessPotential
     from theforce.regression.gppotential import PosteriorPotential
@@ -76,10 +76,12 @@ def potential_energy_surface(train=[0], **kwargs):
 
     # read params and data
     params = read_params(**kwargs)
-    data = sample_atoms(params['path_data'], size=params['ndata'],
-                        chp=params['path_data_chp'])
+    if data is None:
+        data = sample_atoms(params['path_data'], size=params['ndata'],
+                            chp=params['path_data_chp'])
     data.update(cutoff=params['cutoff'])
-    inducing = data.sample_locals(params['nlocals'])
+    if inducing is None:
+        inducing = data.sample_locals(params['nlocals'])
     inducing.to_traj(params['path_inducing'])
 
     # numbers and pairs
@@ -153,8 +155,4 @@ def potential_energy_surface(train=[0], **kwargs):
             log.write('\nforces R2 score={}'.format(R2_f))
 
     return V
-
-
-if __name__ == '__main__':
-    potential_energy_surface()
 
