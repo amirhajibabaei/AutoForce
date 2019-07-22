@@ -9,7 +9,7 @@ import torch
 from torch import ones_like, as_tensor, from_numpy, cat
 from ase.atoms import Atoms
 from ase.neighborlist import NeighborList
-from ase.calculators.calculator import PropertyNotImplementedError
+from ase.calculators.singlepoint import SinglePointCalculator
 import copy
 import warnings
 from theforce.util.util import iterable
@@ -100,6 +100,9 @@ class Local:
     def as_atoms(self):
         atoms = (TorchAtoms(numbers=self._a.unique().detach().numpy(), positions=[(0, 0, 0)]) +
                  TorchAtoms(numbers=self._b.detach().numpy(), positions=self._r.detach().numpy()))
+        if 'target_energy' in self.__dict__:
+            atoms.set_calculator(
+                SinglePointCalculator(atoms, energy=self.target_energy))
         return atoms
 
     def detach(self, keepids=False):
@@ -191,9 +194,11 @@ class TorchAtoms(Atoms):
             self.target_forces = as_tensor(forces)
         except RuntimeError:
             if ase_atoms is not None and ase_atoms.get_calculator() is not None:
-                self.target_energy = as_tensor(
-                    ase_atoms.get_potential_energy())
-                self.target_forces = as_tensor(ase_atoms.get_forces())
+                if 'energy' in ase_atoms.calc.results:
+                    self.target_energy = as_tensor(
+                        ase_atoms.get_potential_energy())
+                if 'forces' in ase_atoms.calc.results:
+                    self.target_forces = as_tensor(ase_atoms.get_forces())
 
     def build_nl(self, rc):
         self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
@@ -276,7 +281,10 @@ class TorchAtoms(Atoms):
         a, b = np.broadcast_arrays(self.numbers[0], self.numbers[1:])
         _i = np.arange(self.natoms)
         i, j = np.broadcast_arrays(_i[0], _i[1:])
-        return Local(i, j, a, b, r)
+        loc = Local(i, j, a, b, r)
+        if 'target_energy' in self.__dict__:
+            loc.target_energy = self.target_energy
+        return loc
 
     def shake(self, beta=0.05, update=True):
         trans = np.random.laplace(0., beta, size=self.positions.shape)
