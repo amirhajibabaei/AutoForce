@@ -98,7 +98,8 @@ class Local:
         self._m = ones_like(self._i).to(torch.bool)
 
     def as_atoms(self):
-        atoms = (TorchAtoms(numbers=self._a.unique().detach().numpy(), positions=[(0, 0, 0)]) +
+        a = self._a.unique().detach().numpy()
+        atoms = (TorchAtoms(numbers=a, positions=len(a)*[(0, 0, 0)]) +
                  TorchAtoms(numbers=self._b.detach().numpy(), positions=self._r.detach().numpy()))
         if 'target_energy' in self.__dict__:
             atoms.set_calculator(
