@@ -128,7 +128,7 @@ class PairSimilarityKernel(SimilarityKernel):
         for i, loc in enumerate(iterable(p.loc)):
             d = self.saved(loc, 'diag_value')
             grad = self.saved(loc, 'diag_grad')
-            c = self.kern.gradgrad(d, d).squeeze(0).squeeze(1)
+            c = self.kern.gradgrad(d, d).squeeze()
             if self.has_factor:
                 self.recalculate(loc)
                 f = self.saved(loc, 'diag_fac')
