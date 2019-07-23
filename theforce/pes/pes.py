@@ -21,7 +21,7 @@ def read_params(**kwargs):
         'lmax': 2,
         'nmax': 2,
         'exponent': 4,
-        'pairkernel': False,
+        'pairkernel': True,
         'soapkernel': True,
         'test': True,
         'path_data': None,
@@ -101,20 +101,28 @@ def potential_energy_surface(data=None, inducing=None, train=[0], **kwargs):
         log.write('\n')
 
     # Gaussian Process
-    kerns = []
-    if params['pairkernel']:
-        kerns += [PairKernel(RBF(), a, b, factor=PolyCut(params['cutoff']))
-                  for a, b in pairs]
-    if params['soapkernel']:
-        kerns += [SoapKernel(Positive(1.0, requires_grad=True)*Normed(DotProd()**params['exponent']),
-                             atomic_number, params['numbers'], params['lmax'], params['nmax'],
-                             PolyCut(params['cutoff']), atomic_unit=params['atomic_unit'])
-                  for atomic_number in params['numbers']]
-    gp = GaussianProcessPotential(kerns)
-    with open(params['path_log'], 'a') as log:
-        log.write('GP is created and written to {}\n'.format(
-            params['path_gp']))
-    gp.to_file(params['path_gp'], flag='initial state', mode='w')
+    if os.path.isfile(params['path_gp']):
+        with open(params['path_gp'], 'r') as f:
+            gp = eval(f.readlines()[-1])
+            kerns = gp.kern.kernels
+        with open(params['path_log'], 'a') as log:
+            log.write('GP is reconstructed from the last line of {}\n'.format(
+                params['path_gp']))
+    else:
+        kerns = []
+        if params['pairkernel']:
+            kerns += [PairKernel(RBF(), a, b, factor=PolyCut(params['cutoff']))
+                      for a, b in pairs]
+        if params['soapkernel']:
+            kerns += [SoapKernel(Positive(1.0, requires_grad=True)*Normed(DotProd()**params['exponent']),
+                                 atomic_number, params['numbers'], params['lmax'], params['nmax'],
+                                 PolyCut(params['cutoff']), atomic_unit=params['atomic_unit'])
+                      for atomic_number in params['numbers']]
+        gp = GaussianProcessPotential(kerns)
+        with open(params['path_log'], 'a') as log:
+            log.write('GP is created and written to {}\n'.format(
+                params['path_gp']))
+        gp.to_file(params['path_gp'], flag='initial state', mode='w')
 
     # train
     data.update(descriptors=kerns)
@@ -128,7 +136,7 @@ def potential_energy_surface(data=None, inducing=None, train=[0], **kwargs):
         state += steps
         if state > 0:
             gp.to_file(params['path_gp'],
-                       flag='state:{}'.format(state))
+                       flag='state: {}'.format(state))
         # save inducing
         if inducing.trainable:
             raise NotImplementedError(
