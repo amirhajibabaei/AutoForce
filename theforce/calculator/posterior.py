@@ -58,3 +58,26 @@ class PosteriorStressCalculator(Calculator):
         self.results['free_energy'] = self.results['energy']
         self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
 
+
+class PosteriorVarianceCalculator(Calculator):
+    implemented_properties = ['energy', 'forces', 'free_energy']
+
+    def __init__(self, potential, **kwargs):
+        Calculator.__init__(self, **kwargs)
+        self.potential = potential
+
+    def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+        Calculator.calculate(self, atoms, properties, system_changes)
+        self.atoms.update()
+        energy, energy_var = self.potential(
+            [self.atoms], 'energy', variance=True)
+        forces, forces_var = self.potential(
+            [self.atoms], 'forces', variance=True)
+        self.results['energy'] = energy.detach().numpy()[0]
+        self.results['forces'] = forces.detach().numpy()
+        # variances
+        self.results['energy_var'] = energy_var.detach().numpy()[0]
+        self.results['forces_var'] = forces_var.detach().numpy()
+        # NOTE: check if this is correct!
+        self.results['free_energy'] = self.results['energy']
+
