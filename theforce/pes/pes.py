@@ -128,7 +128,7 @@ def potential_energy_surface(data=None, inducing=None, train=[0], **kwargs):
         state += steps
         if state > 0:
             gp.to_file(params['path_gp'],
-                       flag='state:{}'.format(epoch))
+                       flag='state:{}'.format(state))
         # save inducing
         if inducing.trainable:
             raise NotImplementedError(
