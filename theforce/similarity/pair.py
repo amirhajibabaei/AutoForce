@@ -135,7 +135,7 @@ class PairSimilarityKernel(SimilarityKernel):
                 fg = self.saved(loc, 'diag_facgrad')
                 c = (c*(f*f.t()) + fg*fg.t()*self.kern(d, d) +
                      (fg*f.t()*self.kern.rightgrad(d, d)) +
-                     (f*fg.t()*self.kern.leftgrad(d, d)))
+                     (f*fg.t()*self.kern.leftgrad(d, d))).squeeze()
             c = c[..., None] * grad[None, ] * grad[:, None]
             c = c.sum(dim=(0, 1))
             forces += [c]
