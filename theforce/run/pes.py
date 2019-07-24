@@ -23,13 +23,13 @@ def read_params(**kwargs):
         'exponent': 4,
         'pairkernel': True,
         'soapkernel': True,
-        'test': True,
+        'test': False,
         'path_data': None,
         'path_data_chp': 'data.chp',
-        'path_inducing': 'inducing.traj',
-        'path_gp': 'gp.chp',
-        'ndata': -1,
-        'nlocals': 50,
+        'path_inducing': 'inducing.traj',       # None or string
+        'path_gp': 'gp.chp',                    # None or string
+        'ndata': -1,                            # -1 or positive int
+        'nlocals': 50,                          # -1 or positive int
         'path_log': 'log.txt'
     }
 
@@ -60,7 +60,7 @@ def read_params(**kwargs):
     return params
 
 
-def potential_energy_surface(data=None, inducing=None, train=[0], **kwargs):
+def potential_energy_surface(data=None, inducing=None, train=[0], append_log=True, **kwargs):
     from theforce.descriptor.atoms import AtomsData, LocalsData, sample_atoms
     from theforce.regression.gppotential import GaussianProcessPotential
     from theforce.regression.gppotential import PosteriorPotential
@@ -77,11 +77,20 @@ def potential_energy_surface(data=None, inducing=None, train=[0], **kwargs):
     if data is None:
         data = sample_atoms(params['path_data'], size=params['ndata'],
                             chp=params['path_data_chp'])
+        data.update(cutoff=params['cutoff'])
+    else:
+        # if data is given as kwarg, it already should be cutoff-ed.
+        assert len(data[-1]) == data[-1].natoms
     params['ndata'] = len(data)
-    data.update(cutoff=params['cutoff'])
+
+    # inducing
     if inducing is None:
-        inducing = data.sample_locals(params['nlocals'])
-    inducing.to_traj(params['path_inducing'])
+        if params['nlocals'] == -1:
+            inducing = data.to_locals()
+        else:
+            inducing = data.sample_locals(params['nlocals'])
+    if params['path_inducing'] is not None:
+        inducing.to_traj(params['path_inducing'])
     params['nlocals'] = len(inducing)
 
     # numbers and pairs
@@ -95,7 +104,8 @@ def potential_energy_surface(data=None, inducing=None, train=[0], **kwargs):
     pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
              [(a, a) for a in numbers])
 
-    with open(params['path_log'], 'w') as log:
+    mode = 'a' if append_log else 'w'
+    with open(params['path_log'], mode) as log:
         for a, b in params.items():
             log.write('{}: {} \n'.format(a, b))
         log.write('\n')
