@@ -121,7 +121,31 @@ class PairSimilarityKernel(SimilarityKernel):
         return g.view(1, -1)
 
     def gradgrad(self, p, q):
-        raise NotImplementedError('Not defined yet')
+        d1 = self.saved(p, 'value')
+        g1 = self.saved(p, 'grad')
+        i1 = self.saved(p, 'i')
+        j1 = self.saved(p, 'j')
+        d2 = self.saved(q, 'value')
+        g2 = self.saved(q, 'grad')
+        i2 = self.saved(q, 'i')
+        j2 = self.saved(q, 'j')
+        c = self.kern.gradgrad(d1, d2)
+        if self.has_factor:
+            self.recalculate(p)
+            self.recalculate(q)
+            f1 = self.saved(p, 'fac')
+            h1 = self.saved(p, 'facgrad')
+            f2 = self.saved(q, 'fac')
+            h2 = self.saved(q, 'facgrad')
+            c = (c*(f1*f2.t()) + h1*h2.t()*self.kern(d1, d2) +
+                 (h1*f2.t()*self.kern.rightgrad(d1, d2)) +
+                 (f1*h2.t()*self.kern.leftgrad(d1, d2)))
+        c = c.squeeze()[:, None, :, None] * g1[..., None, None] * g2
+        cc = torch.zeros(p.natoms, 3, j2.size(0), 3).index_add(
+            0, j1, c).index_add(0, i1, -c)
+        ccc = torch.zeros(p.natoms, 3, q.natoms, 3).index_add(
+            2, j2, cc).index_add(2, i2, -cc)
+        return ccc.view(p.natoms*3, q.natoms*3)
 
     def gradgraddiag(self, p):
         forces = []
@@ -191,6 +215,73 @@ class PairKernel(DistanceKernel):
             and hasattr(self.factor, 'state') else None)
 
 
+def test():
+    from theforce.descriptor.atoms import namethem
+    from theforce.math.cutoff import PolyCut
+    from theforce.regression.kernel import Positive, DotProd, Normed
+    from theforce.regression.stationary import RBF
+    from theforce.descriptor.atoms import TorchAtoms, AtomsData
+    import numpy as np
+    torch.set_default_tensor_type(torch.DoubleTensor)
+
+    # create kernel
+    kern = PairKernel(RBF(), 18, 10, factor=PolyCut(3.0))
+    kerns = [kern]
+    namethem(kerns)
+
+    cell = np.ones(3)*10
+    positions = np.array([(-1., 0., 0.), (1., 0., 0.),
+                          (0., -1., 0.), (0., 1., 0.),
+                          (0., 0., -1.1), (0., 0., 1.1),
+                          (0., 0., 0.)]) + cell/2
+
+    b = TorchAtoms(positions=positions, numbers=3*[10]+3*[18]+[10], cell=cell,
+                   pbc=True, cutoff=3.0, descriptors=kerns)
+
+    # make natoms different in a, b. P.S. add an isolated atom.
+    _pos = np.concatenate([positions, [[0., 0., 0.], [3., 5., 5.]]])
+    a = TorchAtoms(positions=_pos, numbers=2*[10, 18, 10]+[18, 10, 18], cell=cell,
+                   pbc=True, cutoff=3.0, descriptors=kerns)
+
+    a.update(posgrad=True, forced=True)
+    b.update(posgrad=True, forced=True)
+
+    # left/right-grad
+    kern([a], [b]).backward()
+    test_left = a.xyz.grad.allclose(kern.leftgrad(a, b).view(-1, 3))
+    max_left = (a.xyz.grad - kern.leftgrad(a, b).view(-1, 3)).max()
+    print("leftgrad: {}  \t max diff: {}".format(test_left, max_left))
+    test_right = b.xyz.grad.allclose(kern.rightgrad(a, b).view(-1, 3))
+    max_right = (b.xyz.grad - kern.rightgrad(a, b).view(-1, 3)).max()
+    print("rightgrad: {} \t max diff: {}".format(test_right, max_right))
+
+    # gradgrad-left
+    a.update(posgrad=True, forced=True)
+    b.update(posgrad=True, forced=True)
+    (kern.leftgrad(a, b).view(-1, 3)*a.xyz).sum().backward()
+    v1 = a.xyz.grad.data
+    a.update(posgrad=True, forced=True)
+    b.update(posgrad=True, forced=True)
+    (kern.gradgrad(a, b)*a.xyz.view(-1)[:, None]).sum().backward()
+    v2 = a.xyz.grad.data
+    print('gradgrad-left: {}'.format(v1.allclose(v2)))
+
+    # gradgrad-right
+    a.update(posgrad=True, forced=True)
+    b.update(posgrad=True, forced=True)
+    (kern.rightgrad(a, b).view(-1, 3)*b.xyz).sum().backward()
+    v1 = b.xyz.grad.data
+    a.update(posgrad=True, forced=True)
+    b.update(posgrad=True, forced=True)
+    (kern.gradgrad(a, b)*b.xyz.view(-1)[None]).sum().backward()
+    v2 = b.xyz.grad.data
+    print('gradgrad-right: {}'.format(v1.allclose(v2)))
+
+    # gradgraddiag
+    test_diag = kern.gradgrad(a, a).diag().allclose(kern.gradgraddiag(a))
+    print('gradgraddiag: {}'.format(test_diag))
+
+
 def example():
     from torch import tensor
     from theforce.regression.stationary import RBF
@@ -210,5 +301,6 @@ def example():
 
 
 if __name__ == '__main__':
+    test()
     example()
 
