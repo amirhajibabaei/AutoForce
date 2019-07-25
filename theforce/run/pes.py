@@ -24,6 +24,7 @@ def read_params(**kwargs):
         'exponent': 4,
         'pairkernel': True,
         'soapkernel': True,
+        'error': 0.05
         # data
         'path_data': None,
         'path_data_chp': None,
@@ -142,7 +143,8 @@ def potential_energy_surface(data=None, inducing=None, train=0, append_log=True,
             log.write('lmax: {}\n nmax: {}\nexponent: {}\natomic_unit: {}\n'.format(
                 params['lmax'], params['nmax'], params['exponent'], params['atomic_unit']))
 
-        gp = GaussianProcessPotential(kerns)
+        gp = GaussianProcessPotential(
+            kerns, noise=White(signal=params['error'], requires_grad=True))
         if params['path_gp_chp']:
             gp.to_file(params['path_gp_chp'], flag='initial state', mode='w')
             log.write('path_gp_chp: {} (write)\n'.format(
