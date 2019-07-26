@@ -24,7 +24,7 @@ def read_params(**kwargs):
         'exponent': 4,
         'pairkernel': True,
         'soapkernel': True,
-        'error': 0.05,
+        'noise': 0.01,
         # data
         'path_data': None,
         'path_data_chp': None,
@@ -64,7 +64,7 @@ def read_params(**kwargs):
     return params
 
 
-def potential_energy_surface(data=None, inducing=None, train=0, append_log=True, **kwargs):
+def potential_energy_surface(data=None, inducing=None, hypernoise=True, train=0, append_log=True, **kwargs):
     from theforce.descriptor.atoms import AtomsData, LocalsData, sample_atoms
     from theforce.regression.gppotential import GaussianProcessPotential
     from theforce.regression.gppotential import PosteriorPotential
@@ -146,7 +146,7 @@ def potential_energy_surface(data=None, inducing=None, train=0, append_log=True,
                 params['lmax'], params['nmax'], params['exponent'], params['atomic_unit']))
 
         gp = GaussianProcessPotential(
-            kerns, noise=White(signal=params['error'], requires_grad=True))
+            kerns, noise=White(signal=params['noise'], requires_grad=hypernoise))
         if params['path_gp_chp']:
             gp.to_file(params['path_gp_chp'], flag='initial state', mode='w')
             log.write('path_gp_chp: {} (write)\n'.format(
