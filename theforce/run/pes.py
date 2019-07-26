@@ -24,7 +24,7 @@ def read_params(**kwargs):
         'exponent': 4,
         'pairkernel': True,
         'soapkernel': True,
-        'error': 0.05
+        'error': 0.05,
         # data
         'path_data': None,
         'path_data_chp': None,
@@ -80,19 +80,21 @@ def potential_energy_surface(data=None, inducing=None, train=0, append_log=True,
     # read params
     params = read_params(**kwargs)
     log = open(params['path_log'], 'a' if append_log else 'w')
-    log.write('{}\n'.format(37*'*'))
+    log.write('{} threads: {}\n'.format(37*'*', torch.get_num_threads()))
 
     # data
     if data is None:
         data = sample_atoms(params['path_data'], size=params['ndata'],
                             chp=params['path_data_chp'])
         data.update(cutoff=params['cutoff'])
-        log.write('cutoff: {}\npath_data: {}\nndata: {}\npath_data_chp: {}\n'.format(
-            params['cutoff'], params['path_data'], params['ndata'], params['path_data_chp']))
+        natoms = sum([len(atoms) for atoms in data])
+        log.write('cutoff: {}\npath_data: {}\nndata: {} (={} locals)\npath_data_chp: {}\n'.format(
+            params['cutoff'], params['path_data'], params['ndata'], natoms, params['path_data_chp']))
     else:
         # if data is given as kwarg, it already should be cutoff-ed.
         assert len(data[-1]) == data[-1].natoms
-        log.write('ndata: {} (kwarg)\n'.format(len(data)))
+        natoms = sum([len(atoms) for atoms in data])
+        log.write('ndata: {} (={} locals) (kwarg)\n'.format(len(data), natoms))
 
     # inducing
     if inducing is None:
