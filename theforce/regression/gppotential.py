@@ -136,9 +136,10 @@ class GaussianProcessPotential(Module):
         return 'GaussianProcessPotential({})'.format(self.state_args)
 
     def to_file(self, file, flag='', mode='a'):
+        from theforce.util.util import one_liner
         with open(file, mode) as f:
             f.write('\n\n\n#flag: {}\n'.format(flag))
-            f.write(self.state.replace('\n', ''))
+            f.write(one_liner(self.state))
 
 
 class PosteriorPotential(Module):
