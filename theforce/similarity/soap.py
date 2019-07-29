@@ -49,13 +49,13 @@ class SoapKernel(SimilarityKernel):
         data = {'value': d, 'grad': grad, 'j': j, 'empty': empty}
         self.save_for_later(loc, data)
 
-    def func(self, p, q):
+    def get_func(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         c = self.kern(d, dd)
         return c.sum().view(1, 1)
 
-    def leftgrad(self, p, q):
+    def get_leftgrad(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         empty = self.saved(p, 'empty')
@@ -71,7 +71,7 @@ class SoapKernel(SimilarityKernel):
                 _i += 1
         return g.view(-1, 1)
 
-    def rightgrad(self, p, q):
+    def get_rightgrad(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         empty = self.saved(q, 'empty')
@@ -105,7 +105,7 @@ class SoapKernel(SimilarityKernel):
         grad = torch.cat(grad, dim=1)
         return i, j, grad
 
-    def gradgrad(self, p, q):
+    def get_gradgrad(self, p, q):
         d1 = self.saved(p, 'value')
         d2 = self.saved(q, 'value')
         c = self.kern.gradgrad(d1, d2)
@@ -118,7 +118,7 @@ class SoapKernel(SimilarityKernel):
         h = torch.zeros(p.natoms, 3, q.natoms, 3).index_add(2, j2, f)
         return h.view(p.natoms*3, q.natoms*3)
 
-    def gradgraddiag(self, p):
+    def get_gradgraddiag(self, p):
         d = self.saved(p, 'value')
         empty = self.saved(p, 'empty')
         c = self.kern.gradgrad(d, d)

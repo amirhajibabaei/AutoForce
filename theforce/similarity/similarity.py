@@ -27,19 +27,19 @@ class SimilarityKernel(Module):
         return self.func(first, first).view(1)
 
     def func(self, p, q):
-        raise NotImplementedError('func!')
+        return self.get_func(p, q)
 
     def leftgrad(self, p, q):
-        raise NotImplementedError('leftgrad!')
+        return self.get_leftgrad(p, q)
 
     def rightgrad(self, p, q):
-        raise NotImplementedError('rightgrad!')
+        return self.get_rightgrad(p, q)
 
     def gradgrad(self, p, q):
-        raise NotImplementedError('gradgrad!')
+        return self.get_gradgrad(p, q)
 
     def gradgraddiag(self, p):
-        raise NotImplementedError('gradgraddiag!')
+        return self.get_gradgraddiag(p)
 
     def save_for_later(self, loc, keyvals):
         for key, val in keyvals.items():
