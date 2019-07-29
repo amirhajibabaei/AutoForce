@@ -11,11 +11,11 @@ import numpy as np
 import torch
 
 
-def read_params(**kwargs):
+def get_params(**kwargs):
 
     # default params
     params = {
-        # gp
+        # kernel
         'numbers': None,
         'cutoff': None,
         'atomic_unit': None,
@@ -25,7 +25,7 @@ def read_params(**kwargs):
         'pairkernel': True,
         'soapkernel': True,
         'noise': 0.01,
-        'noisegrad': True
+        'noisegrad': True,
         # data
         'path_data': None,
         'path_data_chp': None,
@@ -65,21 +65,74 @@ def read_params(**kwargs):
     return params
 
 
-def potential_energy_surface(data=None, inducing=None, train=0, append_log=True, **kwargs):
-    from theforce.descriptor.atoms import AtomsData, LocalsData, sample_atoms
+def get_kernel(params):
     from theforce.regression.gppotential import GaussianProcessPotential
-    from theforce.regression.gppotential import PosteriorPotential
-    from theforce.regression.gppotential import train_gpp
     from theforce.similarity.pair import PairKernel
     from theforce.similarity.soap import SoapKernel
     from theforce.regression.stationary import RBF
     from theforce.math.cutoff import PolyCut
-    from theforce.util.util import iterable
     from theforce.regression.kernel import White, Positive, DotProd, Normed, Mul, Pow, Add
     from torch import tensor
 
-    # read params
-    params = read_params(**kwargs)
+    # Gaussian Process
+    if params['path_gp_chp'] and os.path.isfile(params['path_gp_chp']):
+        with open(params['path_gp_chp'], 'r') as f:
+            gp = eval(f.readlines()[-1])
+            kerns = gp.kern.kernels
+
+        # log
+        if params['path_log']:
+            with open(params['path_log'], 'a') as log:
+                log.write('path_gp_chp: {} (read)\n'.format(
+                    params['path_gp_chp']))
+    else:
+
+        # log
+        if params['path_log']:
+            with open(params['path_log'], 'a') as log:
+                log.write('pairkernel: {}\nsoapkernel: {}\n'.format(
+                    params['pairkernel'], params['soapkernel']))
+
+        kerns = []
+        if params['pairkernel']:
+            pairs = ([(a, b) for a, b in itertools.combinations(params['numbers'], 2)] +
+                     [(a, a) for a in params['numbers']])
+            kerns += [PairKernel(RBF(), a, b, factor=PolyCut(params['cutoff']))
+                      for a, b in pairs]
+        if params['soapkernel']:
+            kerns += [SoapKernel(Positive(1.0, requires_grad=True)*Normed(DotProd()**params['exponent']),
+                                 atomic_number, params['numbers'], params['lmax'], params['nmax'],
+                                 PolyCut(params['cutoff']), atomic_unit=params['atomic_unit'])
+                      for atomic_number in params['numbers']]
+            # log
+            if params['path_log']:
+                with open(params['path_log'], 'a') as log:
+                    log.write('lmax: {}\n nmax: {}\nexponent: {}\natomic_unit: {}\n'.format(
+                        params['lmax'], params['nmax'], params['exponent'], params['atomic_unit']))
+
+        gp = GaussianProcessPotential(
+            kerns, noise=White(signal=params['noise'], requires_grad=params['noisegrad']))
+
+        if params['path_gp_chp']:
+            gp.to_file(params['path_gp_chp'], flag='created', mode='w')
+
+            # log
+            if params['path_log']:
+                with open(params['path_log'], 'a') as log:
+                    log.write('path_gp_chp: {} (write)\n'.format(
+                        params['path_gp_chp']))
+
+    return gp
+
+
+def potential_energy_surface(data=None, inducing=None, train=0, append_log=True, **kwargs):
+    from theforce.descriptor.atoms import AtomsData, LocalsData, sample_atoms
+    from theforce.regression.gppotential import PosteriorPotential
+    from theforce.regression.gppotential import train_gpp
+    from theforce.util.util import iterable
+
+    # get params
+    params = get_params(**kwargs)
     log = open(params['path_log'], 'a' if append_log else 'w')
     log.write('{} threads: {}\n'.format(37*'*', torch.get_num_threads()))
 
@@ -112,46 +165,18 @@ def potential_energy_surface(data=None, inducing=None, train=0, append_log=True,
         log.write('path_inducing_chp: {}\n'.format(
             params['path_inducing_chp']))
 
-    # Gaussian Process
-    if params['path_gp_chp'] and os.path.isfile(params['path_gp_chp']):
-        with open(params['path_gp_chp'], 'r') as f:
-            gp = eval(f.readlines()[-1])
-            kerns = gp.kern.kernels
-        log.write('path_gp_chp: {} (read)\n'.format(params['path_gp_chp']))
-    else:
-        # numbers and pairs
-        if params['numbers'] is None:
-            params['numbers'] = data.numbers_set()
-        pairs = ([(a, b) for a, b in itertools.combinations(params['numbers'], 2)] +
-                 [(a, a) for a in params['numbers']])
+    # numbers
+    if params['numbers'] is None:
+        params['numbers'] = data.numbers_set()
         log.write('numbers: {}\n'.format(params['numbers']))
-
-        # kerns
-        log.write('pairkernel: {}\nsoapkernel: {}\n'.format(
-            params['pairkernel'], params['soapkernel']))
-        kerns = []
-        if params['pairkernel']:
-            kerns += [PairKernel(RBF(), a, b, factor=PolyCut(params['cutoff']))
-                      for a, b in pairs]
-        if params['soapkernel']:
-            kerns += [SoapKernel(Positive(1.0, requires_grad=True)*Normed(DotProd()**params['exponent']),
-                                 atomic_number, params['numbers'], params['lmax'], params['nmax'],
-                                 PolyCut(params['cutoff']), atomic_unit=params['atomic_unit'])
-                      for atomic_number in params['numbers']]
-            log.write('lmax: {}\n nmax: {}\nexponent: {}\natomic_unit: {}\n'.format(
-                params['lmax'], params['nmax'], params['exponent'], params['atomic_unit']))
-
-        gp = GaussianProcessPotential(
-            kerns, noise=White(signal=params['noise'], requires_grad=param['noisegrad']))
-        if params['path_gp_chp']:
-            gp.to_file(params['path_gp_chp'], flag='initial state', mode='w')
-            log.write('path_gp_chp: {} (write)\n'.format(
-                params['path_gp_chp']))
     log.close()
 
+    # kernel
+    gp = get_kernel(params)
+
     # train
-    data.update(descriptors=kerns)
-    inducing.stage(kerns)
+    data.update(descriptors=gp.kern.kernels)
+    inducing.stage(gp.kern.kernels)
     inducing.trainable = False  # TODO: this should be set inside Locals
     state = 0
     for steps in iterable(train):
