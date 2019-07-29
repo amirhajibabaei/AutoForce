@@ -25,6 +25,7 @@ def read_params(**kwargs):
         'pairkernel': True,
         'soapkernel': True,
         'noise': 0.01,
+        'noisegrad': True
         # data
         'path_data': None,
         'path_data_chp': None,
@@ -64,7 +65,7 @@ def read_params(**kwargs):
     return params
 
 
-def potential_energy_surface(data=None, inducing=None, hypernoise=True, train=0, append_log=True, **kwargs):
+def potential_energy_surface(data=None, inducing=None, train=0, append_log=True, **kwargs):
     from theforce.descriptor.atoms import AtomsData, LocalsData, sample_atoms
     from theforce.regression.gppotential import GaussianProcessPotential
     from theforce.regression.gppotential import PosteriorPotential
@@ -120,14 +121,9 @@ def potential_energy_surface(data=None, inducing=None, hypernoise=True, train=0,
     else:
         # numbers and pairs
         if params['numbers'] is None:
-            _num = set()
-            for atoms in data:
-                for n in set(atoms.numbers):
-                    _num.add(n)
-            numbers = sorted(list(_num))
-            params['numbers'] = numbers
-        pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
-                 [(a, a) for a in numbers])
+            params['numbers'] = data.numbers_set()
+        pairs = ([(a, b) for a, b in itertools.combinations(params['numbers'], 2)] +
+                 [(a, a) for a in params['numbers']])
         log.write('numbers: {}\n'.format(params['numbers']))
 
         # kerns
@@ -146,7 +142,7 @@ def potential_energy_surface(data=None, inducing=None, hypernoise=True, train=0,
                 params['lmax'], params['nmax'], params['exponent'], params['atomic_unit']))
 
         gp = GaussianProcessPotential(
-            kerns, noise=White(signal=params['noise'], requires_grad=hypernoise))
+            kerns, noise=White(signal=params['noise'], requires_grad=param['noisegrad']))
         if params['path_gp_chp']:
             gp.to_file(params['path_gp_chp'], flag='initial state', mode='w')
             log.write('path_gp_chp: {} (write)\n'.format(
