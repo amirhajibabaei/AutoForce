@@ -251,6 +251,14 @@ class TorchAtoms(Atoms):
     def natoms(self):
         return self.get_number_of_atoms()
 
+    @property
+    def tnumbers(self):
+        return torch.from_numpy(self.numbers)
+
+    @property
+    def tpbc(self):
+        return torch.from_numpy(self.pbc)
+
     def __getattr__(self, attr):
         try:
             return torch.cat([env.__dict__[attr] for env in self.loc])
