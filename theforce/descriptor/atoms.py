@@ -119,9 +119,22 @@ class Local:
         return Local(i, j, a, b, r)
 
     def __eq__(self, other):
-        return all([(self._i == other._i).all(), (self._j == other._j).all(),
-                    (self._a == other._a).all(), (self._b == other._b).all(),
-                    (self._r == other._r).all(), (self._lex == other._lex).all()])
+        if other.__class__ == TorchAtoms:
+            return False
+        elif (self._i != other._i).any():
+            return False
+        elif (self._j != other._j).any():
+            return False
+        elif (self._a != other._a).any():
+            return False
+        elif (self._b != other._b).any():
+            return False
+        elif (self._r != other._r).any():
+            return False
+        elif (self._lex != other._lex).any():
+            return False
+        else:
+            return True
 
 
 class AtomsChanges:
@@ -252,6 +265,22 @@ class TorchAtoms(Atoms):
         """This is a overloads the behavior of ase.Atoms."""
         for env in self.loc:
             yield env
+
+    def __eq__(self, other):  # Note: descriptors are excluded
+        if other.__class__ == Local:
+            return False
+        elif self.natoms != other.natoms:
+            return False
+        elif (self.pbc != other.pbc).any():
+            return False
+        elif not self.lll.allclose(other.lll):
+            return False
+        elif (self.numbers != other.numbers).any():
+            return False
+        elif not self.xyz.allclose(other.xyz):
+            return False
+        else:
+            return True
 
     def copy(self):
         new = TorchAtoms(positions=self.positions.copy(),
@@ -558,7 +587,9 @@ def example():
     numbers = 4*[10] + 4*[18]
     atoms = TorchAtoms(positions=xyz, numbers=numbers,
                        cutoff=3.0, descriptors=kerns)
-    atoms.copy()
+
+    other = atoms.copy()
+    print(other == atoms)
 
     for loc in atoms:
         print(loc.as_atoms().as_local() == loc.detach())
