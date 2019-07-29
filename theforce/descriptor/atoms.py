@@ -289,6 +289,9 @@ class TorchAtoms(Atoms):
                          pbc=self.pbc.copy(),
                          descriptors=self.descriptors,
                          cutoff=self.cutoff)
+        vel = self.get_velocities()
+        if vel is not None:
+            new.set_velocities(vel)
         return new
 
     def set_cell(self, *args, **kwargs):
@@ -302,6 +305,9 @@ class TorchAtoms(Atoms):
     def as_ase(self):
         atoms = Atoms(positions=self.positions, cell=self.cell,
                       pbc=self.pbc, numbers=self.numbers)  # TODO: e, f
+        vel = self.get_velocities()
+        if vel is not None:
+            atoms.set_velocities(vel)
         return atoms
 
     def as_local(self):
