@@ -27,13 +27,6 @@ class PairSimilarityKernel(SimilarityKernel):
         raise NotImplementedError(
             'descriptor shoud be implemented in a child class')
 
-    def save_for_later(self, loc, keyvals):
-        for key, val in keyvals.items():
-            setattr(loc, self.name+'_'+key, val)
-
-    def saved(self, atoms_or_loc, key):
-        return getattr(atoms_or_loc, self.name+'_'+key)
-
     def precalculate(self, loc):
         loc.select(self.a, self.b, bothways=True)
         d, grad = self.descriptor(loc.r)
@@ -70,7 +63,7 @@ class PairSimilarityKernel(SimilarityKernel):
                                                   'fac': fac[m], 'facgrad': facgrad[m],
                                                   'state': self.factor.state})
 
-    def func(self, p, q):
+    def get_func(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         c = self.kern(d, dd)
@@ -82,7 +75,7 @@ class PairSimilarityKernel(SimilarityKernel):
             c = c * (f*ff.t())
         return c.sum().view(1, 1)
 
-    def leftgrad(self, p, q):
+    def get_leftgrad(self, p, q):
         d = self.saved(p, 'value')
         grad = self.saved(p, 'grad')
         i = self.saved(p, 'i')
@@ -101,7 +94,7 @@ class PairSimilarityKernel(SimilarityKernel):
         g = zeros(p.natoms, 3).index_add(0, i, -c).index_add(0, j, c)
         return g.view(-1, 1)
 
-    def rightgrad(self, p, q):
+    def get_rightgrad(self, p, q):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         grad = self.saved(q, 'grad')
@@ -120,7 +113,7 @@ class PairSimilarityKernel(SimilarityKernel):
         g = zeros(q.natoms, 3).index_add(0, i, -c).index_add(0, j, c)
         return g.view(1, -1)
 
-    def gradgrad(self, p, q):
+    def get_gradgrad(self, p, q):
         d1 = self.saved(p, 'value')
         g1 = self.saved(p, 'grad')
         i1 = self.saved(p, 'i')
@@ -147,7 +140,7 @@ class PairSimilarityKernel(SimilarityKernel):
             2, j2, cc).index_add(2, i2, -cc)
         return ccc.view(p.natoms*3, q.natoms*3)
 
-    def gradgraddiag(self, p):
+    def get_gradgraddiag(self, p):
         forces = []
         for i, loc in enumerate(iterable(p.loc)):
             d = self.saved(loc, 'diag_value')
