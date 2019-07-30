@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -219,7 +219,10 @@ class TorchAtoms(Atoms):
                                self_interaction=False, bothways=True)
         self.cutoff = rc
         self.xyz = torch.from_numpy(self.positions)
-        self.lll = torch.from_numpy(self.cell)
+        try:
+            self.lll = torch.from_numpy(self.cell)
+        except TypeError:
+            self.lll = torch.from_numpy(self.cell.array)
 
     def update(self, cutoff=None, descriptors=None, forced=False,
                posgrad=False, cellgrad=False):
@@ -304,7 +307,10 @@ class TorchAtoms(Atoms):
 
     def set_cell(self, *args, **kwargs):
         super().set_cell(*args, **kwargs)
-        self.lll = torch.from_numpy(self.cell)
+        try:
+            self.lll = torch.from_numpy(self.cell)
+        except TypeError:
+            self.lll = torch.from_numpy(self.cell.array)
 
     def set_positions(self, *args, **kwargs):
         super().set_positions(*args, **kwargs)
