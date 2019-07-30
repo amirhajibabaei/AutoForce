@@ -251,6 +251,14 @@ class TorchAtoms(Atoms):
     def natoms(self):
         return self.get_number_of_atoms()
 
+    @property
+    def tnumbers(self):
+        return torch.from_numpy(self.numbers)
+
+    @property
+    def tpbc(self):
+        return torch.from_numpy(self.pbc)
+
     def __getattr__(self, attr):
         try:
             return torch.cat([env.__dict__[attr] for env in self.loc])
@@ -289,6 +297,9 @@ class TorchAtoms(Atoms):
                          pbc=self.pbc.copy(),
                          descriptors=self.descriptors,
                          cutoff=self.cutoff)
+        vel = self.get_velocities()
+        if vel is not None:
+            new.set_velocities(vel)
         return new
 
     def set_cell(self, *args, **kwargs):
@@ -302,6 +313,9 @@ class TorchAtoms(Atoms):
     def as_ase(self):
         atoms = Atoms(positions=self.positions, cell=self.cell,
                       pbc=self.pbc, numbers=self.numbers)  # TODO: e, f
+        vel = self.get_velocities()
+        if vel is not None:
+            atoms.set_velocities(vel)
         return atoms
 
     def as_local(self):
