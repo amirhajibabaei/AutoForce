@@ -74,6 +74,27 @@ class EnergyForceKernel(Module):
                             for kern in self.kernels]).sum(dim=0)
 
     @property
+    def method_caching(self):
+        return [kern.method_caching if hasattr(kern, 'method_caching') else False
+                for kern in self.kernels]
+
+    @method_caching.setter
+    def method_caching(self, value):
+        if hasattr(value, '__iter__'):
+            val = value
+        else:
+            val = len(self.kernels)*[value]
+        for kern, v in zip(*[self.kernels, val]):
+            kern.method_caching = v
+
+    def clear_cached(self):
+        for kern in self.kernels:
+            try:
+                kern.cached.clear()
+            except AttributeError:
+                pass
+
+    @property
     def state_args(self):
         return '[{}]'.format(', '.join([kern.state for kern in self.kernels]))
 
@@ -128,6 +149,17 @@ class GaussianProcessPotential(Module):
         return lp_loss + covariance_loss
 
     @property
+    def method_caching(self):
+        return self.kern.method_caching
+
+    @method_caching.setter
+    def method_caching(self, value):
+        self.kern.method_caching = value
+
+    def clear_cached(self):
+        self.kern.clear_cached()
+
+    @property
     def state_args(self):
         return ', '.join([self.kern.state_args, self.noise.state])
 
@@ -144,13 +176,19 @@ class GaussianProcessPotential(Module):
 
 class PosteriorPotential(Module):
 
-    def __init__(self, gp, data, inducing=None):
+    def __init__(self, gp, data, inducing=None, use_caching=False, enable_grad=False):
         super().__init__()
-        with torch.no_grad():
-            self.gp = gp
+        self.gp = gp
+        self.set_data(data, inducing, use_caching, enable_grad)
+
+    def set_data(self, data, inducing=None, use_caching=False, enable_grad=False):
+        gp = self.gp
+        caching_status = gp.method_caching
+        gp.method_caching = use_caching
+        with torch.set_grad_enabled(enable_grad):
             p = gp(data, inducing)
             if inducing is None:
-                self.X = copy.deepcopy(data)
+                self.X = copy.deepcopy(data)  # TODO: consider not copying
                 self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
                 self.sig = p.precision_matrix
                 self.has_target_forces = True
@@ -177,6 +215,14 @@ class PosteriorPotential(Module):
                 #F = gp.kern(inducing, inducing, cov='forces_energy')
                 #F = (F @ self.mu).reshape(-1, 3)
                 #inducing.set_per_atom('target_forces', F)
+        gp.method_caching = caching_status
+        self._data = (data, inducing)
+
+    def update(self, **kwargs):
+        self.set_data(*self.data, **kwargs)
+
+    def train(self, *args, **kwargs):
+        train_gpp(self.gp, *args, **kwargs)
 
     def forward(self, test, quant='energy', variance=False, enable_grad=False):
         shape = {'energy': (-1,), 'forces': (-1, 3)}
@@ -229,6 +275,10 @@ def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True,
             inducing.optimizer = ClampedSGD(
                 [{'params': inducing.params}], lr=move)
 
+    caching_status = gp.method_caching
+    gp.method_caching = False
+    gp.clear_cached()
+
     for _ in range(steps):
         if inducing is not None and inducing.trainable:
             if shake > 0:
@@ -241,6 +291,8 @@ def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True,
         gp.optimizer.step()
         if inducing is not None and inducing.trainable:
             inducing.optimizer.step()
+
+    gp.method_caching = caching_status
 
     report = []
     if inducing is None:
