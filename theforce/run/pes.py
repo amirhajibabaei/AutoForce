@@ -125,7 +125,7 @@ def get_kernel(params):
     return gp
 
 
-def potential_energy_surface(data=None, inducing=None, train=0, append_log=True, **kwargs):
+def potential_energy_surface(data=None, inducing=None, train=0, caching=False, append_log=True, **kwargs):
     from theforce.descriptor.atoms import AtomsData, LocalsData, sample_atoms
     from theforce.regression.gppotential import PosteriorPotential
     from theforce.regression.gppotential import train_gpp
@@ -200,7 +200,7 @@ def potential_energy_surface(data=None, inducing=None, train=0, append_log=True,
             log.write('\ntrained for {} steps\n'.format(state))
 
     # create Posterior Potential
-    V = PosteriorPotential(gp, data, inducing)
+    V = PosteriorPotential(gp, data, inducing=inducing, use_caching=caching)
 
     # test
     if params['test']:
