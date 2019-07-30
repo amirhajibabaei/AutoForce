@@ -8,13 +8,20 @@ from ase.md.verlet import VelocityVerlet
 from theforce.calculator.posterior import PosteriorVarianceCalculator
 from theforce.run.pes import potential_energy_surface
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData, sample_atoms
+from theforce.util.util import iterable
 import numpy as np
 
 
-def mlmd(ini_atoms, cutoff, au, dt, tolerance=0.1, pair=True, soap=True, max_data=20, max_steps=100,
-         itrain=30, retrain=0, pes=potential_energy_surface):
+def mlmd(ini_atoms, cutoff, au, dt, tolerance=0.1, pair=True, soap=True, ndata=10, max_steps=100,
+         itrain=10*[5], retrain=5*[5], retrain_every=100, pes=potential_energy_surface):
     """ 
-    ML-assisted-MD: a calculator must be attached to ini_atoms 
+    ML-assisted-MD: a calculator must be attached to ini_atoms.
+    Rules of thumb:
+    Initial training (itrain) is crucial for correct approximation 
+    of variances.
+    Hyper-parameters are sensitive to nlocals=len(inducing) thus 
+    if you don't want to retrain gp every time the data is updated, 
+    at least keep nlocals fixed.
     """
 
     dftcalc = ini_atoms.get_calculator()
@@ -24,14 +31,15 @@ def mlmd(ini_atoms, cutoff, au, dt, tolerance=0.1, pair=True, soap=True, max_dat
     atoms.set_velocities(ini_atoms.get_velocities())
     atoms.set_calculator(dftcalc)
     dyn = VelocityVerlet(atoms, dt=dt, trajectory='md.traj', logfile='md.log')
-    md_step = max_data//2
+    md_step = ndata
     dyn.run(md_step)
     ndft = md_step
 
     # train a potential
     data = AtomsData(traj='md.traj', cutoff=cutoff)
-    V = pes(data, cutoff=cutoff, nlocals=-1, atomic_unit=au, pairkernel=pair,
-            soapkernel=soap, train=itrain, test=True)
+    inducing = data.to_locals()
+    V = pes(data=data, inducing=inducing, cutoff=cutoff, atomic_unit=au, pairkernel=pair,
+            soapkernel=soap, train=itrain, test=True, caching=True)
     atoms.update(cutoff=cutoff, descriptors=V.gp.kern.kernels)
     mlcalc = PosteriorVarianceCalculator(V)
     atoms.set_calculator(mlcalc)
@@ -50,22 +58,41 @@ def mlmd(ini_atoms, cutoff, au, dt, tolerance=0.1, pair=True, soap=True, max_dat
             _forces = forces
             _var = var
 
-            # new dft
+            # new dft calculation
             ndft += 1
             print('|............... new dft calculation (total={})'.format(ndft))
             tmp = atoms.copy()
             tmp.set_calculator(dftcalc)
             true_forces = tmp.get_forces()
-            data += [TorchAtoms(ase_atoms=tmp, cutoff=cutoff)]
 
-            # new model
+            # add new information to data
+            new_data = AtomsData(X=[TorchAtoms(ase_atoms=tmp)])
+            new_data.update(
+                cutoff=cutoff, descriptors=atoms.calc.potential.gp.kern.kernels)
+            new_locals = new_data.to_locals()
+            new_locals.stage(descriptors=atoms.calc.potential.gp.kern.kernels)
+            data += new_data
+            inducing += new_locals  # TODO: importance sampling
+
+            # remove old(est) information
+            del data.X[0]
+            del inducing.X[:len(new_locals)]  # TODO: importance sampling
+
+            # retrain
+            if ndft % retrain_every == 0:
+                print('|............... : retraining for {} steps'.format(retrain))
+                for steps in iterable(retrain):
+                    atoms.calc.potential.train(data, inducing=inducing,
+                                               steps=steps,  cov_loss=False)
+                    atoms.calc.potential.gp.to_file(
+                        'gp.chp', flag='ndft={}'.format(ndft))
+
+            # update model
             print('|............... new regression')
-            if len(data) > max_data:
-                del data.X[0]
-            V = pes(data, nlocals=-1, train=retrain, append_log=True)
-            mlcalc = PosteriorVarianceCalculator(V)
-            atoms.set_calculator(mlcalc)
+            atoms.calc.potential.set_data(data, inducing, use_caching=True)
 
+            # new forces
+            atoms.calc.results.clear()
             forces = atoms.get_forces()
             var = atoms.calc.results['forces_var']
 
@@ -85,6 +112,7 @@ def mlmd(ini_atoms, cutoff, au, dt, tolerance=0.1, pair=True, soap=True, max_dat
 
         print(md_step, '_')
         dyn.run(1)
+    print('finished {} steps, used dftcalc only {} times'.format(md_step, ndft))
 
 
 def example():
@@ -104,13 +132,15 @@ def example():
     ini_atoms.set_velocities(vel)
 
     # use a pretrained model by writing it to the checkpoint
-    pre = """GaussianProcessPotential([PairKernel(RBF(signal=3.2251566545458794, lengthscale=tensor([0.1040])), 
+    # (alternatively set, for example, itrain=10*[5] in mlmd)
+    pre = """GaussianProcessPotential([PairKernel(RBF(signal=3.2251566545458794, lengthscale=tensor([0.1040])),
     0, 0, factor=PolyCut(3.0, n=2))], White(signal=0.1064043798026091, requires_grad=True))""".replace('\n', '')
     with open('gp.chp', 'w') as chp:
         chp.write(pre)
 
     # run(md)
-    mlmd(ini_atoms, 3.0, 0.5, 0.05, tolerance=0.1, soap=False, itrain=[0])
+    mlmd(ini_atoms, 3.0, 0.5, 0.03, tolerance=0.18, max_steps=100,
+         soap=False, itrain=10*[3], retrain_every=5, retrain=5)
 
     # recalculate all with the actual calculator and compare
     traj = Trajectory('md.traj')
