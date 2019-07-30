@@ -7,6 +7,7 @@
 from torch.nn import Module
 from torch import cat
 from theforce.util.util import iterable
+from theforce.util.caching import method_caching
 
 
 class SimilarityKernel(Module):
@@ -26,18 +27,23 @@ class SimilarityKernel(Module):
     def funcdiag(self, first):
         return self.func(first, first).view(1)
 
+    @method_caching
     def func(self, p, q):
         return self.get_func(p, q)
 
+    @method_caching
     def leftgrad(self, p, q):
         return self.get_leftgrad(p, q)
 
+    @method_caching
     def rightgrad(self, p, q):
         return self.get_rightgrad(p, q)
 
+    @method_caching
     def gradgrad(self, p, q):
         return self.get_gradgrad(p, q)
 
+    @method_caching
     def gradgraddiag(self, p):
         return self.get_gradgraddiag(p)
 
