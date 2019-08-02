@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -30,6 +30,7 @@ def get_params(**kwargs):
         'path_data': None,
         'path_data_chp': None,
         'path_inducing_chp': None,
+        'use_gp_chp': True,
         'path_gp_chp': 'gp.chp',
         'ndata': -1,
         'nlocals': -1,
@@ -75,7 +76,7 @@ def get_kernel(params):
     from torch import tensor
 
     # Gaussian Process
-    if params['path_gp_chp'] and os.path.isfile(params['path_gp_chp']):
+    if params['path_gp_chp'] and params['use_gp_chp'] and os.path.isfile(params['path_gp_chp']):
         with open(params['path_gp_chp'], 'r') as f:
             gp = eval(f.readlines()[-1])
             kerns = gp.kern.kernels
@@ -216,6 +217,9 @@ def potential_energy_surface(data=None, inducing=None, train=0, caching=False, a
             log.write('\ntesting the model on the same data that created it:')
             log.write('\nenergy R2 score={}'.format(R2_e))
             log.write('\nforces R2 score={}\n'.format(R2_f))
+        print('testing the model on the same data that created it:')
+        print('energy R2 score={}'.format(R2_e))
+        print('forces R2 score={}'.format(R2_f))
 
     return V
 
