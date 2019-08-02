@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -16,8 +16,15 @@ class SoapKernel(SimilarityKernel):
         super().__init__(kernel)
         self.a = a
         self.b = sorted(iterable(b))
+        if atomic_unit == None or type(atomic_unit) == float or type(atomic_unit) == int:
+            units = {_b: atomic_unit for _b in self.b}
+        elif type(atomic_unit) == list or type(atomic_unit) == tuple:
+            # if au is a list or a tuple, so should b! self.b is sorted so we shoud use (arg) b.
+            units = {_b: au for _b, au in zip(*[b, atomic_unit])}
+        elif type(atomic_unit) == dict:
+            units = {_b: atomic_unit[(a, _b)] for _b in self.b}
         self.descriptor = MultiSoap([TailoredSoap(RealSeriesSoap(
-            lmax, nmax, radial, atomic_unit=atomic_unit)) for _ in self.b])
+            lmax, nmax, radial, atomic_unit=units[_b])) for _b in self.b])
         self.dim = self.descriptor.dim
         self._args = '{}, {}, {}, {}, {}, atomic_unit={}'.format(
             a, b, lmax, nmax, radial.state, atomic_unit)
