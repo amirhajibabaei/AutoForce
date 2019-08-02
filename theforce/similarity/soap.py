@@ -22,7 +22,8 @@ class SoapKernel(SimilarityKernel):
             # if au is a list or a tuple, so should b! self.b is sorted so we shoud use (arg) b.
             units = {_b: au for _b, au in zip(*[b, atomic_unit])}
         elif type(atomic_unit) == dict:
-            units = {_b: atomic_unit[(a, _b)] for _b in self.b}
+            units = {_b: atomic_unit[(a, _b)] if (a, _b) in atomic_unit else atomic_unit[(_b, a)]
+                     for _b in self.b}
         self.descriptor = MultiSoap([TailoredSoap(RealSeriesSoap(
             lmax, nmax, radial, atomic_unit=units[_b])) for _b in self.b])
         self.dim = self.descriptor.dim
