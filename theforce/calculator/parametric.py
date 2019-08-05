@@ -7,6 +7,9 @@
 import torch
 from torch.nn import Module
 from theforce.util.util import iterable
+from theforce.math.func import Negative, Positive, Real, Pow, Param, I
+from theforce.math.cutoff import PolyCut
+import itertools
 
 
 class ParametricPotential(Module):
@@ -113,6 +116,84 @@ class PairPot(ParametricPotential):
     @property
     def state_args(self):
         return '{}, {}, {}'.format(self.a, self.b, self.radial.state)
+
+
+def get_coulomb_terms(numbers, cutoff, setting={}, default_order=0.01):
+    """
+    If a setting is passed, it should be a dictionary in the form of 
+    {atomic_number: c} where c contains the constraint and optionally 
+    the initial value. Acceptable constraints are 
+    '+': positive
+    '-': negative
+    'r': real (no constraints)
+    'f': fixed
+    ------------------------------------------------------
+    examples:
+    c = '+' -> "positive" constraint
+    c = ('+', 1.) -> "positive" constraint, initial value 1
+    c = ('r', 1.) -> no constraint, initial value 1
+    c = ('f', 1.) -> fix the charge to value 1
+    """
+    # initialize charges
+    charges = {}
+    for a in numbers:
+        try:
+            # constraint and initial value
+            c = setting[a]
+            if type(c) == str:
+                if c == '+' or c == 'r':
+                    ini = default_order
+                elif c == '-':
+                    ini = -default_order
+                elif c == 'f':
+                    raise RuntimeError('f (=fixed) constraint needs a value')
+                else:
+                    raise RuntimeError('unknown constraint {}'.format(c))
+            else:
+                c, ini = c
+            # class of constraint
+            if c == '+':
+                _cls = Positive
+                rg = True
+            elif c == '-':
+                _cls = Negative
+                rg = True
+            elif c == 'r':
+                _cls = Real
+                rg = True
+            elif c == 'f':
+                _cls = Real
+                rg = False
+            else:
+                raise RuntimeError('unknown constraint {}'.format(c))
+            # create charge
+            charges[a] = Param(_cls, ini, 'q_{}'.format(a), rg=rg)
+        except KeyError:
+            charges[a] = Param(Real, default_order, 'q_{}'.format(a), rg=True)
+    # create terms
+    pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
+             [(a, a) for a in numbers])
+
+    terms = sum([PairPot(*pair, PolyCut(cutoff)*charges[pair[0]]*charges[pair[1]]*Pow(n=-1))
+                 for pair in pairs])
+    return terms
+
+
+def get_lj_terms(numbers, cutoff, default_order=0.01):
+    # create terms
+    pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
+             [(a, a) for a in numbers])
+    A = {pair: Param(Positive, default_order, 'A_{}_{}'.format(*pair))
+         for pair in pairs}
+    B = {pair: Param(Positive, default_order, 'B_{}_{}'.format(*pair))
+         for pair in pairs}
+    terms = sum([PairPot(*pair, PolyCut(cutoff)*(A[pair]*Pow(n=-12) - B[pair]*Pow(n=-6)))
+                 for pair in pairs])
+    return terms
+
+
+def load_parametric_potential(state):
+    return eval(state)
 
 
 def test():
