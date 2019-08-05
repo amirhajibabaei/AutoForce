@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -31,6 +31,10 @@ class ParametricPotential(Module):
             else:
                 return e
 
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
 
 class PairPot(ParametricPotential):
 
@@ -57,6 +61,10 @@ class PairPot(ParametricPotential):
         else:
             return e.sum()
 
+    @property
+    def state_args(self):
+        return '{}, {}, {}'.format(self.a, self.b, self.radial.state)
+
 
 def test():
     from theforce.descriptor.atoms import TorchAtoms
@@ -70,6 +78,7 @@ def test():
     e, f = V(a, forces=True)
     e.backward()
     print(a.xyz.grad.allclose(-f))
+    print(V.state)
 
 
 if __name__ == '__main__':
