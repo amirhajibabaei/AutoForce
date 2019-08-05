@@ -34,6 +34,15 @@ class ParametricPotential(Module):
     def __add__(self, other):
         return AddedPotentials(self, other)
 
+    def __radd__(self, other):
+        if other == 0:
+            return self
+        else:
+            raise RuntimeError('This is not ok: {} + {}'.format(self, other))
+
+    def __repr__(self):
+        return self.state
+
     @property
     def unique_params(self):
         params = []
@@ -119,6 +128,8 @@ def test():
     e.backward()
     print(a.xyz.grad.allclose(-f))
     print(V.state)
+    print(sum([PairPot(55, 55, RepulsiveCore()),
+               PairPot(55, 55, RepulsiveCore())]))
 
 
 if __name__ == '__main__':
