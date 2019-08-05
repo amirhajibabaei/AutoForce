@@ -31,9 +31,49 @@ class ParametricPotential(Module):
             else:
                 return e
 
+    def __add__(self, other):
+        return AddedPotentials(self, other)
+
+    @property
+    def unique_params(self):
+        params = []
+        ids = []
+        for param in self.params:
+            if id(param) not in ids:
+                params.append(param)
+                ids.append(id(param))
+        return params
+
     @property
     def state(self):
         return self.__class__.__name__+'({})'.format(self.state_args)
+
+
+class AddedPotentials(ParametricPotential):
+
+    def __init__(self, a, b):
+        super().__init__()
+        self.a = a
+        self.b = b
+        self.params = a.params + b.params
+
+    def forward(self, atoms_or_loc, forces=False, enable_grad=True):
+        a = self.a(atoms_or_loc, forces=forces, enable_grad=enable_grad)
+        b = self.b(atoms_or_loc, forces=forces, enable_grad=enable_grad)
+        if forces:
+            a, aa = a
+            b, bb = b
+            return a + b, aa + bb
+        else:
+            return a + b
+
+    @property
+    def state_args(self):
+        return '{}, {}'.format(self.a.state, self.b.state)
+
+    @property
+    def state(self):
+        return '{} + {}'.format(self.a.state, self.b.state)
 
 
 class PairPot(ParametricPotential):
@@ -71,7 +111,7 @@ def test():
     from theforce.math.radial import RepulsiveCore
     torch.set_default_tensor_type(torch.DoubleTensor)
 
-    V = PairPot(55, 55, RepulsiveCore())
+    V = PairPot(55, 55, RepulsiveCore()) + PairPot(55, 55, RepulsiveCore())
     a = TorchAtoms(positions=[(0, 0, 0), (2, 0, 0), (0, 2, 0)],
                    numbers=[55, 55, 55], cell=[10, 10, 10], pbc=False)
     a.update(cutoff=5., posgrad=True)
