@@ -11,7 +11,7 @@ import os
 
 
 def train_parametric_potential(data, cutoff=None, paramed_pot=None, chp='paramedpot.chp', use_chp=True,
-                               charges_setting={}, threshold=None, max_steps=100):
+                               charges_setting={}, threshold=None, max_steps=100, lr=0.1):
 
     # read
     if paramed_pot == None and os.path.isfile(chp) and use_chp:
@@ -37,7 +37,7 @@ def train_parametric_potential(data, cutoff=None, paramed_pot=None, chp='paramed
     # training setup
     def forces_loss(a, b):
         return (a-b).pow(2).sum()
-    optimizer = torch.optim.RMSprop(paramed_pot.unique_params, lr=0.1)
+    optimizer = torch.optim.RMSprop(paramed_pot.unique_params, lr=lr)
 
     # train
     losses = []
