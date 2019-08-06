@@ -60,6 +60,12 @@ class ParametricPotential(Module):
     def state(self):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
+    def to_file(self, file, flag='', mode='a'):
+        from theforce.util.util import one_liner
+        with open(file, mode) as f:
+            f.write('\n\n\n#flag: {}\n'.format(flag))
+            f.write(one_liner(self.state))
+
 
 class AddedPotentials(ParametricPotential):
 
