@@ -126,6 +126,17 @@ def get_kernel(params):
     return gp
 
 
+def kernel_from_state(state):
+    from theforce.regression.gppotential import GaussianProcessPotential
+    from theforce.similarity.pair import PairKernel
+    from theforce.similarity.soap import SoapKernel
+    from theforce.regression.stationary import RBF
+    from theforce.math.cutoff import PolyCut
+    from theforce.regression.kernel import White, Positive, DotProd, Normed, Mul, Pow, Add
+    from torch import tensor
+    return eval(state)
+
+
 def potential_energy_surface(data=None, inducing=None, train=0, caching=False, append_log=True, **kwargs):
     from theforce.descriptor.atoms import AtomsData, LocalsData, sample_atoms
     from theforce.regression.gppotential import PosteriorPotential
