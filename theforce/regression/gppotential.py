@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -105,13 +105,16 @@ class EnergyForceKernel(Module):
 
 class GaussianProcessPotential(Module):
 
-    def __init__(self, kernels, noise=White(signal=0.01, requires_grad=True)):
+    def __init__(self, kernels, noise=White(signal=0.01, requires_grad=True), parametric=None):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
         self.params = self.kern.params + self.noise.params
         for i, kern in enumerate(self.kern.kernels):
             kern.name = 'kern_{}'.format(i)
+        self.parametric = parametric
+        if parametric is not None:
+            self.params += parametric.params
 
     def forward(self, data, inducing=None):
         if inducing is None:
@@ -128,9 +131,32 @@ class GaussianProcessPotential(Module):
             return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q,
                                              torch.ones(Q.size(0))*self.noise.signal**2)
 
+    def mean(self, data, forces=True, cat=True):
+        if self.parametric is None:
+            if forces:
+                if cat:
+                    return 0
+                else:
+                    return 0, 0
+            else:
+                return 0
+        else:
+            e = [self.parametric(sys, forces=forces) for sys in iterable(data)]
+            if forces:
+                e, f = zip(*e)
+                e = torch.tensor(e).view(-1)
+                f = torch.cat(f).view(-1)
+                if cat:
+                    return torch.cat([e, f])
+                else:
+                    return e, f
+            else:
+                return torch.tensor(e).view(-1)
+
     def Y(self, data):
-        return torch.cat([torch.tensor([sys.target_energy for sys in data])] +
-                         [sys.target_forces.view(-1) for sys in data])
+        y = torch.cat([torch.tensor([sys.target_energy for sys in data])] +
+                      [sys.target_forces.view(-1) for sys in data])
+        return y - self.mean(data)
 
     def loss(self, data, Y=None, inducing=None, logprob_loss=True, cov_loss=False):
         p = self(data, inducing=inducing)
@@ -161,7 +187,8 @@ class GaussianProcessPotential(Module):
 
     @property
     def state_args(self):
-        return ', '.join([self.kern.state_args, self.noise.state])
+        return '{}, noise={}, parametric={}'.format(self.kern.state_args, self.noise.state,
+                                                    self.parametric)
 
     @property
     def state(self):
@@ -231,7 +258,11 @@ class PosteriorPotential(Module):
             if self.has_target_forces:
                 A = torch.cat([A, self.gp.kern(test, self.X, cov=quant+'_forces')],
                               dim=1)
-            out = (A @ self.mu).view(*shape[quant])
+            if quant == 'energy':
+                mean = self.gp.mean(test, forces=False)
+            else:
+                _, mean = self.gp.mean(test, forces=True, cat=False)
+            out = (mean + A @ self.mu).view(*shape[quant])
             if variance:
                 var = (self.gp.kern.diag(test, quant) -
                        (A @ self.sig @ A.t()).diag()).view(*shape[quant])
@@ -240,6 +271,9 @@ class PosteriorPotential(Module):
                 return out
 
     def predict(self, test, variance=False, enable_grad=False):
+        if self.gp.parametric is not None:
+            raise NotImplementedError(
+                'this method is not updated to include parametric potential')
         with torch.set_grad_enabled(enable_grad):
             A = self.gp.kern(test, self.X, cov='energy_energy')
             B = self.gp.kern(test, self.X, cov='forces_energy')
