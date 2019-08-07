@@ -109,12 +109,16 @@ class GaussianProcessPotential(Module):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
-        self.params = self.kern.params + self.noise.params
         for i, kern in enumerate(self.kern.kernels):
             kern.name = 'kern_{}'.format(i)
         self.parametric = parametric
-        if parametric is not None:
-            self.params += parametric.params
+
+    @property
+    def params(self):
+        p = self.kern.params + self.noise.params
+        if self.parametric is not None:
+            p += self.parametric.unique_params
+        return p
 
     def forward(self, data, inducing=None):
         if inducing is None:
@@ -193,6 +197,9 @@ class GaussianProcessPotential(Module):
     @property
     def state(self):
         return 'GaussianProcessPotential({})'.format(self.state_args)
+
+    def __repr__(self):
+        return self.state
 
     def to_file(self, file, flag='', mode='a'):
         from theforce.util.util import one_liner
