@@ -250,10 +250,6 @@ class PosteriorPotential(Module):
                 #F = (F @ self.mu).reshape(-1, 3)
                 #inducing.set_per_atom('target_forces', F)
         gp.method_caching = caching_status
-        self._data = (data, inducing)
-
-    def update(self, **kwargs):
-        self.set_data(*self.data, **kwargs)
 
     def train(self, *args, **kwargs):
         train_gpp(self.gp, *args, **kwargs)
