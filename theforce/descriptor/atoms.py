@@ -14,6 +14,7 @@ import copy
 import warnings
 from theforce.util.util import iterable
 import random
+import itertools
 
 
 def lex3(x):
@@ -369,6 +370,13 @@ class AtomsData:
                 _num.add(n)
         numbers = sorted(list(_num))
         return numbers
+
+    def pairs_set(self, numbers=None):
+        if numbers is None:
+            numbers = self.numbers_set()
+        pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
+                 [(a, a) for a in numbers])
+        return pairs
 
     def apply(self, operation, *args, **kwargs):
         for atoms in self.X:
