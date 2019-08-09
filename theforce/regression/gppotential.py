@@ -148,14 +148,14 @@ class GaussianProcessPotential(Module):
             e = [self.parametric(sys, forces=forces) for sys in iterable(data)]
             if forces:
                 e, f = zip(*e)
-                e = torch.tensor(e).view(-1)
+                e = torch.cat([_e.view(-1) for _e in e])
                 f = torch.cat(f).view(-1)
                 if cat:
                     return torch.cat([e, f])
                 else:
                     return e, f
             else:
-                return torch.tensor(e).view(-1)
+                return torch.cat([_e.view(-1) for _e in e])
 
     def Y(self, data):
         y = torch.cat([torch.tensor([sys.target_energy for sys in data])] +
