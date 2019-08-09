@@ -120,6 +120,15 @@ class GaussianProcessPotential(Module):
             p += self.parametric.unique_params
         return p
 
+    @property
+    def requires_grad(self):
+        return [p.requires_grad for p in self.params]
+
+    @requires_grad.setter
+    def requires_grad(self, value):
+        for p in self.params:
+            p.requires_grad = value
+
     def forward(self, data, inducing=None):
         if inducing is None:
             L = torch.cat([self.kern(data, cov='energy_energy'),
