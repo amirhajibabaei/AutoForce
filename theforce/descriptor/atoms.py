@@ -347,16 +347,18 @@ class TorchAtoms(Atoms):
 class AtomsData:
 
     def __init__(self, X=None, traj=None, posgrad=False, cellgrad=False, **kwargs):
-        if X:
+        if X is not None:
             self.X = X
             assert self.check_content()
-        elif traj:
+        elif traj is not None:
             self.X = []
             from ase.io import Trajectory
             t = Trajectory(traj, 'r')
             self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
                        for atoms in t]
             t.close()
+        else:
+            raise RuntimeError('AtomsData invoked without any input')
         self.posgrad = posgrad
         self.cellgrad = cellgrad
 
@@ -438,7 +440,10 @@ class AtomsData:
             yield atoms
 
     def __getitem__(self, k):
-        return self.X[k]
+        if isinstance(k, int):
+            return self.X[k]
+        else:
+            return AtomsData(self.X[k])
 
     def __len__(self):
         return len(self.X)
@@ -486,12 +491,12 @@ class AtomsData:
 class LocalsData:
 
     def __init__(self, X=None, traj=None):
-        if X:
+        if X is not None:
             self.X = []
             for loc in X:
                 assert loc.__class__ == Local
                 self.X += [loc]
-        elif traj:
+        elif traj is not None:
             from ase.io import Trajectory
             t = Trajectory(traj, 'r')
             self.X = []
@@ -501,6 +506,8 @@ class LocalsData:
                     raise RuntimeError
                 self.X += [tatoms.as_local()]
             t.close()
+        else:
+            raise RuntimeError('LocalsData invoked without any input')
         self.trainable = False
 
     def stage(self, descriptors):
@@ -519,7 +526,10 @@ class LocalsData:
             yield locs
 
     def __getitem__(self, k):
-        return self.X[k]
+        if isinstance(k, int):
+            return self.X[k]
+        else:
+            return LocalsData(self.X[k])
 
     def __len__(self):
         return len(self.X)
