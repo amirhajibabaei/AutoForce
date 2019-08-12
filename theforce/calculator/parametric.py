@@ -9,6 +9,8 @@ from torch.nn import Module
 from theforce.util.util import iterable
 from theforce.math.func import Negative, Positive, Real, Pow, Param, I
 from theforce.math.cutoff import PolyCut
+from torch.autograd import grad
+from ase.calculators.calculator import Calculator, all_changes
 import itertools
 
 
@@ -200,6 +202,33 @@ def get_lj_terms(numbers, cutoff, default_order=0.01):
 
 def load_parametric_potential(state):
     return eval(state)
+
+
+class ParametricCalculator(Calculator):
+    implemented_properties = ['energy', 'forces', 'free_energy', 'stress']
+
+    def __init__(self, potential, **kwargs):
+        Calculator.__init__(self, **kwargs)
+        self.potential = potential
+
+    def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+        Calculator.calculate(self, atoms, properties, system_changes)
+        self.atoms.update(posgrad=False, cellgrad=True, forced=True)
+
+        # energy, forces
+        energy, forces = self.potential(
+            self.atoms, forces=True, enable_grad=True)
+
+        # stress
+        stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
+        cellgrad, = grad(energy, self.atoms.lll)
+        stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
+        stress = (stress1 + stress2).detach().numpy() / self.atoms.get_volume()
+
+        self.results['energy'] = energy.detach().numpy()
+        self.results['forces'] = forces.detach().numpy()
+        self.results['free_energy'] = self.results['energy']
+        self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
 
 
 def test():
