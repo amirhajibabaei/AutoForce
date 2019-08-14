@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -108,10 +108,10 @@ class TailoredSoap(Module):
         self.soap = soap
         n = torch.arange(soap.abs.nmax+1)
         self.mask = ((n[:, None]-n[None]).abs() <=
-                     soap.abs.nmax-corners).byte()
+                     soap.abs.nmax-corners)
 
         if not symm:
-            self.mask = (self.mask & (n[:, None] >= n[None]).byte())
+            self.mask = (self.mask & (n[:, None] >= n[None]))
 
         self._state_args = "corners={}, symm={}".format(corners, symm)
         self.params = []

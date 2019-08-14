@@ -44,9 +44,9 @@ class Local:
         self._r = r
         self._m = ones_like(self._i).to(torch.bool)
         if off is None:
-            self._lex = ones_like(self._i).byte()
+            self._lex = ones_like(self._i).to(torch.bool)
         else:
-            self._lex = torch.tensor([lex3(a) for a in off]).byte()
+            self._lex = torch.tensor([lex3(a) for a in off])
         self.loc = self
         self.stage(descriptors)
 
