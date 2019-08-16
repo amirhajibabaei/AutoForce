@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -8,6 +8,7 @@ from torch.nn import Module
 from torch import cat
 from theforce.util.util import iterable
 from theforce.util.caching import method_caching
+from theforce.util.parallel import method_forker
 
 
 class SimilarityKernel(Module):
@@ -17,13 +18,16 @@ class SimilarityKernel(Module):
         self.kern = kernel
         self.params = self.kern.params
 
+    @method_forker
     def forward(self, first, second, operation='func'):
         return cat([cat([getattr(self, operation)(a, b) for a in iterable(first)], dim=0
                         ) for b in iterable(second)], dim=1)
 
+    @method_forker
     def diag(self, first, operation='func'):
         return cat([getattr(self, operation+'diag')(a) for a in iterable(first)])
 
+    @method_forker
     def funcdiag(self, first):
         return self.func(first, first).view(1)
 

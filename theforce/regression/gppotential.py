@@ -50,7 +50,7 @@ class EnergyForceKernel(Module):
         return self.base_kerns(first, second, 'gradgrad')
 
     def base_kerns(self, first, second, operation):
-        return torch.stack([kern(first, second, operation)
+        return torch.stack([kern(first, second, operation=operation)
                             for kern in self.kernels]).sum(dim=0)
 
     # diagonal elements:
@@ -70,7 +70,7 @@ class EnergyForceKernel(Module):
         return self.base_kerns_diag(data, 'gradgrad')
 
     def base_kerns_diag(self, data, operation):
-        return torch.stack([kern.diag(data, operation)
+        return torch.stack([kern.diag(data, operation=operation)
                             for kern in self.kernels]).sum(dim=0)
 
     @property
@@ -198,6 +198,10 @@ class GaussianProcessPotential(Module):
     def clear_cached(self):
         self.kern.clear_cached()
 
+    def set_process_group(self, group=torch.distributed.group.WORLD):
+        for kern in self.kern.kernels:
+            kern.process_group = group
+
     @property
     def state_args(self):
         return '{}, noise={}, parametric={}'.format(self.kern.state_args, self.noise.state,
@@ -219,9 +223,11 @@ class GaussianProcessPotential(Module):
 
 class PosteriorPotential(Module):
 
-    def __init__(self, gp, data, inducing=None, use_caching=False, enable_grad=False):
+    def __init__(self, gp, data, inducing=None, use_caching=False, enable_grad=False, group=None):
         super().__init__()
         self.gp = gp
+        if group is not None:
+            self.set_process_group(group)
         self.set_data(data, inducing, use_caching, enable_grad)
 
     def set_data(self, data, inducing=None, use_caching=False, enable_grad=False):
@@ -259,6 +265,9 @@ class PosteriorPotential(Module):
                 #F = (F @ self.mu).reshape(-1, 3)
                 #inducing.set_per_atom('target_forces', F)
         gp.method_caching = caching_status
+
+    def set_process_group(self, *args, **kwargs):
+        self.gp.set_process_group(*args, **kwargs)
 
     def train(self, *args, **kwargs):
         train_gpp(self.gp, *args, **kwargs)
