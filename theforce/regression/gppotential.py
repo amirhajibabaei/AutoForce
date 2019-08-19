@@ -198,9 +198,13 @@ class GaussianProcessPotential(Module):
     def clear_cached(self):
         self.kern.clear_cached()
 
-    def set_process_group(self, group=torch.distributed.group.WORLD):
+    def attach_process_group(self, group=torch.distributed.group.WORLD):
         for kern in self.kern.kernels:
             kern.process_group = group
+
+    def detach_process_group(self):
+        for kern in self.kern.kernels:
+            del kern.process_group
 
     @property
     def state_args(self):
@@ -227,7 +231,7 @@ class PosteriorPotential(Module):
         super().__init__()
         self.gp = gp
         if group is not None:
-            self.set_process_group(group)
+            self.attach_process_group(group)
         self.set_data(data, inducing, use_caching, enable_grad)
 
     def set_data(self, data, inducing=None, use_caching=False, enable_grad=False):
@@ -266,8 +270,11 @@ class PosteriorPotential(Module):
                 #inducing.set_per_atom('target_forces', F)
         gp.method_caching = caching_status
 
-    def set_process_group(self, *args, **kwargs):
-        self.gp.set_process_group(*args, **kwargs)
+    def attach_process_group(self, *args, **kwargs):
+        self.gp.attach_process_group(*args, **kwargs)
+
+    def detach_process_group(self, *args, **kwargs):
+        self.gp.detach_process_group(*args, **kwargs)
 
     def train(self, *args, **kwargs):
         train_gpp(self.gp, *args, **kwargs)
