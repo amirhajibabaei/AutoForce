@@ -43,16 +43,17 @@ class Local:
         self._b = from_numpy(b)
         self._r = r
         self._m = ones_like(self._i).to(torch.bool)
-        if off is None:
-            self._lex = ones_like(self._i).to(torch.bool)
-        else:
-            self._lex = torch.tensor([lex3(a) for a in off])
-        self.loc = self
+        self.off = off
         self.stage(descriptors)
 
     def stage(self, descriptors):
         for desc in descriptors:
             desc.precalculate(self)
+
+    @property
+    def loc(self):
+        """This is defined as a property in order to avoid memory leak."""
+        return self
 
     @property
     def i(self):
@@ -73,6 +74,14 @@ class Local:
     @property
     def r(self):
         return self._r[self._m]
+
+    @property
+    def _lex(self):
+        """This is defined as a property in order to avoid memory leak."""
+        if self.off is None:
+            return ones_like(self._i).to(torch.bool)
+        else:
+            return torch.tensor([lex3(a) for a in off])
 
     @property
     def lex(self):
