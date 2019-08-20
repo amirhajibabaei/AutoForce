@@ -81,7 +81,7 @@ class Local:
         if self.off is None:
             return ones_like(self._i).to(torch.bool)
         else:
-            return torch.tensor([lex3(a) for a in off])
+            return torch.tensor([lex3(a) for a in self.off])
 
     @property
     def lex(self):
