@@ -39,6 +39,9 @@ class PosteriorStressCalculator(Calculator):
         self.potential = potential
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+        if self.potential.is_distributed:
+            raise NotImplementedError(
+                '(Auto)stress in distributed mode is not implemented')
         Calculator.calculate(self, atoms, properties, system_changes)
         self.atoms.update(cellgrad=True, forced=True)
         # energy and forces
@@ -87,6 +90,9 @@ class AutoForceCalculator(Calculator):
         self.potential = potential
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+        if self.potential.is_distributed:
+            raise NotImplementedError(
+                '(Auto)forces in distributed mode is not implemented')
         Calculator.calculate(self, atoms, properties, system_changes)
         self.atoms.update(posgrad=True, cellgrad=True, forced=True)
         # energy
