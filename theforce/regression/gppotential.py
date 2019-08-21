@@ -232,6 +232,8 @@ class PosteriorPotential(Module):
         self.gp = gp
         if group is not None:
             self.attach_process_group(group)
+        else:
+            self.is_distributed = False
         self.set_data(data, inducing, use_caching, enable_grad)
 
     def set_data(self, data, inducing=None, use_caching=False, enable_grad=False):
@@ -272,9 +274,11 @@ class PosteriorPotential(Module):
 
     def attach_process_group(self, *args, **kwargs):
         self.gp.attach_process_group(*args, **kwargs)
+        self.is_distributed = True
 
     def detach_process_group(self, *args, **kwargs):
         self.gp.detach_process_group(*args, **kwargs)
+        self.is_distributed = False
 
     def train(self, *args, **kwargs):
         train_gpp(self.gp, *args, **kwargs)
