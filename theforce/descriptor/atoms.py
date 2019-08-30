@@ -13,6 +13,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 import copy
 import warnings
 from theforce.util.util import iterable
+from theforce.util.parallel import balance_work
 import random
 import itertools
 
@@ -198,13 +199,17 @@ class AtomsChanges:
 class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
-                 descriptors=[], **kwargs):
+                 descriptors=[], group=None, **kwargs):
         super().__init__(**kwargs)
 
         if ase_atoms:
             self.__dict__ = ase_atoms.__dict__
 
         # ------------------------------- ----------
+        if group is not None:
+            self.attach_process_group(group)
+        else:
+            self.is_distributed = False
         self.cutoff = cutoff
         self.descriptors = descriptors
         self.changes = AtomsChanges(self)
@@ -224,6 +229,14 @@ class TorchAtoms(Atoms):
                 if 'forces' in ase_atoms.calc.results:
                     self.target_forces = as_tensor(ase_atoms.get_forces())
 
+    def attach_process_group(self, group):
+        self.process_group = group
+        self.is_distributed = True
+
+    def detach_process_group(self):
+        del self.process_group
+        self.is_distributed = False
+
     def build_nl(self, rc):
         self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
                                self_interaction=False, bothways=True)
@@ -233,6 +246,15 @@ class TorchAtoms(Atoms):
             self.lll = torch.from_numpy(self.cell)
         except TypeError:
             self.lll = torch.from_numpy(self.cell.array)
+        # distributed setup
+        if self.is_distributed:
+            workers = torch.distributed.get_world_size(
+                group=self.process_group)
+            indices = balance_work(self.natoms, workers)
+            rank = torch.distributed.get_rank(group=self.process_group)
+            self.indices = range(*indices[rank])
+        else:
+            self.indices = range(self.natoms)
 
     def update(self, cutoff=None, descriptors=None, forced=False,
                posgrad=False, cellgrad=False):
@@ -248,7 +270,7 @@ class TorchAtoms(Atoms):
             types = self.get_atomic_numbers()
             self.xyz.requires_grad = posgrad
             self.lll.requires_grad = cellgrad
-            for a in range(self.natoms):
+            for a in self.indices:
                 n, off = self.nl.get_neighbors(a)
                 cells = (from_numpy(off[..., None].astype(np.float)) *
                          self.lll).sum(dim=1)
@@ -309,7 +331,8 @@ class TorchAtoms(Atoms):
                          numbers=self.numbers.copy(),
                          pbc=self.pbc.copy(),
                          descriptors=self.descriptors,
-                         cutoff=self.cutoff)
+                         cutoff=self.cutoff,
+                         group=self.process_group if self.is_distributed else None)
         vel = self.get_velocities()
         if vel is not None:
             new.set_velocities(vel)
