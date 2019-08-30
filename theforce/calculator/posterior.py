@@ -22,8 +22,10 @@ class PosteriorCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
         self.atoms.update(forced=True)
         # energy and forces
-        energy = self.potential([self.atoms], 'energy')
-        forces = self.potential([self.atoms], 'forces')
+        energy = self.potential([self.atoms], 'energy',
+                                all_reduce=self.atoms.is_distributed)
+        forces = self.potential([self.atoms], 'forces',
+                                all_reduce=self.atoms.is_distributed)
         # results
         self.results['energy'] = energy.detach().numpy()[0]
         self.results['forces'] = forces.detach().numpy()
@@ -45,11 +47,15 @@ class PosteriorStressCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
         self.atoms.update(cellgrad=True, forced=True)
         # energy and forces
-        energy = self.potential([self.atoms], 'energy', enable_grad=True)
-        forces = self.potential([self.atoms], 'forces')
+        energy = self.potential([self.atoms], 'energy', enable_grad=True,
+                                all_reduce=self.atoms.is_distributed)
+        forces = self.potential([self.atoms], 'forces',
+                                all_reduce=self.atoms.is_distributed)
         # stress
         stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
         cellgrad, = grad(energy, self.atoms.lll)
+        if self.atoms.is_distributed:
+            torch.distributed.all_reduce(cellgrad)
         stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
         stress = (stress1 + stress2).detach().numpy() / self.atoms.get_volume()
         # results
@@ -68,6 +74,9 @@ class PosteriorVarianceCalculator(Calculator):
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
+        if self.atoms.is_distributed:
+            raise NotImplementedError(
+                'variance is not implemented for distributed atoms')
         self.atoms.update()
         energy, energy_var = self.potential(
             [self.atoms], 'energy', variance=True)
@@ -96,12 +105,17 @@ class AutoForceCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
         self.atoms.update(posgrad=True, cellgrad=True, forced=True)
         # energy
-        energy = self.potential([self.atoms], 'energy', enable_grad=True)
+        energy = self.potential([self.atoms], 'energy', enable_grad=True,
+                                all_reduce=self.atoms.is_distributed)
         # forces
         forces = -grad(energy, self.atoms.xyz, retain_graph=True)[0]
+        if self.atoms.is_distributed:
+            torch.distributed.all_reduce(forces)
         # stress
         stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
         cellgrad, = grad(energy, self.atoms.lll)
+        if self.atoms.is_distributed:
+            torch.distributed.all_reduce(cellgrad)
         stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
         stress = (stress1 + stress2).detach().numpy() / self.atoms.get_volume()
         # results
