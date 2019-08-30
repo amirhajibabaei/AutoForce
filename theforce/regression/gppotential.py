@@ -283,7 +283,7 @@ class PosteriorPotential(Module):
     def train(self, *args, **kwargs):
         train_gpp(self.gp, *args, **kwargs)
 
-    def forward(self, test, quant='energy', variance=False, enable_grad=False):
+    def forward(self, test, quant='energy', variance=False, enable_grad=False, all_reduce=False):
         shape = {'energy': (-1,), 'forces': (-1, 3)}
         with torch.set_grad_enabled(enable_grad):
             A = self.gp.kern(test, self.X, cov=quant+'_energy')
@@ -295,7 +295,12 @@ class PosteriorPotential(Module):
             else:
                 _, mean = self.gp.mean(test, forces=True, cat=False)
             out = (mean + A @ self.mu).view(*shape[quant])
+            if all_reduce:
+                torch.distributed.all_reduce(out)
             if variance:
+                if all_reduce:
+                    raise NotImplementedError(
+                        'all_reduce with variance=True is not implemented')
                 var = (self.gp.kern.diag(test, quant) -
                        (A @ self.sig @ A.t()).diag()).view(*shape[quant])
                 return out, var
