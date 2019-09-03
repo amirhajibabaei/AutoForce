@@ -256,9 +256,12 @@ class PosteriorPotential(Module):
                 Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
                 Q, R = torch.qr(A)
                 self.mu = R.inverse() @ Q.t() @ Y
+
                 i = L.inverse()
-                W = K @ i.t() @ i
-                self.sig = W.t() @ p.precision_matrix @ W
+                B = K @ i.t()
+                I = torch.eye(i.size(0))
+                T = torch.cholesky(B.t() @ B / gp.noise.signal**2 + I)
+                self.sig = i.t() @ (I - torch.cholesky_inverse(T)) @ i
 
                 self.X = inducing
                 self.has_target_forces = False
