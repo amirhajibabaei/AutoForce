@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -50,22 +50,22 @@ class Ylm(Module):
     using pytorch.
     """
 
-    def __init__(self, lmax):
+    def __init__(self, lmax, device=None):
         super().__init__()
 
         self.lmax = lmax
 
         # pre-calculate
-        self.Yoo = torch.sqrt(1./(4*pi))
+        self.Yoo = torch.sqrt(1./(4*pi)).to(device)
         self.alp_al = 2*[[]] + [torch.tensor([torch.tensor((4.*l*l-1.)/(l*l-m*m)).sqrt()
-                                              for m in range(l-1)])[:, None]
+                                              for m in range(l-1)])[:, None].to(device)
                                 for l in range(2, lmax+1)]
         self.alp_bl = 2*[[]] + [torch.tensor([-torch.tensor(((l-1.)**2-m*m)/(4*(l-1.)**2-1)).sqrt()
-                                              for m in range(l-1)])[:, None]
+                                              for m in range(l-1)])[:, None].to(device)
                                 for l in range(2, lmax+1)]
-        self.alp_cl = [torch.tensor(2.*l+1.).sqrt()
+        self.alp_cl = [torch.tensor(2.*l+1.).sqrt().to(device)
                        for l in range(lmax+1)]
-        self.alp_dl = [[]] + [-torch.tensor(1.+1./(2.*l)).sqrt()
+        self.alp_dl = [[]] + [-torch.tensor(1.+1./(2.*l)).sqrt().to(device)
                               for l in range(1, lmax+1)]
 
         # indices: for traversing diagonals
@@ -75,8 +75,8 @@ class Ylm(Module):
         # l,m tables
         self.l = torch.tensor([[l for m in range(l)] +
                                [m for m in range(l, self.lmax+1)]
-                               for l in range(self.lmax+1)])[:, :, None]
-        self.m = torch.zeros_like(self.l)
+                               for l in range(self.lmax+1)])[:, :, None].to(device)
+        self.m = torch.zeros_like(self.l).to(device)
         for m in range(self.lmax+1):
             self.m[self.I[m], self.J[m]] = m
             self.m[self.J[m], self.I[m]] = m
@@ -84,16 +84,19 @@ class Ylm(Module):
         # lower triangle indices
         one = torch.ones(lmax+1, lmax+1)
         self.sign = (-torch.tril(one, diagonal=-1) +
-                     torch.triu(one))[..., None]
+                     torch.triu(one))[..., None].to(device)
 
         # l,m related coeffs
         self.coef = (((self.l-self.m)*(self.l+self.m)*(2*self.l+1)).float()
-                     / (2*self.l-1).float())[1:, 1:].sqrt()
+                     / (2*self.l-1).float())[1:, 1:].sqrt().to(device)
 
         # floats
-        self.l_float = self.l.type(one.type())
-        self.m_float = self.m.type(one.type())
-        self.coef = self.coef.type(one.type())
+        self.l_float = self.l.type(one.type()).to(device)
+        self.m_float = self.m.type(one.type()).to(device)
+        self.coef = self.coef.type(one.type()).to(device)
+
+        # store device
+        self.device = device
 
     def forward(self, xyz, with_r=None, grad=True, spherical_grads=False):
         """
@@ -128,15 +131,15 @@ class Ylm(Module):
         r_sin_theta = _r*sin_theta
         r_cos_theta = _r*cos_theta
         # Associated Legendre polynomials
-        alp = [[torch.full_like(sin_theta, self.Yoo)]]
+        alp = [[torch.full_like(sin_theta, self.Yoo, device=self.device)]]
         for l in range(1, self.lmax+1):
             alp += [[self.alp_al[l][m] * (r_cos_theta*alp[l-1][m] + r2*self.alp_bl[l][m] *
                                           alp[l-2][m]) for m in range(l-1)]
                     + [self.alp_cl[l] * r_cos_theta * alp[l-1][l-1]]
                     + [self.alp_dl[l] * r_sin_theta * alp[l-1][l-1]]]
         # sin, cos of m*phi
-        sin = [torch.zeros_like(sin_phi), sin_phi]
-        cos = [torch.ones_like(cos_phi), cos_phi]
+        sin = [torch.zeros_like(sin_phi, device=self.device), sin_phi]
+        cos = [torch.ones_like(cos_phi, device=self.device), cos_phi]
         for m in range(2, self.lmax+1):
             s = sin_phi*cos[-1] + cos_phi*sin[-1]
             c = cos_phi*cos[-1] - sin_phi*sin[-1]
@@ -146,11 +149,11 @@ class Ylm(Module):
         n = sin_theta.size(0)
         Yr = torch.cat(
             [torch.cat([(alp[l][m]*cos[m]).view(1, n) for m in range(l, -1, -1)] +
-                       [torch.zeros(self.lmax-l, n)]).view(self.lmax+1, 1, n) for l in range(self.lmax+1)
+                       [torch.zeros(self.lmax-l, n, device=self.device)]).view(self.lmax+1, 1, n) for l in range(self.lmax+1)
              ], dim=1).permute(1, 0, 2)
         Yi = torch.cat(
             [torch.cat([(alp[l][m]*sin[m]).view(1, n) for m in range(l, -1, -1)] +
-                       [torch.zeros(self.lmax-l, n)]).view(self.lmax+1, 1, n) for l in range(self.lmax+1)
+                       [torch.zeros(self.lmax-l, n, device=self.device)]).view(self.lmax+1, 1, n) for l in range(self.lmax+1)
              ], dim=1)
         Y = Yr + Yi
         # partial derivatives
@@ -158,8 +161,9 @@ class Ylm(Module):
             if with_r is None:
                 Y_r = self.l_float*Y/r
             else:
-                Y_r = torch.zeros_like(Y)
+                Y_r = torch.zeros_like(Y, device=self.device)
             Y_theta = cos_theta * self.l_float * Y / sin_theta
+
             Y_theta[1:, 1:] -= _r * Y[:-1, :-1] * self.coef / sin_theta
             Y_phi = Y.clone().permute(1, 0, 2) * self.sign * self.m_float
             if spherical_grads:
@@ -228,22 +232,23 @@ def compare_with_numpy_version():
 def compare_grads_with_autograd():
     torch.set_default_tensor_type(torch.DoubleTensor)
 
-    sph = Ylm(3)
-    xyz = torch.rand(10, 3, requires_grad=True)
+    device = 'cpu'
+    sph = Ylm(3, device=device)
+    xyz = torch.rand(10, 3, requires_grad=True, device=device)
     Y, grad = sph(xyz, grad=True, with_r=1)
     Y.sum().backward()
     a = xyz.grad.allclose(grad.sum(dim=(0, 1)))
     ea = (xyz.grad-grad.sum(dim=(0, 1))).abs().max().data
     print(a, ea)
 
-    xyz = torch.rand(10, 3, requires_grad=True)
+    xyz = torch.rand(10, 3, requires_grad=True, device=device)
     Y, grad = sph(xyz, grad=True, with_r=None)
     Y.sum().backward()
     a = xyz.grad.allclose(grad.sum(dim=(0, 1)))
     ea = (xyz.grad-grad.sum(dim=(0, 1))).abs().max().data
     print(a, ea)
 
-    xyz = torch.tensor([[0, 0, 1.0]], requires_grad=True)
+    xyz = torch.tensor([[0, 0, 1.0]], requires_grad=True, device=device)
     Y, grad = sph(xyz, grad=True, with_r=None)
     Y.sum().backward()
     a = xyz.grad.allclose(grad.sum(dim=(0, 1)))
