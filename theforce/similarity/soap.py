@@ -12,7 +12,7 @@ import torch
 
 class SoapKernel(SimilarityKernel):
 
-    def __init__(self, kernel, a, b, lmax, nmax, radial, atomic_unit=None):
+    def __init__(self, kernel, a, b, lmax, nmax, radial, atomic_unit=None, device=None):
         super().__init__(kernel)
         self.a = a
         self.b = sorted(iterable(b))
@@ -25,7 +25,7 @@ class SoapKernel(SimilarityKernel):
             units = {_b: atomic_unit[(a, _b)] if (a, _b) in atomic_unit else atomic_unit[(_b, a)]
                      for _b in self.b}
         self.descriptor = MultiSoap([TailoredSoap(RealSeriesSoap(
-            lmax, nmax, radial, atomic_unit=units[_b])) for _b in self.b])
+            lmax, nmax, radial, atomic_unit=units[_b], device=device)) for _b in self.b])
         self.dim = self.descriptor.dim
         self._args = '{}, {}, {}, {}, {}, atomic_unit={}'.format(
             a, b, lmax, nmax, radial.state, atomic_unit)
