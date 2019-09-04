@@ -15,9 +15,9 @@ from theforce.math.func import I, Exp
 
 class AbsSeriesSoap(Module):
 
-    def __init__(self, lmax, nmax, radial, unit=None):
+    def __init__(self, lmax, nmax, radial, unit=None, device=None):
         super().__init__()
-        self.ylm = Ylm(lmax)
+        self.ylm = Ylm(lmax, device=device)
         self.nmax = nmax
         self.radial = radial
         if unit:
@@ -25,8 +25,8 @@ class AbsSeriesSoap(Module):
         else:
             self.unit = radial.rc/3
         one = torch.ones(lmax+1, lmax+1)
-        self.Yr = 2*torch.torch.tril(one) - torch.eye(lmax+1)
-        self.Yi = 2*torch.torch.triu(one, diagonal=1)
+        self.Yr = (2*torch.torch.tril(one) - torch.eye(lmax+1)).to(device)
+        self.Yi = (2*torch.torch.triu(one, diagonal=1)).to(device)
 
     @property
     def state_args(self):
@@ -65,7 +65,7 @@ class AbsSeriesSoap(Module):
 
 class RealSeriesSoap(Module):
 
-    def __init__(self, lmax, nmax, radial, atomic_unit=None):
+    def __init__(self, lmax, nmax, radial, atomic_unit=None, device=None):
         """radial: usually a cutoff function, should have an rc attr."""
         super().__init__()
 
@@ -73,11 +73,12 @@ class RealSeriesSoap(Module):
         if atomic_unit is None:
             atomic_unit = radial.rc/3
         R = Exp(-0.5*I()**2/atomic_unit**2)*radial
-        self.abs = AbsSeriesSoap(lmax, nmax, R, unit=atomic_unit)
+        self.abs = AbsSeriesSoap(
+            lmax, nmax, R, unit=atomic_unit, device=device)
 
         a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
-                           for l in range(lmax+1)] for n in range(nmax+1)])
-        self.nnl = (a[None]*a[:, None]).sqrt()
+                           for l in range(lmax+1)] for n in range(nmax+1)], device=device)
+        self.nnl = (a[None]*a[:, None]).sqrt().to(device)
 
     def forward(self, xyz, grad=True):
         p = self.abs(xyz, grad=grad)
@@ -154,8 +155,8 @@ class MultiSoap(Module):
         if grad:
             p, _q = zip(*p)
             n = xyz.size(0)
-            i = torch.arange(n).long()
-            q = torch.cat([torch.zeros(soap.dim, n, 3).index_add(1, i[m], qq)
+            i = torch.arange(n, device=xyz.device).long()
+            q = torch.cat([torch.zeros(soap.dim, n, 3, device=xyz.device).index_add(1, i[m], qq)
                            for soap, m, qq in zip(*[self.soaps, masks, _q])])
         p = torch.cat(p)
 
