@@ -31,19 +31,19 @@ def lex3(x):
 
 class Local:
 
-    def __init__(self, i, j, a, b, r, off=None, descriptors=[]):
+    def __init__(self, i, j, a, b, r, off=None, descriptors=[], device=None):
         """
         i, j: indices
         a, b: atomic numbers
         r : r[j] - r[i]
         off: offsets
         """
-        self._i = from_numpy(np.full_like(j, i))
-        self._j = from_numpy(j)
-        self._a = from_numpy(np.full_like(b, a))
-        self._b = from_numpy(b)
-        self._r = r
-        self._m = ones_like(self._i).to(torch.bool)
+        self._i = from_numpy(np.full_like(j, i)).to(device)
+        self._j = from_numpy(j).to(device)
+        self._a = from_numpy(np.full_like(b, a)).to(device)
+        self._b = from_numpy(b).to(device)
+        self._r = r.to(device)
+        self._m = ones_like(self._i).to(torch.bool).to(device)
         self.off = off
         self.stage(descriptors)
 
@@ -80,9 +80,9 @@ class Local:
     def _lex(self):
         """This is defined as a property in order to avoid memory leak."""
         if self.off is None:
-            return ones_like(self._i).to(torch.bool)
+            return ones_like(self._i, device=self._i.device).to(torch.bool)
         else:
-            return torch.tensor([lex3(a) for a in self.off], dtype=torch.bool)
+            return torch.tensor([lex3(a) for a in self.off], dtype=torch.bool, device=self._i.device)
 
     @property
     def lex(self):
@@ -257,7 +257,7 @@ class TorchAtoms(Atoms):
             self.indices = range(self.natoms)
 
     def update(self, cutoff=None, descriptors=None, forced=False,
-               posgrad=False, cellgrad=False):
+               posgrad=False, cellgrad=False, device=None):
         if cutoff or self.changes.numbers:
             self.build_nl(cutoff if cutoff else self.cutoff)
             forced = True
@@ -276,7 +276,7 @@ class TorchAtoms(Atoms):
                          self.lll).sum(dim=1)
                 r = self.xyz[n] - self.xyz[a] + cells
                 self.loc += [Local(a, n, types[a], types[n],
-                                   r, off, self.descriptors)]
+                                   r, off, self.descriptors, device=device)]
             for loc in self.loc:
                 loc.natoms = self.natoms
 
