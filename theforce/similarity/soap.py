@@ -68,7 +68,7 @@ class SoapKernel(SimilarityKernel):
         dd = self.saved(q, 'value')
         empty = self.saved(p, 'empty')
         c = self.kern.leftgrad(d, dd)
-        g = torch.zeros(p.natoms, 3)
+        g = torch.zeros(p.natoms, 3, device=c.device)
         _i = 0
         for i, loc in enumerate(p):
             if not empty[i]:
@@ -84,7 +84,7 @@ class SoapKernel(SimilarityKernel):
         dd = self.saved(q, 'value')
         empty = self.saved(q, 'empty')
         c = self.kern.rightgrad(d, dd)
-        g = torch.zeros(q.natoms, 3)
+        g = torch.zeros(q.natoms, 3, device=c.device)
         _i = 0
         for i, loc in enumerate(q):
             if not empty[i]:
@@ -122,8 +122,10 @@ class SoapKernel(SimilarityKernel):
         a = ((grad1[:, None, :, None, :, None]*grad2[None, :, None, :, None]))
         b = c.index_select(2, i1).index_select(3, i2)[..., None, None]
         g = (a*b).sum(dim=(0, 1)).permute(0, 2, 1, 3)
-        f = torch.zeros(p.natoms, 3, j2.size(0), 3).index_add(0, j1, g)
-        h = torch.zeros(p.natoms, 3, q.natoms, 3).index_add(2, j2, f)
+        f = torch.zeros(p.natoms, 3, j2.size(0), 3,
+                        device=c.device).index_add(0, j1, g)
+        h = torch.zeros(p.natoms, 3, q.natoms, 3,
+                        device=c.device).index_add(2, j2, f)
         return h.view(p.natoms*3, q.natoms*3)
 
     def get_gradgraddiag(self, p):
@@ -131,7 +133,7 @@ class SoapKernel(SimilarityKernel):
         empty = self.saved(p, 'empty')
         c = self.kern.gradgrad(d, d)
         i, j, grad = self.graddata(p)
-        h = torch.zeros(p.natoms, 3)
+        h = torch.zeros(p.natoms, 3, device=d.device)
         for jj in torch.unique(j):
             m = j == jj
             ii = i[m]
