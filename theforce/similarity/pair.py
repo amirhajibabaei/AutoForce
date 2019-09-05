@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -91,7 +91,8 @@ class PairSimilarityKernel(SimilarityKernel):
             c = c*(f*ff.t()) + (fg*ff.t())*self.kern(d, dd)
         c = c[:, None] * grad[..., None]
         c = c.sum(dim=-1).view(-1, 3)
-        g = zeros(p.natoms, 3).index_add(0, i, -c).index_add(0, j, c)
+        g = zeros(p.natoms, 3, device=d.device).index_add(
+            0, i, -c).index_add(0, j, c)
         return g.view(-1, 1)
 
     def get_rightgrad(self, p, q):
@@ -110,7 +111,8 @@ class PairSimilarityKernel(SimilarityKernel):
             c = c*(f*ff.t()) + (f*ffg.t())*self.kern(d, dd)
         c = c[..., None] * grad
         c = c.sum(dim=0).view(-1, 3)
-        g = zeros(q.natoms, 3).index_add(0, i, -c).index_add(0, j, c)
+        g = zeros(q.natoms, 3, device=d.device).index_add(
+            0, i, -c).index_add(0, j, c)
         return g.view(1, -1)
 
     def get_gradgrad(self, p, q):
@@ -134,9 +136,9 @@ class PairSimilarityKernel(SimilarityKernel):
                  (h1*f2.t()*self.kern.rightgrad(d1, d2)) +
                  (f1*h2.t()*self.kern.leftgrad(d1, d2)))
         c = c.squeeze()[:, None, :, None] * g1[..., None, None] * g2
-        cc = torch.zeros(p.natoms, 3, j2.size(0), 3).index_add(
+        cc = torch.zeros(p.natoms, 3, j2.size(0), 3, device=d1.device).index_add(
             0, j1, c).index_add(0, i1, -c)
-        ccc = torch.zeros(p.natoms, 3, q.natoms, 3).index_add(
+        ccc = torch.zeros(p.natoms, 3, q.natoms, 3, device=d1.device).index_add(
             2, j2, cc).index_add(2, i2, -cc)
         return ccc.view(p.natoms*3, q.natoms*3)
 

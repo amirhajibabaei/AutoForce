@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -93,7 +93,7 @@ class RBF(Stationary):
         return -r*self.get_k(r)
 
     def get_d2k(self, r):
-        eye = torch.eye(r.size(0))
+        eye = torch.eye(r.size(0), device=r.device)
         while eye.dim() < r.dim()+1:
             eye = eye.unsqueeze(-1)
         return (r[:, None]*r[None]-eye)*self.get_k(r)
@@ -121,6 +121,7 @@ def test():
 
     # test if backward works
     new(x, xx).sum().backward()
+
 
 if __name__ == '__main__':
     test()
