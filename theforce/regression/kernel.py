@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -265,13 +265,13 @@ class Real(Kernel):
         return self.value.view((x.dim()-1)*[1])
 
     def get_leftgrad(self, x, xx):
-        return torch.zeros(x.dim()*[1])
+        return torch.zeros(x.dim()*[1], device=x.device)
 
     def get_rightgrad(self, x, xx):
-        return torch.zeros(x.dim()*[1])
+        return torch.zeros(x.dim()*[1], device=x.device)
 
     def get_gradgrad(self, x, xx):
-        return torch.zeros((x.dim()+1)*[1])
+        return torch.zeros((x.dim()+1)*[1], device=x.device)
 
 
 class Positive(Kernel):
@@ -308,13 +308,13 @@ class Positive(Kernel):
         return self.signal.view((x.dim()-1)*[1])
 
     def get_leftgrad(self, x, xx):
-        return torch.zeros(x.dim()*[1])
+        return torch.zeros(x.dim()*[1], device=x.device)
 
     def get_rightgrad(self, x, xx):
-        return torch.zeros(x.dim()*[1])
+        return torch.zeros(x.dim()*[1], device=x.device)
 
     def get_gradgrad(self, x, xx):
-        return torch.zeros((x.dim()+1)*[1])
+        return torch.zeros((x.dim()+1)*[1], device=x.device)
 
 
 class White(Kernel):
@@ -373,7 +373,7 @@ class SqD(Kernel):
         # Note: output.expand(d, d, *trail) may be needed
         d = x.size(0)
         trail = x.size()[1:]
-        return -2*torch.eye(d).view(d, d, *(len(trail)*[1]))
+        return -2*torch.eye(d, device=x.device).view(d, d, *(len(trail)*[1]))
 
 
 class DotProd(Kernel):
@@ -398,7 +398,7 @@ class DotProd(Kernel):
         # Note: output.expand(d, d, *trail) may be needed
         d = x.size(0)
         trail = x.size()[1:]
-        return torch.eye(d).view(d, d, *(len(trail)*[1]))
+        return torch.eye(d, device=x.device).view(d, d, *(len(trail)*[1]))
 
 
 class Normed(Kernel):
