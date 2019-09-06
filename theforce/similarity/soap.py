@@ -30,6 +30,9 @@ class SoapKernel(SimilarityKernel):
         self._args = '{}, {}, {}, {}, {}, atomic_unit={}'.format(
             a, b, lmax, nmax, radial.state, atomic_unit)
 
+    def to(self, device):
+        self.descriptor.to(device)
+
     @property
     def state_args(self):
         return super().state_args + ', ' + self._args

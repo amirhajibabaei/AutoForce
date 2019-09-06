@@ -21,6 +21,11 @@ class EnergyForceKernel(Module):
         self.kernels = iterable(similaritykernels)
         self.params = [par for kern in self.kernels for par in kern.params]
 
+    def to(self, device):
+        for k in self.kernels:
+            k.to(device)
+        self.params = [p.to(device) for p in self.params]
+
     def forward(self, first, second=None, cov='energy_energy', inducing=None):
         sec = first if second is None else second
         if inducing is None:
@@ -112,6 +117,13 @@ class GaussianProcessPotential(Module):
         for i, kern in enumerate(self.kern.kernels):
             kern.name = 'kern_{}'.format(i)
         self.parametric = parametric
+
+    def to(self, device):
+        self.kern.to(device)
+        self.noise.to(device)
+        if self.parametric is not None:
+            for p in self.parametric.unique_params:
+                p = p.to(device)
 
     @property
     def params(self):

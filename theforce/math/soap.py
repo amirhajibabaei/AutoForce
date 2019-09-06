@@ -28,6 +28,11 @@ class AbsSeriesSoap(Module):
         self.Yr = (2*torch.torch.tril(one) - torch.eye(lmax+1)).to(device)
         self.Yi = (2*torch.torch.triu(one, diagonal=1)).to(device)
 
+    def to(self, device):
+        self.ylm = Ylm(self.ylm.lmax, device=device)
+        self.Yr = self.Yr.to(device)
+        self.Yi = self.Yi.to(device)
+
     @property
     def state_args(self):
         return "{}, {}, {}, unit={}".format(self.ylm.lmax, self.nmax, self.radial.state, self.unit)
@@ -78,7 +83,11 @@ class RealSeriesSoap(Module):
 
         a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
                            for l in range(lmax+1)] for n in range(nmax+1)], device=device)
-        self.nnl = (a[None]*a[:, None]).sqrt().to(device)
+        self.nnl = (a[None]*a[:, None]).sqrt()
+
+    def to(self, device):
+        self.abs.to(device)
+        self.nnl = self.nnl.to(device)
 
     def forward(self, xyz, grad=True):
         p = self.abs(xyz, grad=grad)
@@ -117,6 +126,9 @@ class TailoredSoap(Module):
         self._state_args = "corners={}, symm={}".format(corners, symm)
         self.params = []
 
+    def to(self, device):
+        self.soap.to(device)
+
     def forward(self, xyz, grad=True):
         p = self.soap(xyz, grad=grad)
         if grad:
@@ -149,6 +161,10 @@ class MultiSoap(Module):
         super().__init__()
         self.soaps = iterable(soaps)
         self.params = [par for soap in self.soaps for par in soap.params]
+
+    def to(self, device):
+        for s in self.soaps:
+            s.to(device)
 
     def forward(self, xyz, masks, grad=True):
         p = [soap(xyz[m], grad=grad) for soap, m in zip(*[self.soaps, masks])]
@@ -185,6 +201,10 @@ class ScaledSoap(Module):
         self.soap = soap
         self.params = [par for par in soap.params]
         self.scales = scales
+
+    def to(self, device):
+        self.soap.to(device)
+        self._scales = self._scales.to(device)
 
     @property
     def scales(self):
@@ -236,6 +256,9 @@ class NormalizedSoap(Module):
         super().__init__()
         self.soap = soap
         self.params = [par for par in soap.params]
+
+    def to(self, device):
+        self.soap.to(device)
 
     def forward(self, *args, **kwargs):
         if 'grad' in kwargs:
