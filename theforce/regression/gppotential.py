@@ -24,7 +24,6 @@ class EnergyForceKernel(Module):
     def to(self, device):
         for k in self.kernels:
             k.to(device)
-        self.params = [p.to(device) for p in self.params]
 
     def forward(self, first, second=None, cov='energy_energy', inducing=None):
         sec = first if second is None else second
@@ -122,8 +121,7 @@ class GaussianProcessPotential(Module):
         self.kern.to(device)
         self.noise.to(device)
         if self.parametric is not None:
-            for p in self.parametric.unique_params:
-                p = p.to(device)
+            self.parametric.to(device)
 
     @property
     def params(self):
@@ -147,14 +145,14 @@ class GaussianProcessPotential(Module):
                            self.kern(data, cov='forces_energy')], dim=0)
             R = torch.cat([self.kern(data, cov='energy_forces'),
                            self.kern(data, cov='forces_forces')], dim=0)
-            return MultivariateNormal(torch.zeros(L.size(0)),
+            return MultivariateNormal(torch.zeros(L.size(0), device=Q.device),
                                       covariance_matrix=torch.cat([L, R], dim=1) +
-                                      torch.eye(L.size(0))*self.noise.signal**2)
+                                      torch.eye(L.size(0), device=Q.device)*self.noise.signal**2)
         else:
             Q = torch.cat([self.kern(data, cov='energy_energy', inducing=inducing)[0],
                            self.kern(data, cov='forces_forces', inducing=inducing)[0]], dim=0)
-            return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q,
-                                             torch.ones(Q.size(0))*self.noise.signal**2)
+            return LowRankMultivariateNormal(torch.zeros(Q.size(0), device=Q.device), Q,
+                                             torch.ones(Q.size(0), device=Q.device)*self.noise.signal**2)
 
     def mean(self, data, forces=True, cat=True):
         if self.parametric is None:
@@ -179,7 +177,7 @@ class GaussianProcessPotential(Module):
                 return torch.cat([_e.view(-1) for _e in e])
 
     def Y(self, data):
-        y = torch.cat([torch.tensor([sys.target_energy for sys in data])] +
+        y = torch.cat([torch.cat([sys.target_energy.view(1) for sys in data])] +
                       [sys.target_forces.view(-1) for sys in data])
         return y - self.mean(data)
 
@@ -265,13 +263,14 @@ class PosteriorPotential(Module):
                 M = gp.kern(inducing, inducing, cov='energy_energy')
                 L, _ = jitcholesky(M)
                 A = torch.cat([K, gp.noise.signal*L.t()], dim=0)
-                Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
+                Y = torch.cat([gp.Y(data), torch.zeros(
+                    L.size(0), device=L.device)], dim=0)
                 Q, R = torch.qr(A)
                 self.mu = R.inverse() @ Q.t() @ Y
 
                 i = L.inverse()
                 B = K @ i.t()
-                I = torch.eye(i.size(0))
+                I = torch.eye(i.size(0), device=i.device)
                 T = torch.cholesky(B.t() @ B / gp.noise.signal**2 + I)
                 self.sig = i.t() @ (I - torch.cholesky_inverse(T)) @ i
 

@@ -31,6 +31,7 @@ class SoapKernel(SimilarityKernel):
             a, b, lmax, nmax, radial.state, atomic_unit)
 
     def to(self, device):
+        super().to(device)
         self.descriptor.to(device)
 
     @property
@@ -45,17 +46,17 @@ class SoapKernel(SimilarityKernel):
             grad = torch.cat([grad, -grad.sum(dim=1, keepdim=True)], dim=1)
             j = torch.cat([loc._j, loc._i.unique()])
             if j.numel() > 0:
-                empty = torch.tensor([False])
+                empty = torch.tensor([False], device=loc._i.device)
             else:
-                empty = torch.tensor([True])
+                empty = torch.tensor([True], device=loc._i.device)
                 del d, grad
-                d = torch.zeros(0, self.dim)
-                grad = torch.zeros(self.dim, 0, 3)
+                d = torch.zeros(0, self.dim, device=loc._i.device)
+                grad = torch.zeros(self.dim, 0, 3, device=loc._i.device)
         else:
-            empty = torch.tensor([True])
-            d = torch.zeros(0, self.dim)
-            grad = torch.zeros(self.dim, 0, 3)
-            j = torch.empty(0).long()
+            empty = torch.tensor([True], device=loc._i.device)
+            d = torch.zeros(0, self.dim, device=loc._i.device)
+            grad = torch.zeros(self.dim, 0, 3, device=loc._i.device)
+            j = torch.empty(0, device=loc._i.device).long()
         # save
         data = {'value': d, 'grad': grad, 'j': j, 'empty': empty}
         self.save_for_later(loc, data)

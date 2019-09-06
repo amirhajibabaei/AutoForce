@@ -47,7 +47,17 @@ class Local:
         self.off = off
         self.stage(descriptors)
 
-    def stage(self, descriptors):
+    def to(self, device):
+        self._i = self._i.to(device)
+        self._j = self._j.to(device)
+        self._a = self._a.to(device)
+        self._b = self._b.to(device)
+        self._r = self._r.to(device)
+        self._m = self._m.to(device)
+
+    def stage(self, descriptors, device=None):
+        if device is not None:
+            self.to(device)
         for desc in descriptors:
             desc.precalculate(self)
 
@@ -117,17 +127,17 @@ class Local:
                 SinglePointCalculator(atoms, energy=self.target_energy))
         return atoms
 
-    def detach(self, keepids=False):
-        a = self._a.detach().numpy()
-        b = self._b.detach().numpy()
+    def detach(self, keepids=False, device=None):
+        a = self._a.detach().cpu().numpy()
+        b = self._b.detach().cpu().numpy()
         r = self._r.clone()
         if keepids:
-            i = self._i.detach().numpy()
-            j = self._j.detach().numpy()
+            i = self._i.detach().cpu().numpy()
+            j = self._j.detach().cpu().numpy()
         else:
             i = np.zeros(a.shape[0], dtype=np.int)
             j = np.arange(1, a.shape[0]+1, dtype=np.int)
-        return Local(i, j, a, b, r)
+        return Local(i, j, a, b, r, device=device)
 
     def __eq__(self, other):
         if other.__class__ == TorchAtoms:
@@ -199,7 +209,7 @@ class AtomsChanges:
 class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
-                 descriptors=[], group=None, **kwargs):
+                 descriptors=[], group=None, device=None, **kwargs):
         super().__init__(**kwargs)
 
         if ase_atoms:
@@ -215,19 +225,20 @@ class TorchAtoms(Atoms):
         self.changes = AtomsChanges(self)
         if cutoff is not None:
             self.build_nl(cutoff)
-            self.update(forced=True)
+            self.update(forced=True, device=device)
         # ------------------------------------------
 
         try:
-            self.target_energy = as_tensor(energy)
-            self.target_forces = as_tensor(forces)
+            self.target_energy = as_tensor(energy).to(device)
+            self.target_forces = as_tensor(forces).to(device)
         except RuntimeError:
             if ase_atoms is not None and ase_atoms.get_calculator() is not None:
                 if 'energy' in ase_atoms.calc.results:
                     self.target_energy = as_tensor(
-                        ase_atoms.get_potential_energy())
+                        ase_atoms.get_potential_energy()).to(device)
                 if 'forces' in ase_atoms.calc.results:
-                    self.target_forces = as_tensor(ase_atoms.get_forces())
+                    self.target_forces = as_tensor(
+                        ase_atoms.get_forces()).to(device)
 
     def attach_process_group(self, group):
         self.process_group = group
@@ -458,7 +469,7 @@ class AtomsData:
 
     @property
     def target_energy(self):
-        return torch.tensor([atoms.target_energy for atoms in self])
+        return torch.cat([atoms.target_energy.view(1) for atoms in self])
 
     @property
     def target_forces(self):
@@ -512,8 +523,8 @@ class AtomsData:
         self.append(others)
         return self
 
-    def to_locals(self, keepids=False):
-        return LocalsData([loc.detach(keepids=keepids) for atoms in self for loc in atoms])
+    def to_locals(self, keepids=False, device=None):
+        return LocalsData([loc.detach(keepids=keepids, device=device) for atoms in self for loc in atoms])
 
     def sample_locals(self, size, keepids=False):
         return LocalsData([random.choice(random.choice(self)).detach(keepids=keepids)
@@ -542,9 +553,9 @@ class LocalsData:
             raise RuntimeError('LocalsData invoked without any input')
         self.trainable = False
 
-    def stage(self, descriptors):
+    def stage(self, descriptors, device=None):
         for loc in self:
-            loc.stage(descriptors)
+            loc.stage(descriptors, device=None)
 
     def to_traj(self, trajname, mode='w'):
         from ase.io import Trajectory
