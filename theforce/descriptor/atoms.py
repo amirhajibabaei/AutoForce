@@ -229,6 +229,10 @@ class TorchAtoms(Atoms):
                 if 'forces' in ase_atoms.calc.results:
                     self.target_forces = as_tensor(ase_atoms.get_forces())
 
+    def set_targets(self):
+        self.target_energy = as_tensor(self.get_potential_energy())
+        self.target_forces = as_tensor(self.get_forces())
+
     def attach_process_group(self, group):
         self.process_group = group
         self.is_distributed = True
