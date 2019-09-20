@@ -112,6 +112,22 @@ def projected_process_auxiliary_matrices(K, M, Y, sigma):
     return mu, nu
 
 
+def inverse_using_low_rank_factor(Q, D):
+    """
+    returns inverse of Q @ Q.T + D.diag()
+    algorithm inspired by torch.distributions.LowRankMultivariateNormal
+    """
+    m = Q.size(-1)
+    W = Q.t() / D[None]
+    K = torch.matmul(W, Q).contiguous()
+    K.view(-1, m * m)[:, ::m + 1] += 1  # add identity matrix to K
+    C, _ = jitcholesky(K)  # robust
+    A = torch.triangular_solve(W, C, upper=False)[0]
+    inv = (torch.diag_embed(D.reciprocal())
+           - torch.matmul(A.transpose(-1, -2), A))
+    return inv
+
+
 # greedy algorithms ------------------------------------------------------------
 def select_greedy_simple(T, num, Z=None):
     assert T.dim() == 2
@@ -172,7 +188,19 @@ def test(n=1000):
     print('solve_svd: {}'.format(test_solve_svd))
 
 
+def test_iulrf(n=100, d=7, sigma=1e-4):
+    torch.set_default_tensor_type(torch.DoubleTensor)  # this is necessary!
+    """keep sigma higher than 1e-4"""
+    Q = torch.rand(n, 7)
+    D = torch.rand(n)*sigma**2
+    res = inverse_using_low_rank_factor(Q, D) @ (
+        Q @ Q.t() + D.diag()) - torch.eye(n)
+    print("testing inverse_using_low_rank_factor:", res.abs().max().allclose(torch.zeros(1)),
+          res.abs().max())
+
+
 if __name__ == '__main__':
     example_sum_packed_dim()
     test()
+    test_iulrf()
 
