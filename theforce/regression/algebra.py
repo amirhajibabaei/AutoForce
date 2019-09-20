@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -82,6 +82,36 @@ def solve_svd(A, Y):
     return V @ ((U.t() @ Y)/S)
 
 
+def projected_process_auxiliary_matrices(K, M, Y, sigma):
+    """
+    If "x", "m" indicate the data and inducing points, and "k(.,.)" is
+    the kernel function, then
+    K = k(x, m)
+    M = k(m, m)
+    Y are the data values and sigma^2 is the ridge factor that will be 
+    added to the diagonal of the approximated covariance matrix.
+    In projected process (PP) approximation the predictive distribution 
+    for a given test point "t" is:
+    p(y|t,x,Y,m) = Normal(A @ mu, B - A @ nu @ A.t())
+    where mu and nu which are independent from the test inputs are 
+    calculated here but A = k(t, m) and B = k(t, t) should be 
+    calculated outside this routine.
+    """
+    # mu
+    L, _ = jitcholesky(M)
+    A = torch.cat([K, sigma*L.t()], dim=0)
+    _Y = torch.cat([Y, torch.zeros(L.size(0))], dim=0)
+    Q, R = torch.qr(A)
+    mu = R.inverse() @ Q.t() @ _Y
+    # nu
+    i = L.inverse()
+    B = K @ i.t()
+    I = torch.eye(i.size(0))
+    T = torch.cholesky(B.t() @ B / sigma**2 + I)
+    nu = i.t() @ (I - torch.cholesky_inverse(T)) @ i
+    return mu, nu
+
+
 # greedy algorithms ------------------------------------------------------------
 def select_greedy_simple(T, num, Z=None):
     assert T.dim() == 2
@@ -140,7 +170,6 @@ def test(n=1000):
     X = solve_svd(A, Y)
     test_solve_svd = torch.allclose(X, Y)
     print('solve_svd: {}'.format(test_solve_svd))
-
 
 
 if __name__ == '__main__':

@@ -8,7 +8,7 @@ import torch
 from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.kernel import White
-from theforce.regression.algebra import jitcholesky
+from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices
 from theforce.util.util import iterable
 from theforce.optimize.optimizers import ClampedSGD
 import copy
@@ -245,34 +245,17 @@ class PosteriorPotential(Module):
             if inducing is None:
                 self.X = copy.deepcopy(data)  # TODO: consider not copying
                 self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
-                self.sig = p.precision_matrix
+                self.nu = p.precision_matrix
                 self.has_target_forces = True
             else:
                 K = torch.cat([gp.kern(data, inducing, cov='energy_energy'),
                                gp.kern(data, inducing, cov='forces_energy')], dim=0)
                 M = gp.kern(inducing, inducing, cov='energy_energy')
-                L, _ = jitcholesky(M)
-                A = torch.cat([K, gp.noise.signal*L.t()], dim=0)
-                Y = torch.cat([gp.Y(data), torch.zeros(L.size(0))], dim=0)
-                Q, R = torch.qr(A)
-                self.mu = R.inverse() @ Q.t() @ Y
-
-                i = L.inverse()
-                B = K @ i.t()
-                I = torch.eye(i.size(0))
-                T = torch.cholesky(B.t() @ B / gp.noise.signal**2 + I)
-                self.sig = i.t() @ (I - torch.cholesky_inverse(T)) @ i
-
+                self.mu, self.nu = projected_process_auxiliary_matrices(
+                    K, M, gp.Y(data), gp.noise.signal)
                 self.X = inducing
                 self.has_target_forces = False
 
-                # Following lines are commented because:
-                # 1) they are unnecessary, 2) maybe Loc objects are passed as inducing,
-                # but are not eliminated because I find them meaningful.
-                #inducing.set_per_atoms('target_energy', M @ self.mu)
-                #F = gp.kern(inducing, inducing, cov='forces_energy')
-                #F = (F @ self.mu).reshape(-1, 3)
-                #inducing.set_per_atom('target_forces', F)
         gp.method_caching = caching_status
 
     def attach_process_group(self, *args, **kwargs):
@@ -305,7 +288,7 @@ class PosteriorPotential(Module):
                     raise NotImplementedError(
                         'all_reduce with variance=True is not implemented')
                 var = (self.gp.kern.diag(test, quant) -
-                       (A @ self.sig @ A.t()).diag()).view(*shape[quant])
+                       (A @ self.nu @ A.t()).diag()).view(*shape[quant])
                 return out, var
             else:
                 return out
@@ -330,9 +313,9 @@ class PosteriorPotential(Module):
 
             if variance:
                 energy_var = (self.gp.kern.diag(test, 'energy') -
-                              (A @ self.sig @ A.t()).diag())
+                              (A @ self.nu @ A.t()).diag())
                 forces_var = (self.gp.kern.diag(test, 'forces') -
-                              (B @ self.sig @ B.t()).diag())
+                              (B @ self.nu @ B.t()).diag())
                 out += (energy_var, forces_var.view(-1, 3))
 
             return out
