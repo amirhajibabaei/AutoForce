@@ -82,7 +82,7 @@ def solve_svd(A, Y):
     return V @ ((U.t() @ Y)/S)
 
 
-def projected_process_auxiliary_matrices(K, M, Y, sigma):
+def projected_process_auxiliary_matrices_I(K, M, Y, sigma):
     """
     If "x", "m" indicate the data and inducing points, and "k(.,.)" is
     the kernel function, then
@@ -97,6 +97,7 @@ def projected_process_auxiliary_matrices(K, M, Y, sigma):
     calculated here but A = k(t, m) and B = k(t, t) should be 
     calculated outside this routine.
     """
+    assert type(sigma) == float or sigma.numel() == 1
     # mu
     L, _ = jitcholesky(M)
     A = torch.cat([K, sigma*L.t()], dim=0)
@@ -126,6 +127,21 @@ def inverse_using_low_rank_factor(Q, D):
     inv = (torch.diag_embed(D.reciprocal())
            - torch.matmul(A.transpose(-1, -2), A))
     return inv
+
+
+def projected_process_auxiliary_matrices_D(K, M, Y, D):
+    """
+    same as projected_process_auxiliary_matrices_I, with a difference
+    that the scalar input "sigma" is replaced by a vector "D"
+    """
+    assert D.numel() == Y.numel()
+    L, _ = jitcholesky(M)
+    i = L.inverse()
+    B = K@i.t()
+    J = inverse_using_low_rank_factor(B, D)
+    mu = i.t()@B.t()@J@Y
+    nu = i.t()@B.t()@J@B@i
+    return mu, nu
 
 
 # greedy algorithms ------------------------------------------------------------
@@ -199,8 +215,26 @@ def test_iulrf(n=100, d=7, sigma=1e-4):
           res.abs().max())
 
 
+def test_PP(n=100, d=7, sigma=1e-2):
+    # full Gram matrix is X@X.t()+D.diag(), where:
+    X = torch.rand(n, d)
+    D = (torch.ones(n)*sigma**2)
+    # sparsification:
+    W = X[::10]
+    M = (W@W.t())
+    K = (X@W.t())
+    # since D = sigma^2*I, the two methods are equivalent
+    Y = torch.rand(n)
+    mu1, nu1 = projected_process_auxiliary_matrices_I(K, M, Y, sigma)
+    mu2, nu2 = projected_process_auxiliary_matrices_D(K, M, Y, D)
+    a = (mu1-mu2).abs().max()
+    b = (nu1-nu2).abs().max()
+    print('test project process (PP): {}, {}'.format(a, b))
+
+
 if __name__ == '__main__':
     example_sum_packed_dim()
     test()
     test_iulrf()
+    test_PP()
 

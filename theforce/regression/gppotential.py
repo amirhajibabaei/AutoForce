@@ -8,7 +8,7 @@ import torch
 from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.kernel import White
-from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices
+from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_I
 from theforce.util.util import iterable
 from theforce.optimize.optimizers import ClampedSGD
 import copy
@@ -251,7 +251,7 @@ class PosteriorPotential(Module):
                 K = torch.cat([gp.kern(data, inducing, cov='energy_energy'),
                                gp.kern(data, inducing, cov='forces_energy')], dim=0)
                 M = gp.kern(inducing, inducing, cov='energy_energy')
-                self.mu, self.nu = projected_process_auxiliary_matrices(
+                self.mu, self.nu = projected_process_auxiliary_matrices_I(
                     K, M, gp.Y(data), gp.noise.signal)
                 self.X = inducing
                 self.has_target_forces = False
