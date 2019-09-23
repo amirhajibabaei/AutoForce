@@ -141,8 +141,10 @@ class GaussianProcessPotential(Module):
         else:
             Q = torch.cat([self.kern(data, cov='energy_energy', inducing=inducing)[0],
                            self.kern(data, cov='forces_forces', inducing=inducing)[0]], dim=0)
-            return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q,
-                                             torch.ones(Q.size(0))*self.noise.signal**2)
+            return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q, self.cov_diag(data))
+
+    def cov_diag(self, data):
+        return torch.ones(len(data) + 3*sum(data.natoms))*self.noise.signal**2
 
     def mean(self, data, forces=True, cat=True):
         if self.parametric is None:
