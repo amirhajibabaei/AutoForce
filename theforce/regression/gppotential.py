@@ -8,7 +8,7 @@ import torch
 from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.kernel import White
-from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_I
+from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_D
 from theforce.util.util import iterable
 from theforce.optimize.optimizers import ClampedSGD
 import copy
@@ -144,7 +144,11 @@ class GaussianProcessPotential(Module):
             return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q, self.cov_diag(data))
 
     def cov_diag(self, data):
-        return torch.ones(len(data) + 3*sum(data.natoms))*self.noise.signal**2
+        f_diag = torch.ones(3*sum(data.natoms))
+        #e_diag = torch.ones(len(data))
+        e_diag = torch.tensor(data.natoms, dtype=f_diag.dtype)
+        diag = torch.cat([e_diag, f_diag])*self.noise.signal**2
+        return diag
 
     def mean(self, data, forces=True, cat=True):
         if self.parametric is None:
@@ -243,8 +247,8 @@ class PosteriorPotential(Module):
         caching_status = gp.method_caching
         gp.method_caching = use_caching
         with torch.set_grad_enabled(enable_grad):
-            p = gp(data, inducing)
             if inducing is None:
+                p = gp(data, inducing)
                 self.X = copy.deepcopy(data)  # TODO: consider not copying
                 self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
                 self.nu = p.precision_matrix
@@ -253,8 +257,8 @@ class PosteriorPotential(Module):
                 K = torch.cat([gp.kern(data, inducing, cov='energy_energy'),
                                gp.kern(data, inducing, cov='forces_energy')], dim=0)
                 M = gp.kern(inducing, inducing, cov='energy_energy')
-                self.mu, self.nu = projected_process_auxiliary_matrices_I(
-                    K, M, gp.Y(data), gp.noise.signal)
+                self.mu, self.nu = projected_process_auxiliary_matrices_D(
+                    K, M, gp.Y(data), gp.cov_diag(data))
                 self.X = inducing
                 self.has_target_forces = False
 
