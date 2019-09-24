@@ -141,9 +141,9 @@ class GaussianProcessPotential(Module):
         else:
             Q = torch.cat([self.kern(data, cov='energy_energy', inducing=inducing)[0],
                            self.kern(data, cov='forces_forces', inducing=inducing)[0]], dim=0)
-            return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q, self.cov_diag(data))
+            return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q, self.diagonal_ridge(data))
 
-    def cov_diag(self, data):
+    def diagonal_ridge(self, data):
         f_diag = torch.ones(3*sum(data.natoms))
         #e_diag = torch.ones(len(data))
         e_diag = torch.tensor(data.natoms, dtype=f_diag.dtype)
@@ -181,8 +181,8 @@ class GaussianProcessPotential(Module):
         p = self(data, inducing=inducing)
         if hasattr(p, 'cov_factor'):
             if cov_loss:
-                covariance_loss = 0.5*(self.kern.diag(data, 'full').sum() - torch.einsum(
-                                       'ij,ij', p.cov_factor, p.cov_factor))/self.noise.signal**2
+                covariance_loss = 0.5 * ((self.kern.diag(data, 'full') - p.cov_factor.pow(2).sum(dim=-1)
+                                          )/self.diagonal_ridge(data)).sum()
             else:
                 covariance_loss = 0
         else:
@@ -258,7 +258,7 @@ class PosteriorPotential(Module):
                                gp.kern(data, inducing, cov='forces_energy')], dim=0)
                 M = gp.kern(inducing, inducing, cov='energy_energy')
                 self.mu, self.nu = projected_process_auxiliary_matrices_D(
-                    K, M, gp.Y(data), gp.cov_diag(data))
+                    K, M, gp.Y(data), gp.diagonal_ridge(data))
                 self.X = inducing
                 self.has_target_forces = False
 
