@@ -1,10 +1,11 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
 
 
 import re
+import datetime
 
 
 def iterable(a, ignore=None):
@@ -16,4 +17,8 @@ def iterable(a, ignore=None):
 
 def one_liner(x):
     return re.sub(' +', ' ', str(x).replace('\n', ''))
+
+
+def date(fmt="%m/%d/%Y %H:%M:%S"):
+    return datetime.datetime.now().strftime(fmt)
 
