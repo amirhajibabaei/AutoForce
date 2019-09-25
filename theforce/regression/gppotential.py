@@ -143,12 +143,16 @@ class GaussianProcessPotential(Module):
                            self.kern(data, cov='forces_forces', inducing=inducing)[0]], dim=0)
             return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q, self.diagonal_ridge(data))
 
-    def diagonal_ridge(self, data):
-        f_diag = torch.ones(3*sum(data.natoms))
-        #e_diag = torch.ones(len(data))
-        e_diag = torch.tensor(data.natoms, dtype=f_diag.dtype)
-        diag = torch.cat([e_diag, f_diag])*self.noise.signal**2
-        return diag
+    def diagonal_ridge(self, data, operation='full'):
+        s = self.noise.signal**2
+        e_diag = torch.tensor(data.natoms, dtype=s.dtype) * s
+        f_diag = torch.ones(3*sum(data.natoms)) * s
+        if operation == 'energy':
+            return e_diag
+        elif operation == 'forces':
+            return f_diag
+        elif operation == 'full':
+            return torch.cat([e_diag, f_diag])
 
     def mean(self, data, forces=True, cat=True):
         if self.parametric is None:
