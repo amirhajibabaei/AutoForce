@@ -279,6 +279,9 @@ class PosteriorPotential(Module):
     def train(self, *args, **kwargs):
         train_gpp(self.gp, *args, **kwargs)
 
+    def save(self, file):
+        torch.save(self, file)
+
     def forward(self, test, quant='energy', variance=False, enable_grad=False, all_reduce=False):
         shape = {'energy': (-1,), 'forces': (-1, 3)}
         with torch.set_grad_enabled(enable_grad):
