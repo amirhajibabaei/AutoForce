@@ -111,12 +111,16 @@ class AutoForceCalculator(Calculator):
         if self.variance:
             energy, variance = energy
         # forces
-        forces = -grad(energy, self.atoms.xyz, retain_graph=True)[0]
+        rgrad = grad(energy, self.atoms.xyz, retain_graph=True,
+                     allow_unused=True)[0]
+        forces = torch.zeros_like(self.atoms.xyz) if rgrad is None else -rgrad
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(forces)
         # stress
         stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
-        cellgrad, = grad(energy, self.atoms.lll)
+        cellgrad, = grad(energy, self.atoms.lll, allow_unused=True)
+        if cellgrad is None:
+            cellgrad = torch.zeros_like(self.atoms.lll)
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(cellgrad)
         stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
