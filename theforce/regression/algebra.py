@@ -31,6 +31,8 @@ def jitcholesky(A, jit=1e-6, jitbase=2):
         L = torch.cholesky(A)
     except RuntimeError:
         scale = A.diag().mean()
+        if scale == torch.zeros(1):
+            scale = torch.finfo().eps
         ridge = jit*scale
         done = False
         while not done:
