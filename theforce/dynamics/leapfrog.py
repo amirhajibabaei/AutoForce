@@ -148,7 +148,7 @@ class Leapfrog:
         try:
             d1 = self.energy[-1] - self.energy[-2]
             d2 = self.energy[-2] - self.energy[-3]
-            if d1*d2 <= 0:
+            if d1*d2 < 0:  # "<" instead of "<=" for E=Constant case
                 self.trigger = 1
                 return True
         except:
