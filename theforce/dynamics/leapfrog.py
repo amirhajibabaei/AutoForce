@@ -4,7 +4,7 @@
 # In[ ]:
 
 
-from theforce.regression.gppotential import PosteriorPotential
+from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.calculator.posterior import AutoForceCalculator
 from theforce.descriptor.atoms import AtomsData, LocalsData, TorchAtoms
 from theforce.util.util import date
@@ -14,7 +14,7 @@ import ase
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, cutoff, calculator=None, train=True, ediff=0.1):
+    def __init__(self, dyn, gp, cutoff, calculator=None, train=True, ediff=0.1, step=0, model=None):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
@@ -31,13 +31,23 @@ class Leapfrog:
         else:
             self.exact = self.atoms.calc
 
-        self.step = 0
+        self.step0 = step
+        self.step = self.step0
         self.log('leapfrog says Hello!'.format(date()), mode='w')
-        self.data = AtomsData(X=[])
-        self.inducing = LocalsData(X=[])
-        self.model = None
         self.atoms.update(cutoff=cutoff, descriptors=self.gp.kern.kernels)
-        self.update_calc()
+        if model:
+            if type(model) == str:
+                self.model = PosteriorPotentialFromFolder(model)
+            else:
+                self.model = model
+            self.data = self.model.data
+            self.inducing = self.model.X
+            self.update_calc(newdata=False)
+        else:
+            self.model = None
+            self.data = AtomsData(X=[])
+            self.inducing = LocalsData(X=[])
+            self.update_calc()
         self.energy = [self.atoms.get_potential_energy()]
 
     @property
@@ -50,24 +60,25 @@ class Leapfrog:
 
     @property
     def steps(self):
-        return torch.arange(self.step+1).numpy()
+        return torch.arange(self.step0, self.step+1).numpy()
 
     @property
     def nodes(self):
-        return self.node, [self.energy[k] for k in self.node]
+        return self.node, [self.energy[k-self.step0] for k in self.node]
 
     def log(self, mssge, file='leapfrog.log', mode='a'):
         with open(file, mode) as f:
             f.write('{} {} {}\n'.format(date(), self.step, mssge))
 
-    def update_calc(self, sparse=True):
-        new = self.get_exact_data()
-        new.update(cutoff=self.cutoff, descriptors=self.gp.kern.kernels)
-        self.add_data(new)
-        self.add_locals(new, sparse=sparse)
+    def update_calc(self, newdata=True, sparse=True):
+        if newdata:
+            new = self.get_exact_data()
+            new.update(cutoff=self.cutoff, descriptors=self.gp.kern.kernels)
+            self.add_data(new)
+            self.add_locals(new, sparse=sparse)
+        self.create_node()
         self.atoms.set_calculator(
             AutoForceCalculator(self.model))
-        self.create_node()
         self.log("new calculator")
 
     def get_exact_data(self):
