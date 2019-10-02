@@ -306,6 +306,8 @@ class PosteriorPotential(Module):
 
     def to_folder(self, folder):
         mkdir_p(folder)
+        with open(os.path.join(folder, 'cutoff'), 'w') as file:
+            file.write('{}\n'.format(self.data[0].cutoff))
         self.data.to_traj(os.path.join(folder, 'data.traj'))
         self.X.to_traj(os.path.join(folder, 'inducing.traj'))
         self.gp.to_file(os.path.join(folder, 'gp'))
@@ -361,6 +363,18 @@ class PosteriorPotential(Module):
                 out += (energy_var, forces_var.view(-1, 3))
 
             return out
+
+
+def PosteriorPotentialFromFolder(folder, load_data=True):
+    from theforce.descriptor.atoms import AtomsData
+    self = torch.load(os.path.join(folder, 'model'))
+    with open(os.path.join(folder, 'cutoff'), 'r') as file:
+        cutoff = float(file.readline().split()[0])
+    if load_data:
+        self.data = AtomsData(traj=os.path.join(folder, 'data.traj'),
+                              cutoff=cutoff,
+                              descriptors=self.gp.kern.kernels)
+    return self
 
 
 def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True, cov_loss=False,
