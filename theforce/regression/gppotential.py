@@ -9,9 +9,10 @@ from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.kernel import White
 from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_D
-from theforce.util.util import iterable
+from theforce.util.util import iterable, mkdir_p
 from theforce.optimize.optimizers import ClampedSGD
 import copy
+import os
 
 
 class EnergyForceKernel(Module):
@@ -281,6 +282,15 @@ class PosteriorPotential(Module):
 
     def save(self, file):
         torch.save(self, file)
+
+    def to_folder(self, folder, data=None):
+        mkdir_p(folder)
+        self.X.to_traj(os.path.join(folder, 'inducing.traj'))
+        self.gp.to_file(os.path.join(folder, 'gp'))
+        if data:
+            data.to_traj(os.path.join(folder, 'data.traj'))
+        torch.save(self.mu, os.path.join(folder, 'mu'))
+        torch.save(self.nu, os.path.join(folder, 'nu'))
 
     def forward(self, test, quant='energy', variance=False, enable_grad=False, all_reduce=False):
         shape = {'energy': (-1,), 'forces': (-1, 3)}
