@@ -7,6 +7,7 @@
 import re
 import datetime
 import os
+import psutil
 
 
 def iterable(a, ignore=None):
@@ -29,4 +30,8 @@ def mkdir_p(path):
         os.makedirs(path)
     except FileExistsError:
         pass
+
+
+def meminfo():
+    return os.getpid(), psutil.Process(os.getpid()).memory_info().rss
 
