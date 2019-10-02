@@ -209,6 +209,21 @@ class GaussianProcessPotential(Module):
     def clear_cached(self):
         self.kern.clear_cached()
 
+    @property
+    def cached(self):
+        return [kern.cached if hasattr(kern, 'cached') else {}
+                for kern in self.kern.kernels]
+
+    @cached.setter
+    def cached(self, values):
+        for kern, val in zip(*[self.kern.kernels, value]):
+            kern.cached = val
+
+    def del_cached(self):
+        for kern in self.kern.kernels:
+            if hasattr(kern, 'cached'):
+                del kern.cached
+
     def attach_process_group(self, group=torch.distributed.group.WORLD):
         for kern in self.kern.kernels:
             kern.process_group = group
@@ -266,7 +281,7 @@ class PosteriorPotential(Module):
                     K, M, gp.Y(data), gp.diagonal_ridge(data))
                 self.X = inducing
                 self.has_target_forces = False
-
+        self.data = data
         gp.method_caching = caching_status
 
     def attach_process_group(self, *args, **kwargs):
@@ -281,16 +296,20 @@ class PosteriorPotential(Module):
         train_gpp(self.gp, *args, **kwargs)
 
     def save(self, file):
+        cached = self.gp.cached
+        self.gp.del_cached()
+        data = self.data
+        del self.data
         torch.save(self, file)
+        self.data = data
+        self.gp.cahced = cached
 
-    def to_folder(self, folder, data=None):
+    def to_folder(self, folder):
         mkdir_p(folder)
+        self.data.to_traj(os.path.join(folder, 'data.traj'))
         self.X.to_traj(os.path.join(folder, 'inducing.traj'))
         self.gp.to_file(os.path.join(folder, 'gp'))
-        if data:
-            data.to_traj(os.path.join(folder, 'data.traj'))
-        torch.save(self.mu, os.path.join(folder, 'mu'))
-        torch.save(self.nu, os.path.join(folder, 'nu'))
+        self.save(os.path.join(folder, 'model'))
 
     def forward(self, test, quant='energy', variance=False, enable_grad=False, all_reduce=False):
         shape = {'energy': (-1,), 'forces': (-1, 3)}
