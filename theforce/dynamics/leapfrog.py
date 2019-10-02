@@ -6,21 +6,30 @@
 
 from theforce.regression.gppotential import PosteriorPotential
 from theforce.calculator.posterior import AutoForceCalculator
-from theforce.descriptor.atoms import AtomsData, LocalsData
-from ase.io import Trajectory
+from theforce.descriptor.atoms import AtomsData, LocalsData, TorchAtoms
 from theforce.util.util import date
 import torch
+import ase
 
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, cutoff, train=True, ediff=0.1):
+    def __init__(self, dyn, gp, cutoff, calculator=None, train=True, ediff=0.1):
         self.dyn = dyn
-        self.exact = self.atoms.calc
         self.gp = gp
         self.cutoff = cutoff
         self.train = train
         self.ediff = ediff
+
+        if type(dyn.atoms) == ase.Atoms:
+            self.to_ase = True
+            dyn.atoms = TorchAtoms(dyn.atoms)
+        else:
+            self.to_ase = False
+        if calculator:
+            self.exact = calculator
+        else:
+            self.exact = self.atoms.calc
 
         self.step = 0
         self.log('leapfrog says Hello!'.format(date()), mode='w')
@@ -63,11 +72,17 @@ class Leapfrog:
 
     def get_exact_data(self):
         if not hasattr(self, 'exact_results'):
-            self.exact_results = Trajectory('exact_calcs.traj', 'w')
+            self.exact_results = ase.io.Trajectory('exact_calcs.traj', 'w')
         tmp = self.atoms.copy()
+        if self.to_ase:
+            tmp = tmp.as_ase()
         tmp.set_calculator(self.exact)
-        tmp.set_targets()
+        tmp.get_forces()
         self.exact_results.write(tmp)
+        if self.to_ase:
+            tmp = TorchAtoms(ase_atoms=tmp)
+        else:
+            tmp.set_targets()
         self.log("exact calculation")
         return tmp
 
