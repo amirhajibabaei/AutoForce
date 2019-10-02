@@ -83,6 +83,7 @@ class Leapfrog:
             tmp = TorchAtoms(ase_atoms=tmp)
         else:
             tmp.set_targets()
+        tmp.single_point()
         self.log("exact calculation")
         return tmp
 

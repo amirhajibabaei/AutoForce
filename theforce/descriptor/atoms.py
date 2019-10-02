@@ -379,6 +379,15 @@ class TorchAtoms(Atoms):
         if update:
             self.update()
 
+    def single_point(self):
+        results = {}
+        for q in ['energy', 'forces', 'stress', 'xx']:
+            try:
+                results[q] = self.calc.results[q]
+            except KeyError:
+                pass
+        self.set_calculator(SinglePointCalculator(self, **results))
+
 
 class AtomsData:
 
