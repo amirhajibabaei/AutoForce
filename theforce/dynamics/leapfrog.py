@@ -14,7 +14,7 @@ import ase
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, cutoff, calculator=None, train=True, ediff=0.1, step=0, model=None):
+    def __init__(self, dyn, gp, cutoff, calculator=None, ediff=0.1, step=0, train=True, model=None, skip=0):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
@@ -49,6 +49,7 @@ class Leapfrog:
             self.inducing = LocalsData(X=[])
             self.update_calc()
         self.energy = [self.atoms.get_potential_energy()]
+        self.skip = skip
 
     @property
     def atoms(self):
@@ -176,8 +177,16 @@ class Leapfrog:
             d1 = self.energy[-1] - self.energy[-2]
             d2 = self.energy[-2] - self.energy[-3]
             if d1*d2 < 0:  # "<" instead of "<=" for E=Constant case
-                self.trigger = 1
-                return True
+                if not hasattr(self, "trigger"):
+                    self.trigger = 0
+                    return True
+                else:
+                    self.trigger += 1
+                    if self.trigger > self.skip:
+                        self.trigger = 0
+                        return True
+                    else:
+                        return False
         except:
             pass
 
