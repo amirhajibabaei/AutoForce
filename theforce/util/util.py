@@ -6,6 +6,7 @@
 
 import re
 import datetime
+import os
 
 
 def iterable(a, ignore=None):
@@ -21,4 +22,11 @@ def one_liner(x):
 
 def date(fmt="%m/%d/%Y %H:%M:%S"):
     return datetime.datetime.now().strftime(fmt)
+
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except FileExistsError:
+        pass
 
