@@ -14,11 +14,13 @@ import ase
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, cutoff, calculator=None, ediff=0.1, step=0, train=True, model=None, skip=0):
+    def __init__(self, dyn, gp, cutoff, calculator=None, ediff=0.1, step=0,
+                 train=True, sparse=True, model=None, skip=0):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
         self.train = train
+        self.sparse = sparse
         self.ediff = ediff
 
         if type(dyn.atoms) == ase.Atoms:
@@ -71,12 +73,12 @@ class Leapfrog:
         with open(file, mode) as f:
             f.write('{} {} {}\n'.format(date(), self.step, mssge))
 
-    def update_calc(self, newdata=True, sparse=True):
+    def update_calc(self, newdata=True):
         if newdata:
             new = self.get_exact_data()
             new.update(cutoff=self.cutoff, descriptors=self.gp.kern.kernels)
             self.add_data(new)
-            self.add_locals(new, sparse=sparse)
+            self.add_locals(new)
         self.create_node()
         self.atoms.set_calculator(
             AutoForceCalculator(self.model))
@@ -114,10 +116,10 @@ class Leapfrog:
         if log:
             self.log("new model")
 
-    def add_locals(self, atms, sparse=True, measure='energy'):
+    def add_locals(self, atms, measure='energy'):
         ind = AtomsData([atms]).to_locals()
         ind.stage(descriptors=self.gp.kern.kernels)
-        if sparse:
+        if self.sparse:
             if self.model is None:
                 self.inducing += ind[0]
                 self.update_model(log=False)
