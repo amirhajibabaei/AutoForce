@@ -1,10 +1,11 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
 
 
 import functools
+from theforce.util.util import iterable
 
 
 class UID:
@@ -64,6 +65,12 @@ def method_caching(method):
             return method(self, *args)
 
     return cacher
+
+
+def strip_uid(X):
+    for x in iterable(X):
+        if hasattr(x, 'UID'):
+            del x.UID
 
 
 def example():

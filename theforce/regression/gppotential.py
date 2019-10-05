@@ -367,7 +367,9 @@ class PosteriorPotential(Module):
 
 def PosteriorPotentialFromFolder(folder, load_data=True):
     from theforce.descriptor.atoms import AtomsData
+    from theforce.util.caching import strip_uid
     self = torch.load(os.path.join(folder, 'model'))
+    strip_uid(self.X)
     with open(os.path.join(folder, 'cutoff'), 'r') as file:
         cutoff = float(file.readline().split()[0])
     if load_data:
