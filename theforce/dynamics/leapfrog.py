@@ -15,13 +15,17 @@ import ase
 class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, calculator=None, ediff=0.1, step=0,
-                 train=True, sparse=True, model=None, skip=0):
+                 train=True, sparse=True, model=None, skip=0, maxfp=None):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
         self.train = train
         self.sparse = sparse
         self.ediff = ediff
+
+        self.skip = skip
+        self.nfp = 0
+        self.maxfp = maxfp
 
         if type(dyn.atoms) == ase.Atoms:
             self.to_ase = True
@@ -45,13 +49,13 @@ class Leapfrog:
             self.data = self.model.data
             self.inducing = self.model.X
             self.update_calc(newdata=False)
+            self.trigger = self.skip
         else:
             self.model = None
             self.data = AtomsData(X=[])
             self.inducing = LocalsData(X=[])
             self.update_calc()
         self.energy = [self.atoms.get_potential_energy()]
-        self.skip = skip
 
     @property
     def atoms(self):
@@ -74,6 +78,7 @@ class Leapfrog:
             f.write('{} {} {}\n'.format(date(), self.step, mssge))
 
     def update_calc(self, newdata=True):
+        self.log("updating ...")
         if newdata:
             new = self.get_exact_data()
             new.update(cutoff=self.cutoff, descriptors=self.gp.kern.kernels)
@@ -99,6 +104,7 @@ class Leapfrog:
             tmp.set_targets()
         tmp.single_point()
         self.log("exact calculation")
+        self.nfp += 1
         return tmp
 
     def add_data(self, new):
@@ -168,7 +174,7 @@ class Leapfrog:
             self.node = [self.step]
             self.node_atoms = [self.atoms.copy()]
 
-    def doit(self):
+    def _doit(self):
         if not self.train:
             return False
 
@@ -197,6 +203,15 @@ class Leapfrog:
             return True
 
         return False
+
+    def doit(self):
+        if self.maxfp is None:
+            return self._doit()
+        else:
+            if self.nfp < self.maxfp:
+                return self._doit()
+            else:
+                return False
 
     def run(self, maxsteps):
         for _ in range(maxsteps):
