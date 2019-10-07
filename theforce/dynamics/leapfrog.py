@@ -15,7 +15,7 @@ import ase
 class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, calculator=None, ediff=0.1, step=0,
-                 train=True, sparse=True, model=None, skip=0, maxfp=None):
+                 train=True, sparse=True, model=None, skip=0, maxfp=None, firstfp=False):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
@@ -48,7 +48,7 @@ class Leapfrog:
                 self.model = model
             self.data = self.model.data
             self.inducing = self.model.X
-            self.update_calc(newdata=False)
+            self.update_calc(newdata=firstfp)
             self.trigger = self.skip
         else:
             self.model = None
