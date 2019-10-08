@@ -13,6 +13,7 @@ from theforce.util.util import iterable, mkdir_p
 from theforce.optimize.optimizers import ClampedSGD
 import copy
 import os
+import functools
 
 
 class EnergyForceKernel(Module):
@@ -251,38 +252,100 @@ class GaussianProcessPotential(Module):
             f.write(one_liner(self.state))
 
 
+def context_setting(method):
+
+    @functools.wraps(method)
+    def wrapper(self, *args, use_caching=False, enable_grad=False, **kwargs):
+        caching_status = self.gp.method_caching
+        self.gp.method_caching = use_caching
+        with torch.set_grad_enabled(enable_grad):
+            result = method(self, *args, **kwargs)
+        self.gp.method_caching = caching_status
+        return result
+
+    return wrapper
+
+
 class PosteriorPotential(Module):
 
-    def __init__(self, gp, data, inducing=None, use_caching=False, enable_grad=False, group=None):
+    def __init__(self, gp, data, inducing=None, group=None, **setting):
         super().__init__()
         self.gp = gp
         if group is not None:
             self.attach_process_group(group)
         else:
             self.is_distributed = False
-        self.set_data(data, inducing, use_caching, enable_grad)
+        self.set_data(data, inducing=inducing, **setting)
 
-    def set_data(self, data, inducing=None, use_caching=False, enable_grad=False):
-        gp = self.gp
-        caching_status = gp.method_caching
-        gp.method_caching = use_caching
-        with torch.set_grad_enabled(enable_grad):
-            if inducing is None:
-                p = gp(data, inducing)
-                self.X = copy.deepcopy(data)  # TODO: consider not copying
-                self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
-                self.nu = p.precision_matrix
-                self.has_target_forces = True
-            else:
-                K = torch.cat([gp.kern(data, inducing, cov='energy_energy'),
-                               gp.kern(data, inducing, cov='forces_energy')], dim=0)
-                M = gp.kern(inducing, inducing, cov='energy_energy')
-                self.mu, self.nu = projected_process_auxiliary_matrices_D(
-                    K, M, gp.Y(data), gp.diagonal_ridge(data))
-                self.X = inducing
-                self.has_target_forces = False
+    @context_setting
+    def set_data(self, data, inducing=None):
         self.data = data
-        gp.method_caching = caching_status
+        if inducing is None:
+            raise RuntimeWarning(
+                'This (inducing=None) has not been used in long while!')
+            p = self.gp(data, inducing)
+            self.X = copy.deepcopy(data)  # TODO: consider not copying
+            self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
+            self.nu = p.precision_matrix
+            self.has_target_forces = True
+        else:
+            self.Ke = self.gp.kern(data, inducing, cov='energy_energy')
+            self.Kf = self.gp.kern(data, inducing, cov='forces_energy')
+            self.M = self.gp.kern(inducing, inducing, cov='energy_energy')
+            self.X = inducing
+            self.make_munu()
+            self.has_target_forces = False
+
+    @property
+    def K(self):
+        return torch.cat([self.Ke, self.Kf], dim=0)
+
+    def make_munu(self):
+        self.mu, self.nu = projected_process_auxiliary_matrices_D(
+            self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data))
+
+    @context_setting
+    def remake_all(self):
+        self.set_data(self.data, self.X)
+
+    @context_setting
+    def add_data(self, data, remake=True):
+        Ke = self.gp.kern(data, self.X, cov='energy_energy')
+        Kf = self.gp.kern(data, self.X, cov='forces_energy')
+        self.Ke = torch.cat([self.Ke, Ke], dim=0)
+        self.Kf = torch.cat([self.Kf, Kf], dim=0)
+        self.data += data
+        if remake:
+            self.make_munu()
+
+    @context_setting
+    def add_inducing(self, X, remake=True):
+        Ke = self.gp.kern(self.data, X, cov='energy_energy')
+        Kf = self.gp.kern(self.data, X, cov='forces_energy')
+        self.Ke = torch.cat([self.Ke, Ke], dim=1)
+        self.Kf = torch.cat([self.Kf, Kf], dim=1)
+        a = self.gp.kern(self.X, X, cov='energy_energy')
+        b = self.gp.kern(X, X, cov='energy_energy')
+        self.M = torch.cat(
+            [torch.cat([self.M, a.t()]), torch.cat([a, b])], dim=1)
+        self.X += X
+        if remake:
+            self.make_munu()
+
+    def pop_1data(self, remake=True):
+        self.Ke = self.Ke[:-1]
+        self.Kf = self.Kf[:-3*self.data[-1].natoms]
+        del self.data.X[-1]
+        if remake:
+            self.make_munu()
+
+    def pop_1inducing(self, remake=True):
+        self.Ke = self.Ke[:, :-1]
+        self.Kf = self.Kf[:, :-1]
+        self.M = self.M[:-1, :-1]
+        del self.X.X[-1]
+        if remake:
+            self.make_munu()
 
     def attach_process_group(self, *args, **kwargs):
         self.gp.attach_process_group(*args, **kwargs)
@@ -313,56 +376,56 @@ class PosteriorPotential(Module):
         self.gp.to_file(os.path.join(folder, 'gp'))
         self.save(os.path.join(folder, 'model'))
 
-    def forward(self, test, quant='energy', variance=False, enable_grad=False, all_reduce=False):
+    @context_setting
+    def forward(self, test, quant='energy', variance=False, all_reduce=False):
         shape = {'energy': (-1,), 'forces': (-1, 3)}
-        with torch.set_grad_enabled(enable_grad):
-            A = self.gp.kern(test, self.X, cov=quant+'_energy')
-            if self.has_target_forces:
-                A = torch.cat([A, self.gp.kern(test, self.X, cov=quant+'_forces')],
-                              dim=1)
-            if quant == 'energy':
-                mean = self.gp.mean(test, forces=False)
-            else:
-                _, mean = self.gp.mean(test, forces=True, cat=False)
-            out = (mean + A @ self.mu).view(*shape[quant])
+        A = self.gp.kern(test, self.X, cov=quant+'_energy')
+        if self.has_target_forces:
+            A = torch.cat([A, self.gp.kern(test, self.X, cov=quant+'_forces')],
+                          dim=1)
+        if quant == 'energy':
+            mean = self.gp.mean(test, forces=False)
+        else:
+            _, mean = self.gp.mean(test, forces=True, cat=False)
+        out = (mean + A @ self.mu).view(*shape[quant])
+        if all_reduce:
+            torch.distributed.all_reduce(out)
+        if variance:
             if all_reduce:
-                torch.distributed.all_reduce(out)
-            if variance:
-                if all_reduce:
-                    raise NotImplementedError(
-                        'all_reduce with variance=True is not implemented')
-                var = (self.gp.kern.diag(test, quant) -
-                       (A @ self.nu @ A.t()).diag()).view(*shape[quant])
-                return out, var
-            else:
-                return out
+                raise NotImplementedError(
+                    'all_reduce with variance=True is not implemented')
+            var = (self.gp.kern.diag(test, quant) -
+                   (A @ self.nu @ A.t()).diag()).view(*shape[quant])
+            return out, var
+        else:
+            return out
 
-    def predict(self, test, variance=False, enable_grad=False):
+    @context_setting
+    def predict(self, test, variance=False):
         if self.gp.parametric is not None:
             raise NotImplementedError(
                 'this method is not updated to include parametric potential')
-        with torch.set_grad_enabled(enable_grad):
-            A = self.gp.kern(test, self.X, cov='energy_energy')
-            B = self.gp.kern(test, self.X, cov='forces_energy')
-            if self.has_target_forces:
-                A = torch.cat([A, self.gp.kern(test, self.X, cov='energy_forces')],
-                              dim=1)
-                B = torch.cat([B, self.gp.kern(test, self.X, cov='forces_forces')],
-                              dim=1)
+        A = self.gp.kern(test, self.X, cov='energy_energy')
+        B = self.gp.kern(test, self.X, cov='forces_energy')
+        if self.has_target_forces:
+            A = torch.cat([A, self.gp.kern(test, self.X, cov='energy_forces')],
+                          dim=1)
+            B = torch.cat([B, self.gp.kern(test, self.X, cov='forces_forces')],
+                          dim=1)
 
-            energy = A @ self.mu
-            forces = B @ self.mu
+        energy = A @ self.mu
+        forces = B @ self.mu
 
-            out = (energy, forces.view(-1, 3))
+        out = (energy, forces.view(-1, 3))
 
-            if variance:
-                energy_var = (self.gp.kern.diag(test, 'energy') -
-                              (A @ self.nu @ A.t()).diag())
-                forces_var = (self.gp.kern.diag(test, 'forces') -
-                              (B @ self.nu @ B.t()).diag())
-                out += (energy_var, forces_var.view(-1, 3))
+        if variance:
+            energy_var = (self.gp.kern.diag(test, 'energy') -
+                          (A @ self.nu @ A.t()).diag())
+            forces_var = (self.gp.kern.diag(test, 'forces') -
+                          (B @ self.nu @ B.t()).diag())
+            out += (energy_var, forces_var.view(-1, 3))
 
-            return out
+        return out
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True):
