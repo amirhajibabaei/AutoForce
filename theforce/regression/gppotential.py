@@ -207,8 +207,18 @@ class GaussianProcessPotential(Module):
     def method_caching(self, value):
         self.kern.method_caching = value
 
-    def clear_cached(self):
-        self.kern.clear_cached()
+    def clear_cached(self, X=None):
+        if X is None:
+            self.kern.clear_cached()
+        else:
+            for x in iterable(X):
+                if hasattr(x, 'UID'):
+                    UID = x.UID()
+                    for a in self.cached:
+                        for b in a.values():
+                            for c in list(b.keys()):
+                                if UID in c:
+                                    del b[c]
 
     @property
     def cached(self):
