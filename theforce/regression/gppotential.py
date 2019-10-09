@@ -342,17 +342,21 @@ class PosteriorPotential(Module):
         if remake:
             self.make_munu()
 
-    def pop_1data(self, remake=True):
+    def pop_1data(self, remake=True, clear_cached=True):
         self.Ke = self.Ke[:-1]
         self.Kf = self.Kf[:-3*self.data[-1].natoms]
+        if clear_cached:
+            self.gp.clear_cached([self.data.X[-1]])
         del self.data.X[-1]
         if remake:
             self.make_munu()
 
-    def pop_1inducing(self, remake=True):
+    def pop_1inducing(self, remake=True, clear_cached=True):
         self.Ke = self.Ke[:, :-1]
         self.Kf = self.Kf[:, :-1]
         self.M = self.M[:-1, :-1]
+        if clear_cached:
+            self.gp.clear_cached([self.X.X[-1]])
         del self.X.X[-1]
         if remake:
             self.make_munu()
