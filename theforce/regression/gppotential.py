@@ -364,12 +364,16 @@ class PosteriorPotential(Module):
     def add_1atoms(self, atoms, ediff, fdiff):
         kwargs = {'use_caching': True}
         e1 = self([atoms], **kwargs)
-        f1 = self([atoms], 'forces', **kwargs)
+        if fdiff < float('inf'):
+            f1 = self([atoms], 'forces', **kwargs)
         self.add_data([atoms], **kwargs)
         e2 = self([atoms], **kwargs)
-        f2 = self([atoms], 'forces', **kwargs)
         de = abs(e1-e2)
-        df = (f2-f1).abs().max()
+        if fdiff < float('inf'):
+            f2 = self([atoms], 'forces', **kwargs)
+            df = (f2-f1).abs().max()
+        else:
+            df = 0
         if de < ediff and df < fdiff:
             self.pop_1data(clear_cached=True)
         return de, df
