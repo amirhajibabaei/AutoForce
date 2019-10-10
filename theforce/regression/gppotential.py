@@ -378,7 +378,7 @@ class PosteriorPotential(Module):
         kwargs = {'use_caching': True}
         e1 = self(loc, **kwargs)
         self.add_inducing(loc, **kwargs)
-        e2 = self(atoms, **kwargs)
+        e2 = self(loc, **kwargs)
         de = abs(e1-e2)
         if de < ediff:
             self.pop_1inducing(clear_cached=True)
