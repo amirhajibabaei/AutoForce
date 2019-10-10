@@ -313,6 +313,15 @@ class TorchAtoms(Atoms):
         for env in self.loc:
             yield env
 
+    def first_of_each_atom_type(atoms):
+        indices = []
+        unique = []
+        for i, a in enumerate(atoms.numbers):
+            if a not in unique:
+                unique += [a]
+                indices += [i]
+        return indices
+
     def __eq__(self, other):  # Note: descriptors are excluded
         if other.__class__ == Local:
             return False
