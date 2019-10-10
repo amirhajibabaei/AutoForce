@@ -361,6 +361,29 @@ class PosteriorPotential(Module):
         if remake:
             self.make_munu()
 
+    def add_1atoms(self, atoms, ediff, fdiff):
+        kwargs = {'use_caching': True}
+        e1 = self([atoms], **kwargs)
+        f1 = self([atoms], 'forces', **kwargs)
+        self.add_data([atoms], **kwargs)
+        e2 = self([atoms], **kwargs)
+        f2 = self([atoms], 'forces', **kwargs)
+        de = abs(e1-e2)
+        df = (f2-f1).abs().max()
+        if de < ediff and df < fdiff:
+            self.pop_1data(clear_cached=True)
+        return de, df
+
+    def add_1inducing(self, loc, ediff):
+        kwargs = {'use_caching': True}
+        e1 = self(loc, **kwargs)
+        self.add_inducing(loc, **kwargs)
+        e2 = self(atoms, **kwargs)
+        de = abs(e1-e2)
+        if de < ediff:
+            self.pop_1inducing(clear_cached=True)
+        return de
+
     def attach_process_group(self, *args, **kwargs):
         self.gp.attach_process_group(*args, **kwargs)
         self.is_distributed = True
