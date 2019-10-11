@@ -12,7 +12,155 @@ import torch
 import ase
 
 
+def initial_model(gp, atoms, ediff):
+    i = atoms.first_of_each_atom_type()
+    inducing = LocalsData([atoms.loc[j] for j in i])
+    data = AtomsData([atoms])
+    model = PosteriorPotential(gp, data, inducing, use_caching=True)
+    for j in range(atoms.natoms):
+        if j not in i:
+            model.add_1inducing(atoms.loc[j], ediff)
+    return model
+
+
 class Leapfrog:
+
+    def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None, init=None):
+        self.dyn = dyn
+        self.gp = gp
+        self.cutoff = cutoff
+        self.ediff = ediff
+        self.fdiff = fdiff
+
+        # atoms
+        if type(dyn.atoms) == ase.Atoms:
+            self.to_ase = True
+            dyn.atoms = TorchAtoms(dyn.atoms)
+        else:
+            self.to_ase = False
+        self.atoms.update(cutoff=cutoff, descriptors=self.gp.kern.kernels)
+
+        # calc
+        if calculator:
+            self.calculator = calculator
+        else:
+            self.calculator = dyn.atoms.calc
+
+        # init
+        self.init = True if model is None else False if init is None else init
+
+        # model
+        self.step = 0
+        self._fp = []
+        self._ext = []
+        self.log('leapfrog says Hello!'.format(date()), mode='w')
+        if model:
+            if type(model) == str:
+                potential = PosteriorPotentialFromFolder(model)
+            else:
+                potential = model
+        else:
+            snap = self.snapshot()
+            potential = initial_model(self.gp, snap, self.ediff)
+        self.atoms.set_calculator(AutoForceCalculator(potential))
+        self.energy = [self.atoms.get_potential_energy()]
+
+    def log(self, mssge, file='leapfrog.log', mode='a'):
+        with open(file, mode) as f:
+            f.write('{} {} {}\n'.format(date(), self.step, mssge))
+
+    @property
+    def atoms(self):
+        return self.dyn.atoms
+
+    @atoms.setter
+    def atoms(self, value):
+        self.dyn.atoms = value
+
+    @property
+    def model(self):
+        return self.atoms.calc.potential
+
+    @property
+    def sizes(self):
+        return len(self.model.data), len(self.model.X)
+
+    @property
+    def fp_nodes(self):
+        return self._fp, [self.energy[k] for k in self._fp]
+
+    @property
+    def ext_nodes(self):
+        return self._ext, [self.energy[k] for k in self._ext]
+
+    def snapshot(self):
+        tmp = self.atoms.copy()
+        if self.to_ase:
+            tmp = tmp.as_ase()
+        tmp.set_calculator(self.calculator)
+        tmp.get_forces()
+        if self.to_ase:
+            tmp = TorchAtoms(ase_atoms=tmp, cutoff=self.cutoff,
+                             descriptors=self.gp.kern.kernels)
+        else:
+            tmp.set_targets()
+        tmp.single_point()
+        self._fp.append(self.step)
+        return tmp
+
+    def update_model(self):
+        self.size1 = self.sizes
+        new = self.snapshot()
+        self.model.add_1atoms(new, self.ediff, self.fdiff)
+        for loc in new.loc:
+            self.model.add_1inducing(loc, self.ediff)
+        self.size2 = self.sizes
+
+    def undo_update(self):
+        d = self.size2[0]-self.size1[0]
+        i = self.size2[1]-self.size1[1]
+        while d > 0:
+            self.model.pop_1data()
+            d -= 1
+        while i > 0:
+            self.model.pop_1inducing()
+            i -= 1
+
+    def doit(self):
+
+        # check
+        ext = False
+        if len(self.energy) >= 3:
+            d1 = self.energy[-1] - self.energy[-2]
+            d2 = self.energy[-2] - self.energy[-3]
+            if d1*d2 < 0:
+                ext = True
+
+        # decide
+        if ext:
+            self._ext += [self.step]
+            if len(self._ext) > 2 and self._ext[-1]-self._fp[-1] < 10:
+                return False
+            return True  # main
+        else:
+            last = 0 if len(self._fp) == 0 else self._fp[-1]
+            if self.init and len(self._ext) <= 2 and self.step-last > 3:
+                return True
+            return False  # main
+
+    def run(self, maxsteps):
+        for _ in range(maxsteps):
+            if self.doit():
+                self.log('updating ...')
+                self.update_model()
+                self.log('data: {} inducing: {}'.format(*self.sizes))
+            self.dyn.run(1)
+            self.step += 1
+            self.energy += [self.atoms.get_potential_energy()]
+            self.log('{}'.format(self.energy[-1]))
+
+
+class _Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, calculator=None, ediff=0.1, step=0,
                  train=True, sparse=True, model=None, skip=0, maxfp=None, firstfp=False):
