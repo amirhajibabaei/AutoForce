@@ -52,6 +52,7 @@ class Leapfrog:
         # model
         self.step = 0
         self._fp = []
+        self._fp_e = []
         self._ext = []
         self.log('leapfrog says Hello!'.format(date()), mode='w')
         if model:
@@ -87,7 +88,7 @@ class Leapfrog:
 
     @property
     def fp_nodes(self):
-        return self._fp, [self.energy[k] for k in self._fp]
+        return self._fp, self._fp_e
 
     @property
     def ext_nodes(self):
@@ -98,14 +99,16 @@ class Leapfrog:
         if self.to_ase:
             tmp = tmp.as_ase()
         tmp.set_calculator(self.calculator)
+        self._fp.append(self.step)
+        self._fp_e.append(tmp.get_potential_energy())
         tmp.get_forces()
+        ase.io.Trajectory('_FP.traj', 'a').write(tmp)
         if self.to_ase:
             tmp = TorchAtoms(ase_atoms=tmp, cutoff=self.cutoff,
                              descriptors=self.gp.kern.kernels)
         else:
             tmp.set_targets()
         tmp.single_point()
-        self._fp.append(self.step)
         return tmp
 
     def update_model(self):
