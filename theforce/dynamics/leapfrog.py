@@ -10,6 +10,7 @@ from theforce.descriptor.atoms import AtomsData, LocalsData, TorchAtoms
 from theforce.util.util import date
 import torch
 import ase
+import numpy as np
 
 
 def initial_model(gp, atoms, ediff):
@@ -129,7 +130,7 @@ class Leapfrog:
             self.model.pop_1inducing()
             i -= 1
 
-    def doit(self):
+    def doit(self, prob=1):
 
         # check
         ext = False
@@ -144,16 +145,16 @@ class Leapfrog:
             self._ext += [self.step]
             if len(self._ext) > 2 and self._ext[-1]-self._fp[-1] < 10:
                 return False
-            return True  # main
+            return np.random.choice([True, False], p=[prob, 1-prob])  # main
         else:
             last = 0 if len(self._fp) == 0 else self._fp[-1]
             if self.init and len(self._ext) <= 2 and self.step-last > 3:
                 return True
             return False  # main
 
-    def run(self, maxsteps):
+    def run(self, maxsteps, prob=1):
         for _ in range(maxsteps):
-            if self.doit():
+            if self.doit(prob=prob):
                 self.log('updating ...')
                 self.update_model()
                 self.log('data: {} inducing: {}'.format(*self.sizes))
