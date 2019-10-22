@@ -154,7 +154,7 @@ class Leapfrog:
 
     def run(self, maxsteps, prob=1):
         for _ in range(maxsteps):
-            if self.doit(prob=prob):
+            if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
                 self.update_model()
                 self.log('data: {} inducing: {}'.format(*self.sizes))
