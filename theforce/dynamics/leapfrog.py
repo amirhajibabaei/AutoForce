@@ -166,6 +166,27 @@ class Leapfrog:
             self.temperature += [self.atoms.get_temperature()]
             self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
 
+    def run_updates(self, maxupdates, prob=1):
+        updates = 0
+        steps = 0
+        while updates < maxupdates:
+            if prob > 0 and self.doit(prob=prob):
+                self.log('updating ...')
+                self.update_model()
+                self.log('data: {} inducing: {}'.format(*self.sizes))
+                updates += 1
+            self.dyn.run(1)
+            self.step += 1
+            steps += 1
+            self.energy += [self.atoms.get_potential_energy()]
+            self.temperature += [self.atoms.get_temperature()]
+            self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
+        steps_per_update = steps / updates
+        average_temp = np.array(self.temperature[-steps:]).mean()
+        self.log('steps per update: {}, temperature: {}'.format(
+            steps_per_update, average_temp))
+        return steps_per_update, average_temp
+
 
 class _Leapfrog:
 
