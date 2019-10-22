@@ -121,6 +121,7 @@ class Leapfrog:
             ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
             self.model.add_1inducing(loc, ediff)
         self.size2 = self.sizes
+        return (self.size2[0]-self.size1[0]) > 0 or (self.size2[1]-self.size1[1]) > 0
 
     def undo_update(self):
         d = self.size2[0]-self.size1[0]
@@ -158,8 +159,8 @@ class Leapfrog:
         for _ in range(maxsteps):
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
-                self.update_model()
-                self.log('data: {} inducing: {}'.format(*self.sizes))
+                self.log('update: {} data: {} inducing: {}'.format(
+                    self.update_model(), *self.sizes))
             self.dyn.run(1)
             self.step += 1
             self.energy += [self.atoms.get_potential_energy()]
@@ -172,8 +173,8 @@ class Leapfrog:
         while updates < maxupdates:
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
-                self.update_model()
-                self.log('data: {} inducing: {}'.format(*self.sizes))
+                self.log('update: {} data: {} inducing: {}'.format(
+                    self.update_model(), *self.sizes))
                 updates += 1
             self.dyn.run(1)
             self.step += 1
