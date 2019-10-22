@@ -66,6 +66,7 @@ class Leapfrog:
             potential = initial_model(self.gp, snap, self.ediff)
         self.atoms.set_calculator(AutoForceCalculator(potential))
         self.energy = [self.atoms.get_potential_energy()]
+        self.temperature = [self.atoms.get_temperature()]
 
     def log(self, mssge, file='leapfrog.log', mode='a'):
         with open(file, mode) as f:
@@ -161,7 +162,8 @@ class Leapfrog:
             self.dyn.run(1)
             self.step += 1
             self.energy += [self.atoms.get_potential_energy()]
-            self.log('{}'.format(self.energy[-1]))
+            self.temperature += [self.atoms.get_temperature()]
+            self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
 
 
 class _Leapfrog:
