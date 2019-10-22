@@ -118,7 +118,8 @@ class Leapfrog:
         new = self.snapshot()
         self.model.add_1atoms(new, self.ediff, self.fdiff)
         for loc in new.loc:
-            self.model.add_1inducing(loc, self.ediff)
+            ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
+            self.model.add_1inducing(loc, ediff)
         self.size2 = self.sizes
 
     def undo_update(self):
