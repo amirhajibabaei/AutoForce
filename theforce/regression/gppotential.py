@@ -416,6 +416,10 @@ class PosteriorPotential(Module):
         self.X.to_traj(os.path.join(folder, 'inducing.traj'))
         self.gp.to_file(os.path.join(folder, 'gp'))
         self.save(os.path.join(folder, 'model'))
+        # info
+        with open(os.path.join(folder, 'info'), 'w') as file:
+            file.write('data size: {}\n'.format(len(self.data)))
+            file.write('inducing size: {}\n'.format(len(self.X)))
 
     @context_setting
     def forward(self, test, quant='energy', variance=False, all_reduce=False):
