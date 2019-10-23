@@ -122,7 +122,7 @@ class Leapfrog:
         tmp.single_point()
         return tmp
 
-    def update_model(self, datafirst=None):
+    def update_model(self, datafirst=True):
         self.size1 = self.sizes
         new = self.snapshot()
         if datafirst is None:
@@ -169,7 +169,7 @@ class Leapfrog:
                 return True
             return False  # main
 
-    def run(self, maxsteps, prob=1, datafirst=None):
+    def run(self, maxsteps, prob=1, datafirst=True):
         for _ in range(maxsteps):
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
@@ -181,7 +181,7 @@ class Leapfrog:
             self.temperature += [self.atoms.get_temperature()]
             self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
 
-    def run_updates(self, maxupdates, prob=1, datafirst=None):
+    def run_updates(self, maxupdates, prob=1, datafirst=True):
         updates = 0
         steps = 0
         while updates < maxupdates:
