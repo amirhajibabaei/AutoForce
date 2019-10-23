@@ -122,13 +122,18 @@ class Leapfrog:
         tmp.single_point()
         return tmp
 
-    def update_model(self):
+    def update_model(self, datafirst=None):
         self.size1 = self.sizes
         new = self.snapshot()
-        self.model.add_1atoms(new, self.ediff, self.fdiff)
+        if datafirst is None:
+            datafirst = np.random.choice([True, False])
+        if datafirst:
+            self.model.add_1atoms(new, self.ediff, self.fdiff)
         for loc in new.loc:
             ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
             self.model.add_1inducing(loc, ediff)
+        if not datafirst:
+            self.model.add_1atoms(new, self.ediff, self.fdiff)
         self.size2 = self.sizes
         return (self.size2[0]-self.size1[0]) > 0 or (self.size2[1]-self.size1[1]) > 0
 
@@ -164,26 +169,26 @@ class Leapfrog:
                 return True
             return False  # main
 
-    def run(self, maxsteps, prob=1):
+    def run(self, maxsteps, prob=1, datafirst=None):
         for _ in range(maxsteps):
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
                 self.log('update: {} data: {} inducing: {}'.format(
-                    self.update_model(), *self.sizes))
+                    self.update_model(datafirst=datafirst), *self.sizes))
             self.dyn.run(1)
             self.step += 1
             self.energy += [self.atoms.get_potential_energy()]
             self.temperature += [self.atoms.get_temperature()]
             self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
 
-    def run_updates(self, maxupdates, prob=1):
+    def run_updates(self, maxupdates, prob=1, datafirst=None):
         updates = 0
         steps = 0
         while updates < maxupdates:
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
                 self.log('update: {} data: {} inducing: {}'.format(
-                    self.update_model(), *self.sizes))
+                    self.update_model(datafirst=datafirst), *self.sizes))
                 updates += 1
             self.dyn.run(1)
             self.step += 1
