@@ -9,7 +9,7 @@ from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.kernel import White
 from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_D
-from theforce.util.util import iterable, mkdir_p
+from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.optimize.optimizers import ClampedSGD
 import copy
 import os
@@ -408,7 +408,9 @@ class PosteriorPotential(Module):
         self.data = data
         self.gp.cahced = cached
 
-    def to_folder(self, folder, info=None):
+    def to_folder(self, folder, info=None, overwrite=True):
+        if not overwrite:
+            folder = safe_dirname(folder)
         mkdir_p(folder)
         with open(os.path.join(folder, 'cutoff'), 'w') as file:
             file.write('{}\n'.format(self.data[0].cutoff))
