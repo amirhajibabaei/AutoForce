@@ -183,10 +183,11 @@ class Leapfrog:
             self.temperature += [self.atoms.get_temperature()]
             self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
         steps_per_update = steps / updates
+        average_energy = np.array(self.energy[-steps:]).mean()
         average_temp = np.array(self.temperature[-steps:]).mean()
-        self.log('steps per update: {}, temperature: {}'.format(
-            steps_per_update, average_temp))
-        return steps_per_update, average_temp
+        self.log('steps per update: {}, energy: {}, temperature: {}'.format(
+            steps_per_update, average_energy, average_temp))
+        return steps_per_update, average_energy, average_temp
 
 
 class _Leapfrog:
