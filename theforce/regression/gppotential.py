@@ -408,7 +408,7 @@ class PosteriorPotential(Module):
         self.data = data
         self.gp.cahced = cached
 
-    def to_folder(self, folder):
+    def to_folder(self, folder, info=None):
         mkdir_p(folder)
         with open(os.path.join(folder, 'cutoff'), 'w') as file:
             file.write('{}\n'.format(self.data[0].cutoff))
@@ -418,8 +418,16 @@ class PosteriorPotential(Module):
         self.save(os.path.join(folder, 'model'))
         # info
         with open(os.path.join(folder, 'info'), 'w') as file:
-            file.write('data size: {}\n'.format(len(self.data)))
-            file.write('inducing size: {}\n'.format(len(self.X)))
+            file.write('data: {}, inducing: {}\n'.format(
+                len(self.data), len(self.X)))
+            if info is not None:
+                if type(info) == str:
+                    file.write('{}\n'.format(info))
+                elif hasattr(info, '__iter__'):
+                    for inf in info:
+                        file.write('{}\n'.format(inf))
+                else:
+                    file.write('{}\n'.format(info))
 
     @context_setting
     def forward(self, test, quant='energy', variance=False, all_reduce=False):
