@@ -99,6 +99,12 @@ class Leapfrog:
     def rescale_velocities(self, factor):
         self.atoms.set_velocities(self.atoms.get_velocities()*factor)
 
+    def get_atoms(self):
+        tmp = self.atoms.copy()
+        if self.to_ase:
+            tmp = tmp.as_ase()
+        return tmp
+
     def snapshot(self):
         tmp = self.atoms.copy()
         if self.to_ase:
