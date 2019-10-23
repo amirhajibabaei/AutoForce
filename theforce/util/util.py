@@ -32,6 +32,15 @@ def mkdir_p(path):
         pass
 
 
+def safe_dirname(d, append='x'):
+    dd = d
+    if dd.endswith('/'):
+        dd = dd[:-1]
+    while os.path.isdir(dd):
+        dd += append
+    return dd
+
+
 def meminfo():
     return os.getpid(), psutil.Process(os.getpid()).memory_info().rss
 
