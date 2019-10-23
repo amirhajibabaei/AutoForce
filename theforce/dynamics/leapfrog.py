@@ -96,6 +96,9 @@ class Leapfrog:
     def ext_nodes(self):
         return self._ext, [self.energy[k] for k in self._ext]
 
+    def rescale_velocities(self, factor):
+        self.atoms.set_velocities(self.atoms.get_velocities()*factor)
+
     def snapshot(self):
         tmp = self.atoms.copy()
         if self.to_ase:
