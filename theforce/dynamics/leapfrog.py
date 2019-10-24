@@ -26,12 +26,14 @@ def initial_model(gp, atoms, ediff):
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None, init=None):
+    def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), leakage_factor=3,
+                 calculator=None, model=None, init=None):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
         self.ediff = ediff
         self.fdiff = fdiff
+        self.leakage_factor = leakage_factor
 
         # atoms
         if type(dyn.atoms) == ase.Atoms:
@@ -122,7 +124,9 @@ class Leapfrog:
         tmp.single_point()
         return tmp
 
-    def update_model(self, datafirst=True):
+    def _update_model(self, datafirst=True):
+        raise DeprecationWarning(
+            '_update_model scales like len(ref)*len(data) and is deprecated')
         self.size1 = self.sizes
         new = self.snapshot()
         if datafirst is None:
@@ -133,6 +137,16 @@ class Leapfrog:
             ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
             self.model.add_1inducing(loc, ediff)
         if not datafirst:
+            self.model.add_1atoms(new, self.ediff, self.fdiff)
+        self.size2 = self.sizes
+        return (self.size2[0]-self.size1[0]) > 0 or (self.size2[1]-self.size1[1]) > 0
+
+    def update_model(self):
+        self.size1 = self.sizes
+        refs = [self.model.add_1ref(loc, factor=self.leakage_factor)
+                for loc in self.atoms]
+        if any(refs):
+            new = self.snapshot()
             self.model.add_1atoms(new, self.ediff, self.fdiff)
         self.size2 = self.sizes
         return (self.size2[0]-self.size1[0]) > 0 or (self.size2[1]-self.size1[1]) > 0
@@ -158,37 +172,37 @@ class Leapfrog:
                 ext = True
 
         # decide
+        last = 0 if len(self._fp) == 0 else self._fp[-1]
         if ext:
             self._ext += [self.step]
-            if len(self._ext) > 2 and self._ext[-1]-self._fp[-1] < 10:
+            if len(self._ext) > 2 and self._ext[-1]-last < 10:
                 return False
             return np.random.choice([True, False], p=[prob, 1-prob])  # main
         else:
-            last = 0 if len(self._fp) == 0 else self._fp[-1]
             if self.init and len(self._ext) <= 2 and self.step-last > 3:
                 return True
             return False  # main
 
-    def run(self, maxsteps, prob=1, datafirst=True):
+    def run(self, maxsteps, prob=1):
         for _ in range(maxsteps):
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
                 self.log('update: {} data: {} inducing: {}'.format(
-                    self.update_model(datafirst=datafirst), *self.sizes))
+                    self.update_model(), *self.sizes))
             self.dyn.run(1)
             self.step += 1
             self.energy += [self.atoms.get_potential_energy()]
             self.temperature += [self.atoms.get_temperature()]
             self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
 
-    def run_updates(self, maxupdates, prob=1, datafirst=True):
+    def run_updates(self, maxupdates, prob=1):
         updates = 0
         steps = 0
         while updates < maxupdates:
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
                 self.log('update: {} data: {} inducing: {}'.format(
-                    self.update_model(datafirst=datafirst), *self.sizes))
+                    self.update_model(), *self.sizes))
                 updates += 1
             self.dyn.run(1)
             self.step += 1
@@ -201,7 +215,7 @@ class Leapfrog:
         average_temp = np.array(self.temperature[-steps:]).mean()
         self.log('steps per update: {}, energy: {}, temperature: {}'.format(
             steps_per_update, average_energy, average_temp))
-        return steps_per_update, average_energy, average_temp
+        return steps_per_update, average_energy, average_tempclass _Leapfrog:
 
 
 class _Leapfrog:
