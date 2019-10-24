@@ -313,19 +313,17 @@ class PosteriorPotential(Module):
     def make_munu(self):
         self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
             self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
-        self.M = self.M + self.ridge*torch.eye(self.M.size(0))
-        self.Xleaks = self.leakages(self.X)
-        self._leakmean = self.Xleaks.mean()
-        self._leakwidth = self.Xleaks.var().sqrt()
-        if torch.isnan(self._leakwidth):
-            self._leakwidth = torch.finfo().eps
+
+    @property
+    def ref_M(self):
+        return self.M + self.ridge*torch.eye(self.M.size(0))
 
     @context_setting
     def leakage(self, loc):
         a = self.gp.kern(self.X, loc, cov='energy_energy')
         b = self.choli @ a
         c = b.t()@b
-        d = self.gp.kern(loc, loc, cov='energy_energy')
+        d = self.gp.kern(loc, loc, cov='energy_energy') + self.ridge
         return (1-c/d).view(1)
 
     def leakages(self, X):
@@ -404,15 +402,6 @@ class PosteriorPotential(Module):
         if de < ediff:
             self.pop_1inducing(clear_cached=True)
         return de
-
-    def add_1ref(self, loc, factor=1.):
-        kwargs = {'use_caching': True}
-        if abs(self.leakage(loc, **kwargs) - self._leakmean) > self._leakwidth*factor:
-            self.add_inducing(loc, **kwargs)
-            return True
-        else:
-            self.gp.clear_cached([loc])
-            return False
 
     def attach_process_group(self, *args, **kwargs):
         self.gp.attach_process_group(*args, **kwargs)
