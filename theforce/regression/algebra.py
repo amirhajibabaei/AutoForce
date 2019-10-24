@@ -137,16 +137,16 @@ def projected_process_auxiliary_matrices_D(K, M, Y, D, chol_inverse=False):
     that the scalar input "sigma" is replaced by a vector "D"
     """
     assert D.numel() == Y.numel()
-    L, _ = jitcholesky(M)
+    L, ridge = jitcholesky(M)
     i = L.inverse()
     B = K@i.t()
     J = inverse_using_low_rank_factor(B, D)
     mu = i.t()@B.t()@J@Y
     nu = i.t()@B.t()@J@B@i
     if chol_inverse:
-        return mu, nu, i
+        return mu, nu, ridge, i
     else:
-        return mu, nu
+        return mu, nu, ridge
 
 
 # greedy algorithms ------------------------------------------------------------

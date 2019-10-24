@@ -311,8 +311,9 @@ class PosteriorPotential(Module):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
     def make_munu(self):
-        self.mu, self.nu = projected_process_auxiliary_matrices_D(
-            self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data))
+        self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
+            self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
+        self.M = self.M + self.ridge*torch.eye(self.M.size(0))
 
     @context_setting
     def remake_all(self):
