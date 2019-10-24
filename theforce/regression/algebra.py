@@ -131,7 +131,7 @@ def inverse_using_low_rank_factor(Q, D):
     return inv
 
 
-def projected_process_auxiliary_matrices_D(K, M, Y, D):
+def projected_process_auxiliary_matrices_D(K, M, Y, D, chol_inverse=False):
     """
     same as projected_process_auxiliary_matrices_I, with a difference
     that the scalar input "sigma" is replaced by a vector "D"
@@ -143,7 +143,10 @@ def projected_process_auxiliary_matrices_D(K, M, Y, D):
     J = inverse_using_low_rank_factor(B, D)
     mu = i.t()@B.t()@J@Y
     nu = i.t()@B.t()@J@B@i
-    return mu, nu
+    if chol_inverse:
+        return mu, nu, i
+    else:
+        return mu, nu
 
 
 # greedy algorithms ------------------------------------------------------------
