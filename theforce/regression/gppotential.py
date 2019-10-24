@@ -314,6 +314,17 @@ class PosteriorPotential(Module):
         self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
             self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
         self.M = self.M + self.ridge*torch.eye(self.M.size(0))
+        self.Xleaks = self.leakages(self.X)
+
+    def leakage(self, loc):
+        a = self.gp.kern(self.X, loc, cov='energy_energy')
+        b = self.choli @ a
+        c = b.t()@b
+        d = self.gp.kern(loc, loc, cov='energy_energy')
+        return (1-c/d).view(1)
+
+    def leakages(self, X):
+        return torch.cat([self.leakage(x) for x in iterable(X)])
 
     @context_setting
     def remake_all(self):
