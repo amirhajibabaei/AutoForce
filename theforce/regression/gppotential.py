@@ -315,7 +315,10 @@ class PosteriorPotential(Module):
             self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
         self.M = self.M + self.ridge*torch.eye(self.M.size(0))
         self.Xleaks = self.leakages(self.X)
+        self._leakmean = self.Xleaks.mean()
+        self._leakwidth = self.Xleaks.var().sqrt()
 
+    @context_setting
     def leakage(self, loc):
         a = self.gp.kern(self.X, loc, cov='energy_energy')
         b = self.choli @ a
@@ -391,6 +394,8 @@ class PosteriorPotential(Module):
         return de, df
 
     def add_1inducing(self, loc, ediff):
+        raise RuntimeWarning(
+            'add_1inducing is deprecated, use add_1ref instead')
         kwargs = {'use_caching': True}
         e1 = self(loc, **kwargs)
         self.add_inducing(loc, **kwargs)
@@ -399,6 +404,15 @@ class PosteriorPotential(Module):
         if de < ediff:
             self.pop_1inducing(clear_cached=True)
         return de
+
+    def add_1ref(self, loc, factor=1.):
+        kwargs = {'use_caching': True}
+        if abs(self.leakage(loc, **kwargs) - self._leakmean) > self._leakwidth*factor:
+            self.add_inducing(loc, **kwargs)
+            return True
+        else:
+            self.gp.clear_cached([loc])
+            return False
 
     def attach_process_group(self, *args, **kwargs):
         self.gp.attach_process_group(*args, **kwargs)
