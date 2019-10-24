@@ -317,6 +317,8 @@ class PosteriorPotential(Module):
         self.Xleaks = self.leakages(self.X)
         self._leakmean = self.Xleaks.mean()
         self._leakwidth = self.Xleaks.var().sqrt()
+        if torch.isnan(self._leakwidth):
+            self._leakwidth = torch.finfo().eps
 
     @context_setting
     def leakage(self, loc):
@@ -394,8 +396,6 @@ class PosteriorPotential(Module):
         return de, df
 
     def add_1inducing(self, loc, ediff):
-        raise RuntimeWarning(
-            'add_1inducing is deprecated, use add_1ref instead')
         kwargs = {'use_caching': True}
         e1 = self(loc, **kwargs)
         self.add_inducing(loc, **kwargs)
