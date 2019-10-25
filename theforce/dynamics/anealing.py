@@ -15,6 +15,7 @@ import numpy as np
 def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2., ediff=0.01, volatile=None,
                           target_temperature=1000., stages=1, equilibration=5, rescale_velocities=1.05,
                           algorithm='fast', name='model', overwrite=True, traj='anealing.traj'):
+    assert rescale_velocities > 1
 
     if model is not None:
         if type(model) == str:
@@ -32,13 +33,20 @@ def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2.,
     dyn = Leapfrog(dyn, gp, cutoff, calculator=calculator, model=model,
                    ediff=ediff, volatile=volatile, algorithm=algorithm)
 
-    _, ei, ti = dyn.run_updates(equilibration)
-    temperatures = np.linspace(ti, target_temperature, stages+1)[1:]
+    # initial equilibration
+    while dyn.volatile():
+        _, e, t = dyn.run_updates(1)
+    _, e, t = dyn.run_updates(equilibration)
+
+    temperatures = np.linspace(t, target_temperature, stages+1)[1:]
+    heating = t < target_temperature
+    cooling = not heating
     for k, target_t in enumerate(temperatures):
-        print('stage: {} target temperature: {}'.format(k, target_t))
-        t = 0
-        while t < target_t:
-            dyn.rescale_velocities(rescale_velocities)
+        print('stage: {}, temperature: {}, target temperature: {}, ({})'.format(
+            k, t, target_t, 'heating' if heating else 'cooling'))
+        while (heating and t < target_t) or (cooling and t > target_t):
+            dyn.rescale_velocities(
+                rescale_velocities if heating else 1./rescale_velocities)
             _, e, t = dyn.run_updates(equilibration)
         if k == stages-1:
             dyn.model.to_folder(name, info='temperature: {}'.format(t),
