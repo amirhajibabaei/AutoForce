@@ -414,16 +414,20 @@ class PosteriorPotential(Module):
     def train(self, *args, **kwargs):
         train_gpp(self.gp, *args, **kwargs)
 
-    def save(self, file):
+    def save(self, file, supress_warnings=True):
+        import warnings
         cached = self.gp.cached
         self.gp.del_cached()
         data = self.data
         del self.data
-        torch.save(self, file)
+        with warnings.catch_warnings():
+            if supress_warnings:
+                warnings.simplefilter("ignore")
+            torch.save(self, file)
         self.data = data
         self.gp.cahced = cached
 
-    def to_folder(self, folder, info=None, overwrite=True):
+    def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True):
         if not overwrite:
             folder = safe_dirname(folder)
         mkdir_p(folder)
@@ -432,7 +436,8 @@ class PosteriorPotential(Module):
         self.data.to_traj(os.path.join(folder, 'data.traj'))
         self.X.to_traj(os.path.join(folder, 'inducing.traj'))
         self.gp.to_file(os.path.join(folder, 'gp'))
-        self.save(os.path.join(folder, 'model'))
+        self.save(os.path.join(folder, 'model'),
+                  supress_warnings=supress_warnings)
         # info
         with open(os.path.join(folder, 'info'), 'w') as file:
             file.write('data: {}, inducing: {}\n'.format(
