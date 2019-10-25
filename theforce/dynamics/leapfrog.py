@@ -11,6 +11,7 @@ from theforce.util.util import date
 import torch
 import ase
 import numpy as np
+import types
 
 
 def initial_model(gp, atoms, ediff):
@@ -28,12 +29,18 @@ def initial_model(gp, atoms, ediff):
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None, init=None):
+    def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None, init=None,
+                 algorithm=None):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
         self.ediff = ediff
         self.fdiff = fdiff
+
+        if algorithm is None:
+            self.algorithm = self.algorithm_1
+        else:
+            self.algorithm = types.MethodType(algorithm, self)
 
         # atoms
         if type(dyn.atoms) == ase.Atoms:
@@ -138,7 +145,7 @@ class Leapfrog:
 
     def update_model(self):
         self.size1 = self.sizes
-        self.algorithm_1()
+        self.algorithm()
         self.size2 = self.sizes
         return (self.size2[0]-self.size1[0]) > 0 or (self.size2[1]-self.size1[1]) > 0
 
