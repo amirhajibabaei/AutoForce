@@ -192,6 +192,7 @@ class Leapfrog:
         # decide
         last = 0 if len(self._fp) == 0 else self._fp[-1]
         if ext:
+            self.log('extremum')
             self._ext += [self.step]
             if not self.volatile() and self._ext[-1]-last < 10:
                 return False
@@ -205,8 +206,8 @@ class Leapfrog:
         for _ in range(maxsteps):
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
-                self.log('update: {} data: {} inducing: {}'.format(
-                    self.update_model(), *self.sizes))
+                self.log('update: {}  data: {}  inducing: {}  FP: {}'.format(
+                    self.update_model(), *self.sizes, len(self._fp)))
             self.dyn.run(1)
             self.step += 1
             self.energy += [self.atoms.get_potential_energy()]
@@ -219,8 +220,8 @@ class Leapfrog:
         while updates < maxupdates:
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
-                self.log('update: {} data: {} inducing: {}'.format(
-                    self.update_model(), *self.sizes))
+                self.log('update: {}  data: {}  inducing: {}  FP: {}'.format(
+                    self.update_model(), *self.sizes, len(self._fp)))
                 updates += 1
             self.dyn.run(1)
             self.step += 1
