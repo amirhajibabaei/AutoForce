@@ -30,15 +30,15 @@ def initial_model(gp, atoms, ediff):
 class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None, init=None,
-                 algorithm=None):
+                 algorithm='fast'):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
         self.ediff = ediff
         self.fdiff = fdiff
 
-        if algorithm is None:
-            self.algorithm = self.algorithm_1
+        if type(algorithm) == str:
+            self.algorithm = getattr(self, 'algorithm_'+algorithm)
         else:
             self.algorithm = types.MethodType(algorithm, self)
 
@@ -131,7 +131,7 @@ class Leapfrog:
         tmp.single_point()
         return tmp
 
-    def algorithm_1(self, datafirst=True):
+    def algorithm_robust(self, datafirst=True):
         new = self.snapshot()
         if datafirst is None:
             datafirst = np.random.choice([True, False])
@@ -142,6 +142,20 @@ class Leapfrog:
             self.model.add_1inducing(loc, ediff)
         if not datafirst:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
+
+    def algorithm_fast(self):
+        if self.init and len(self._ext) < 2:
+            self.algorithm_robust()
+        else:
+            added_refs = 0
+            for loc in self.atoms.calc.atoms:
+                ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
+                change = self.model.add_1inducing(loc, ediff)
+                if change >= ediff:
+                    added_refs += 1
+            if added_refs > 0:
+                new = self.snapshot()
+                self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def update_model(self):
         self.size1 = self.sizes

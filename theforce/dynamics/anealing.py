@@ -14,7 +14,7 @@ import numpy as np
 
 def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2., ediff=0.01, initialization=None,
                           target_temperature=1000., stages=1, equilibration=5, rescale_velocities=1.05,
-                          algorithm=None, name='model', overwrite=True, traj='anealing.traj'):
+                          algorithm='fast', name='model', overwrite=True, traj='anealing.traj'):
 
     if model is not None:
         if type(model) == str:
