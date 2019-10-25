@@ -29,8 +29,8 @@ def initial_model(gp, atoms, ediff):
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None, init=None,
-                 algorithm='fast'):
+    def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
+                 algorithm='fast', volatile=None):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
@@ -56,15 +56,18 @@ class Leapfrog:
         else:
             self.calculator = dyn.atoms.calc
 
-        # init
-        self.init = True if model is None else False if init is None else init
+        # volatile
+        self._volatile = volatile if volatile else 2 if model is None else -1
 
-        # model
+        # initiate
         self.step = 0
         self._fp = []
         self._fp_e = []
         self._ext = []
-        self.log('leapfrog says Hello!'.format(date()), mode='w')
+        self.log('leapfrog says Hello!', mode='w')
+        self.log('volatile: {}'.format(self._volatile))
+
+        # model
         if model:
             if type(model) == str:
                 potential = PosteriorPotentialFromFolder(model)
@@ -105,6 +108,9 @@ class Leapfrog:
     def ext_nodes(self):
         return self._ext, [self.energy[k] for k in self._ext]
 
+    def volatile(self):
+        return len(self._ext) <= self._volatile
+
     def rescale_velocities(self, factor):
         self.atoms.set_velocities(self.atoms.get_velocities()*factor)
 
@@ -144,22 +150,22 @@ class Leapfrog:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_fast(self):
-        if self.init and len(self._ext) < 2:
-            self.algorithm_robust()
-        else:
-            added_refs = 0
-            for loc in self.atoms.calc.atoms:
-                ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
-                change = self.model.add_1inducing(loc, ediff)
-                if change >= ediff:
-                    added_refs += 1
-            if added_refs > 0:
-                new = self.snapshot()
-                self.model.add_1atoms(new, self.ediff, self.fdiff)
+        added_refs = 0
+        for loc in self.atoms.calc.atoms:
+            ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
+            change = self.model.add_1inducing(loc, ediff)
+            if change >= ediff:
+                added_refs += 1
+        if added_refs > 0:
+            new = self.snapshot()
+            self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def update_model(self):
         self.size1 = self.sizes
-        self.algorithm()
+        if self.volatile():
+            self.algorithm_robust()
+        else:
+            self.algorithm()
         self.size2 = self.sizes
         return (self.size2[0]-self.size1[0]) > 0 or (self.size2[1]-self.size1[1]) > 0
 
@@ -187,11 +193,11 @@ class Leapfrog:
         last = 0 if len(self._fp) == 0 else self._fp[-1]
         if ext:
             self._ext += [self.step]
-            if len(self._ext) > 2 and self._ext[-1]-last < 10:
+            if not self.volatile() and self._ext[-1]-last < 10:
                 return False
             return np.random.choice([True, False], p=[prob, 1-prob])  # main
         else:
-            if self.init and len(self._ext) <= 2 and self.step-last > 3:
+            if self.volatile() and self.step-last > 3:
                 return True
             return False  # main
 
