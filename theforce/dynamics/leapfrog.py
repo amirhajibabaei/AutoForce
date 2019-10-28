@@ -30,7 +30,7 @@ def initial_model(gp, atoms, ediff):
 class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
-                 algorithm='fast', volatile=None):
+                 algorithm='fast', volatile=None, logfile='leapfrog.log'):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
@@ -64,6 +64,7 @@ class Leapfrog:
         self._fp = []
         self._fp_e = []
         self._ext = []
+        self.logfile = logfile
         self.log('leapfrog says Hello!', mode='w')
         self.log('volatile: {}'.format(self._volatile))
 
@@ -80,8 +81,8 @@ class Leapfrog:
         self.energy = [self.atoms.get_potential_energy()]
         self.temperature = [self.atoms.get_temperature()]
 
-    def log(self, mssge, file='leapfrog.log', mode='a'):
-        with open(file, mode) as f:
+    def log(self, mssge, mode='a'):
+        with open(self.logfile, mode) as f:
             f.write('{} {} {}\n'.format(date(), self.step, mssge))
 
     @property
@@ -156,6 +157,23 @@ class Leapfrog:
             change = self.model.add_1inducing(loc, ediff)
             if change >= ediff:
                 added_refs += 1
+        if added_refs > 0:
+            new = self.snapshot()
+            self.model.add_1atoms(new, self.ediff, self.fdiff)
+
+    def algorithm_fastfast(self):
+        locs = self.atoms.calc.atoms.loc
+        leaks = self.model.leakages(locs)
+        q = torch.argsort(leaks, descending=True)
+        added_refs = 0
+        for k in q:
+            loc = locs[k]
+            ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
+            change = self.model.add_1inducing(loc, ediff)
+            if change >= ediff:
+                added_refs += 1
+            else:
+                break
         if added_refs > 0:
             new = self.snapshot()
             self.model.add_1atoms(new, self.ediff, self.fdiff)
