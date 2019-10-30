@@ -22,8 +22,6 @@ def initial_model(gp, atoms, ediff):
     for j in range(atoms.natoms):
         if j not in i:
             model.add_1inducing(atoms.loc[j], ediff)
-    print('a model is initiated with {} data and {} ref'.format(
-        len(model.data), len(model.X)))
     return model
 
 
@@ -77,6 +75,8 @@ class Leapfrog:
         else:
             snap = self.snapshot()
             potential = initial_model(self.gp, snap, self.ediff)
+            self.log('a model is initiated with {} data and {} ref(s)'.format(
+                len(potential.data), len(potential.X)))
         self.atoms.set_calculator(AutoForceCalculator(potential))
         self.energy = [self.atoms.get_potential_energy()]
         self.temperature = [self.atoms.get_temperature()]
@@ -128,6 +128,7 @@ class Leapfrog:
         tmp.set_calculator(self.calculator)
         self._fp.append(self.step)
         self._fp_e.append(tmp.get_potential_energy())
+        self.log('exact energy: {}'.format(tmp.get_potential_energy()))
         tmp.get_forces()
         ase.io.Trajectory('_FP.traj', 'a').write(tmp)
         if self.to_ase:
@@ -179,17 +180,22 @@ class Leapfrog:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def update_model(self):
-        self.size1 = self.sizes
+        size1 = self.sizes
         if self.volatile():
             self.algorithm_robust()
         else:
             self.algorithm()
-        self.size2 = self.sizes
-        return (self.size2[0]-self.size1[0]) > 0 or (self.size2[1]-self.size1[1]) > 0
+        size2 = self.sizes
+        self.data_plus = size2[0]-size1[0]
+        self.ref_plus = size2[1]-size1[1]
+        tf = self.data_plus > 0 or self.ref_plus > 0
+        if tf:
+            self.atoms.calc.results.clear()
+        return tf
 
     def undo_update(self):
-        d = self.size2[0]-self.size1[0]
-        i = self.size2[1]-self.size1[1]
+        d = self.data_plus
+        i = self.ref_plus
         while d > 0:
             self.model.pop_1data()
             d -= 1
