@@ -31,7 +31,7 @@ def lex3(x):
 
 class Local:
 
-    def __init__(self, i, j, a, b, r, off=None, descriptors=[]):
+    def __init__(self, i, j, a, b, r, off=None, descriptors=[], dont_save_grads=False):
         """
         i, j: indices
         a, b: atomic numbers
@@ -45,11 +45,11 @@ class Local:
         self._r = r
         self._m = ones_like(self._i).to(torch.bool)
         self.off = off
-        self.stage(descriptors)
+        self.stage(descriptors, dont_save_grads=dont_save_grads)
 
-    def stage(self, descriptors):
+    def stage(self, descriptors, dont_save_grads=False):
         for desc in descriptors:
-            desc.precalculate(self)
+            desc.precalculate(self, dont_save_grads=dont_save_grads)
 
     @property
     def loc(self):
@@ -564,9 +564,9 @@ class LocalsData:
             raise RuntimeError('LocalsData invoked without any input')
         self.trainable = False
 
-    def stage(self, descriptors):
+    def stage(self, descriptors, dont_save_grads=True):
         for loc in self:
-            loc.stage(descriptors)
+            loc.stage(descriptors, dont_save_grads=dont_save_grads)
 
     def to_traj(self, trajname, mode='w'):
         from ase.io import Trajectory

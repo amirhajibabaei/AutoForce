@@ -34,7 +34,7 @@ class SoapKernel(SimilarityKernel):
     def state_args(self):
         return super().state_args + ', ' + self._args
 
-    def precalculate(self, loc):
+    def precalculate(self, loc, dont_save_grads=False):
         if (self.a == loc._a.unique()).all():
             masks = [loc.select(self.a, b, bothways=True) for b in self.b]
             d, grad = self.descriptor(loc._r, masks, grad=True)
@@ -54,7 +54,11 @@ class SoapKernel(SimilarityKernel):
             grad = torch.zeros(self.dim, 0, 3)
             j = torch.empty(0).long()
         # save
-        data = {'value': d, 'grad': grad, 'j': j, 'empty': empty}
+        if dont_save_grads:
+            del grad, j, empty
+            data = {'value': d}
+        else:
+            data = {'value': d, 'grad': grad, 'j': j, 'empty': empty}
         self.save_for_later(loc, data)
 
     def get_func(self, p, q):

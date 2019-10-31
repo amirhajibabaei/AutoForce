@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
 # In[ ]:
@@ -27,7 +27,7 @@ class PairSimilarityKernel(SimilarityKernel):
         raise NotImplementedError(
             'descriptor shoud be implemented in a child class')
 
-    def precalculate(self, loc):
+    def precalculate(self, loc, dont_save_grads=False):
         loc.select(self.a, self.b, bothways=True)
         d, grad = self.descriptor(loc.r)
         data = {'diag_value': d, 'diag_grad': grad}
@@ -35,7 +35,12 @@ class PairSimilarityKernel(SimilarityKernel):
         m = (loc.j > loc.i)
         if self.a == self.b:
             m = m | ((loc.j == loc.i) & loc.lex)
-        data = {'value': d[m], 'grad': grad[m], 'i': loc.i[m], 'j': loc.j[m]}
+        if dont_save_grads:
+            del grad
+            data = {'value': d[m]}
+        else:
+            data = {'value': d[m], 'grad': grad[m],
+                    'i': loc.i[m], 'j': loc.j[m]}
         self.save_for_later(loc, data)
         if hasattr(self, 'factor'):
             fac, facgrad = self.factor(d)
