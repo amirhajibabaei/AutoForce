@@ -399,8 +399,13 @@ class PosteriorPotential(Module):
             self.pop_1data(clear_cached=True)
         return de, df
 
-    def add_1inducing(self, loc, ediff):
+    def add_1inducing(self, _loc, ediff, detach=True):
         kwargs = {'use_caching': True}
+        if detach:
+            loc = _loc.detach()
+            loc.stage(self.gp.kern.kernels, dont_save_grads=True)
+        else:
+            loc = _loc
         e1 = self(loc, **kwargs)
         self.add_inducing(loc, **kwargs)
         e2 = self(loc, **kwargs)
