@@ -376,6 +376,12 @@ class PosteriorPotential(Module):
         if remake:
             self.make_munu()
 
+    def downsize(self, n, m):
+        while len(self.data) > n:
+            self.pop_1data()
+        while len(self.X) > m:
+            self.pop_1inducing()
+
     def add_1atoms(self, atoms, ediff, fdiff):
         kwargs = {'use_caching': True}
         e1 = self([atoms], **kwargs)
