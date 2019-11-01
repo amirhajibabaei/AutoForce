@@ -72,6 +72,8 @@ class Leapfrog:
                 potential = PosteriorPotentialFromFolder(model)
             else:
                 potential = model
+            self.log('a model is provided with {} data and {} ref(s)'.format(
+                len(potential.data), len(potential.X)))
         else:
             snap = self.snapshot()
             potential = initial_model(self.gp, snap, self.ediff)
