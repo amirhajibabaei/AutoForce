@@ -9,6 +9,8 @@ from ase.calculators.calculator import Calculator, all_changes
 import torch
 from torch.autograd import grad
 import warnings
+import ase
+from theforce.descriptor.atoms import TorchAtoms
 
 
 class PosteriorCalculator(Calculator):
@@ -99,12 +101,19 @@ class AutoForceCalculator(Calculator):
         self.potential = potential
         self.variance = variance
 
-    def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+    def calculate(self, _atoms=None, properties=['energy'], system_changes=all_changes):
         if self.potential.is_distributed:
             raise NotImplementedError(
                 '(Auto)forces in distributed mode is not implemented')
+        if type(_atoms) == ase.atoms.Atoms:
+            atoms = TorchAtoms(ase_atoms=_atoms)
+            uargs = {'cutoff': self.potential._cutoff,
+                     'descriptors': self.potential.gp.kern.kernels}
+        else:
+            atoms = _atoms
+            uargs = {}
         Calculator.calculate(self, atoms, properties, system_changes)
-        self.atoms.update(posgrad=True, cellgrad=True, forced=True)
+        self.atoms.update(posgrad=True, cellgrad=True, forced=True, **uargs)
         # energy
         energy = self.potential([self.atoms], 'energy', enable_grad=True, variance=self.variance,
                                 all_reduce=self.atoms.is_distributed)

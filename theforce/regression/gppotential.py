@@ -521,6 +521,7 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True):
     strip_uid(self.X)
     with open(os.path.join(folder, 'cutoff'), 'r') as file:
         cutoff = float(file.readline().split()[0])
+        self._cutoff = cutoff
     if load_data:
         self.data = AtomsData(traj=os.path.join(folder, 'data.traj'))
         if update_data:
