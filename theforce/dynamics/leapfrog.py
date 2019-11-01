@@ -176,6 +176,8 @@ class Leapfrog:
             if change >= ediff:
                 added_refs += 1
             else:
+                self.log('added refs: {}  ediff at break: {}'.format(
+                    added_refs, change))
                 break
         if added_refs > 0:
             new = self.snapshot()
