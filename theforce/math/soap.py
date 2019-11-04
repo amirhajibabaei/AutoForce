@@ -13,6 +13,81 @@ from theforce.regression.algebra import positive, free_form
 from theforce.math.func import I, Exp
 
 
+class HeteroSoap(Module):
+
+    def __init__(self, lmax, nmax, radial, numbers, unit=None):
+        super().__init__()
+        self.ylm = Ylm(lmax)
+        self.nmax = nmax
+
+        self._radial = radial
+        if unit:
+            self.unit = unit
+        else:
+            self.unit = radial.rc/3
+        self.radial = Exp(-0.5*I()**2/self.unit**2)*radial
+        self.numbers = sorted(iterable(numbers))
+
+        one = torch.ones(lmax+1, lmax+1)
+        self.Yr = 2*torch.torch.tril(one) - torch.eye(lmax+1)
+        self.Yi = 2*torch.torch.triu(one, diagonal=1)
+
+        a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
+                           for l in range(lmax+1)] for n in range(nmax+1)])
+        self.nnl = (a[None]*a[:, None]).sqrt()
+
+        #m = torch.arange(len(self.numbers))
+        #n = torch.arange(self.nmax+1)
+        #i = torch.ones(m.size(0), m.size(0), n.size(0), n.size(0))
+        # self.mask = (i * (m[:, None] >= m[None]).to(torch.int)[..., None, None] *
+        #             (n[:, None] >= n[None]).to(torch.int)).to(torch.bool)
+
+    @property
+    def state_args(self):
+        return "{}, {}, {}, {}, unit={}".format(self.ylm.lmax, self.nmax, self._radial.state,
+                                                self.numbers, self.unit)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+    def forward(self, coo, numbers, grad=True):
+        xyz = coo/self.unit
+        d = xyz.pow(2).sum(dim=-1).sqrt()
+        n = 2*torch.arange(self.nmax+1).type(xyz.type())
+        r, dr = self.radial(self.unit*d)
+        dr = self.unit*dr
+        f = (r*d[None]**n[:, None])
+        Y = self.ylm(xyz, grad=grad)
+        if grad:
+            Y, dY = Y
+        ff = f[:, None, None]*Y[None]
+        i = torch.arange(r.size(0))
+        c = []
+        for num in self.numbers:
+            t = torch.index_select(ff, -1, i[numbers == num])
+            c += [t.sum(dim=-1)]
+        c = torch.stack(c)
+        nnp = c[None, :, None, ]*c[:, None, :, None]
+        p = (nnp*self.Yr).sum(dim=-1) + (nnp*self.Yi).sum(dim=-2)
+        if grad:
+            df = dr*d[None]**n[:, None] + r*n[:, None]*d[None]**(n[:, None]-1)
+            df = df[..., None]*xyz/d[:, None]
+            dc = (df[:, None, None]*Y[None, ..., None] +
+                  f[:, None, None, :, None]*dY[None])
+            dc = torch.stack([(numbers == num).type(r.type())[:, None] * dc
+                              for num in self.numbers])
+            dnnp = (c[None, :, None, ..., None, None]*dc[:, None, :, None] +
+                    dc[None, :, None, ]*c[:, None, :, None, ..., None, None])
+            dp = ((dnnp*self.Yr[..., None, None]).sum(dim=-3) +
+                  (dnnp*self.Yi[..., None, None]).sum(dim=-4))
+            p, dp = p*self.nnl, dp*self.nnl[..., None, None]/self.unit
+            return p, dp
+        else:
+            p = p*self.nnl
+            return p
+
+
 class AbsSeriesSoap(Module):
 
     def __init__(self, lmax, nmax, radial, unit=None):
@@ -468,10 +543,25 @@ def test_multisoap():
         test, err))
 
 
+def test_heterosoap():
+    import torch
+    from theforce.math.cutoff import PolyCut
+
+    xyz = (torch.rand(10, 3) - 0.5) * 5
+    xyz.requires_grad = True
+    s = HeteroSoap(7, 5, PolyCut(8.0), [10, 18])
+    numbers = torch.tensor(4*[10]+6*[18])
+    p, dp = s(xyz, numbers)
+    p.sum().backward()
+    print('fits gradients calculated by autograd: {}'.format(
+        xyz.grad.allclose(dp.sum(dim=(0, 1, 2, 3, 4)))))
+
+
 if __name__ == '__main__' and True:
     test_validity()
     test_units()
     test_realseriessoap()
     test_multisoap()
     test_speed()
+    test_heterosoap()
 
