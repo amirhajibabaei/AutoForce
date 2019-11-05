@@ -556,6 +556,16 @@ def test_heterosoap():
     print('fits gradients calculated by autograd: {}'.format(
         xyz.grad.allclose(dp.sum(dim=(0, 1, 2, 3, 4)))))
 
+    ss = RealSeriesSoap(7, 5, PolyCut(8.0))
+    pp, dpp = ss(xyz[:4])
+    print('HeteroSoap == RealSeriesSoap: {}'.format(pp.allclose(p[0, 0])))
+    print('HeteroSoap == RealSeriesSoap: {}'.format(
+        dpp.allclose(dp[0, 0, :, :, :, :4])))
+    pp, dpp = ss(xyz[4:])
+    print('HeteroSoap == RealSeriesSoap: {}'.format(pp.allclose(p[1, 1])))
+    print('HeteroSoap == RealSeriesSoap: {}'.format(
+        dpp.allclose(dp[1, 1, :, :, :, 4:])))
+
 
 if __name__ == '__main__' and True:
     test_validity()
