@@ -37,9 +37,12 @@ class HeteroSoap(Module):
                            for l in range(lmax+1)] for n in range(nmax+1)])
         self.nnl = (a[None]*a[:, None]).sqrt()
 
+        self.dim = self.species**2 * (nmax+1)**2 * (lmax+1)
         self.shape = (self.species, self.species, nmax+1, nmax+1, lmax+1)
         if flatten:
-            self.shape = (-1,)
+            self.shape = (self.dim,)
+
+        self.params = []
 
         #m = torch.arange(len(self.numbers))
         #n = torch.arange(self.nmax+1)
@@ -574,7 +577,8 @@ def test_heterosoap():
     # reshape
     s = HeteroSoap(2, 2, PolyCut(8.0), [10, 18], atomic_unit=1., flatten=True)
     p, dp = s(xyz, numbers)
-    print(p.shape, dp.shape)
+    print('checking dimensions: dim={}, shape={}, grad-shape={}'.format(
+        s.dim, p.shape, dp.shape))
 
 
 if __name__ == '__main__' and True:
