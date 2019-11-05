@@ -395,6 +395,7 @@ class SeriesSoap(Module):
         if self.normalize:
             norm = p.norm()
             if norm > 0.0:
+                norm = norm + torch.finfo().eps
                 p = p/norm
                 if grad:
                     q = q/norm
