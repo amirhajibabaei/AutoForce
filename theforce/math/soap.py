@@ -15,18 +15,19 @@ from theforce.math.func import I, Exp
 
 class HeteroSoap(Module):
 
-    def __init__(self, lmax, nmax, radial, numbers, unit=None):
+    def __init__(self, lmax, nmax, radial, numbers, atomic_unit=None, flatten=True):
         super().__init__()
         self.ylm = Ylm(lmax)
         self.nmax = nmax
 
         self._radial = radial
-        if unit:
-            self.unit = unit
+        if atomic_unit:
+            self.unit = atomic_unit
         else:
             self.unit = radial.rc/3
         self.radial = Exp(-0.5*I()**2/self.unit**2)*radial
         self.numbers = sorted(iterable(numbers))
+        self.species = len(self.numbers)
 
         one = torch.ones(lmax+1, lmax+1)
         self.Yr = 2*torch.torch.tril(one) - torch.eye(lmax+1)
@@ -35,6 +36,10 @@ class HeteroSoap(Module):
         a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
                            for l in range(lmax+1)] for n in range(nmax+1)])
         self.nnl = (a[None]*a[:, None]).sqrt()
+
+        self.shape = (self.species, self.species, nmax+1, nmax+1, lmax+1)
+        if flatten:
+            self.shape = (-1,)
 
         #m = torch.arange(len(self.numbers))
         #n = torch.arange(self.nmax+1)
@@ -82,10 +87,10 @@ class HeteroSoap(Module):
             dp = ((dnnp*self.Yr[..., None, None]).sum(dim=-3) +
                   (dnnp*self.Yi[..., None, None]).sum(dim=-4))
             p, dp = p*self.nnl, dp*self.nnl[..., None, None]/self.unit
-            return p, dp
+            return p.view(*self.shape), dp.view(*self.shape, *xyz.size())
         else:
             p = p*self.nnl
-            return p
+            return p.view(*self.shape)
 
 
 class AbsSeriesSoap(Module):
@@ -549,7 +554,7 @@ def test_heterosoap():
 
     xyz = (torch.rand(10, 3) - 0.5) * 5
     xyz.requires_grad = True
-    s = HeteroSoap(7, 5, PolyCut(8.0), [10, 18])
+    s = HeteroSoap(7, 5, PolyCut(8.0), [10, 18], flatten=False)
     numbers = torch.tensor(4*[10]+6*[18])
     p, dp = s(xyz, numbers)
     p.sum().backward()
@@ -565,6 +570,11 @@ def test_heterosoap():
     print('HeteroSoap == RealSeriesSoap: {}'.format(pp.allclose(p[1, 1])))
     print('HeteroSoap == RealSeriesSoap: {}'.format(
         dpp.allclose(dp[1, 1, :, :, :, 4:])))
+
+    # reshape
+    s = HeteroSoap(2, 2, PolyCut(8.0), [10, 18], atomic_unit=1., flatten=True)
+    p, dp = s(xyz, numbers)
+    print(p.shape, dp.shape)
 
 
 if __name__ == '__main__' and True:
