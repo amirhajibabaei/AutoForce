@@ -70,7 +70,7 @@ def get_strain(stress, target_stress, rescale_cell=0.01):
 
 def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None, dt=2., ediff=0.01, volatile=None,
                            target_temperature=1000., stages=1, equilibration=5, rescale_velocities=1.05,
-                           pressure=None, rescale_cell=1.001, off_diag_strain=True,
+                           pressure=None, rescale_cell=1.01, off_diag_strain=True,
                            algorithm='fastfast', name='model', overwrite=True, traj='tempering.traj',
                            logfile='leapfrog.log'):
     assert rescale_velocities > 1 and rescale_cell > 1
@@ -103,6 +103,8 @@ def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None
             dyn.rescale_velocities(
                 rescale_velocities if T < target_temperature else 1./rescale_velocities)
             if pressure is not None:
+                spu, e, T, s = dyn.run_updates(equilibration)
+                t += spu*equilibration*dt
                 strain = get_strain(s, 3*[-pressure*units.Pascal] + 3*[0],
                                     rescale_cell=rescale_cell-1)
                 if not off_diag_strain:
