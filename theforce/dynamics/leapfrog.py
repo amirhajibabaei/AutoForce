@@ -117,6 +117,10 @@ class Leapfrog:
     def rescale_velocities(self, factor):
         self.atoms.set_velocities(self.atoms.get_velocities()*factor)
 
+    def strain_atoms(self, strain):
+        cell = (np.eye(3) + strain) @ self.atoms.cell.T
+        self.atoms.set_cell(cell, scale_atoms=True)
+
     def get_atoms(self):
         tmp = self.atoms.copy()
         if self.to_ase:
