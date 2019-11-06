@@ -245,6 +245,7 @@ class Leapfrog:
     def run_updates(self, maxupdates, prob=1):
         updates = 0
         steps = 0
+        stresses = []
         while updates < maxupdates:
             if prob > 0 and self.doit(prob=prob):
                 self.log('updating ...')
@@ -255,6 +256,7 @@ class Leapfrog:
             self.step += 1
             steps += 1
             self.energy += [self.atoms.get_potential_energy()]
+            stresses += [self.atoms.get_stress().reshape(1, -1)]
             self.temperature += [self.atoms.get_temperature()]
             self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
         steps_per_update = steps / updates
@@ -262,5 +264,7 @@ class Leapfrog:
         average_temp = np.array(self.temperature[-steps:]).mean()
         self.log('steps per update: {}, energy: {}, temperature: {}'.format(
             steps_per_update, average_energy, average_temp))
-        return steps_per_update, average_energy, average_temp
+        stress = np.concatenate(stresses).mean(axis=0)
+        self.log('stress: {}'.format(stress))
+        return steps_per_update, average_energy, average_temp, stress
 

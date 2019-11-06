@@ -36,8 +36,8 @@ def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2.,
 
     # initial equilibration
     while dyn.volatile():
-        _, e, t = dyn.run_updates(1)
-    _, e, t = dyn.run_updates(equilibration)
+        _, e, t, s = dyn.run_updates(1)
+    _, e, t, s = dyn.run_updates(equilibration)
 
     temperatures = np.linspace(t, target_temperature, stages+1)[1:]
     heating = t < target_temperature
@@ -48,7 +48,7 @@ def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2.,
         while (heating and t < target_t) or (cooling and t > target_t):
             dyn.rescale_velocities(
                 rescale_velocities if heating else 1./rescale_velocities)
-            _, e, t = dyn.run_updates(equilibration)
+            _, e, t, s = dyn.run_updates(equilibration)
         if k == stages-1:
             dyn.model.to_folder(name, info='temperature: {}'.format(t),
                                 overwrite=overwrite)
@@ -87,7 +87,7 @@ def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None
         print('stage: {}, time: {}, target time: {}, (temperature={})'.format(
             k, t, target_t, T))
         while t < target_t:
-            spu, e, T = dyn.run_updates(equilibration)
+            spu, e, T, s = dyn.run_updates(equilibration)
             t += spu*equilibration*dt
             dyn.rescale_velocities(
                 rescale_velocities if T < target_temperature else 1./rescale_velocities)
