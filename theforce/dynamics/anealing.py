@@ -58,11 +58,22 @@ def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2.,
     return dyn.get_atoms(), dyn.model
 
 
+def get_strain(stress, target_stress, rescale_cell=0.01):
+    assert len(stress) == len(target_stress) == 6
+    assert rescale_cell > 0
+    strain = np.zeros((3, 3))
+    strain.flat[[0, 4, 8, 5, 2, 1]] = np.where(
+        np.asarray(stress) > np.asarray(target_stress), -rescale_cell, rescale_cell)
+    strain.flat[[7, 6, 3]] = strain.flat[[5, 2, 1]]
+    return strain
+
+
 def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None, dt=2., ediff=0.01, volatile=None,
                            target_temperature=1000., stages=1, equilibration=5, rescale_velocities=1.05,
+                           pressure=None, rescale_cell=1.001, off_diag_strain=True,
                            algorithm='fastfast', name='model', overwrite=True, traj='tempering.traj',
                            logfile='leapfrog.log'):
-    assert rescale_velocities > 1
+    assert rescale_velocities > 1 and rescale_cell > 1
 
     if model is not None:
         if type(model) == str:
@@ -91,6 +102,12 @@ def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None
             t += spu*equilibration*dt
             dyn.rescale_velocities(
                 rescale_velocities if T < target_temperature else 1./rescale_velocities)
+            if pressure is not None:
+                strain = get_strain(s, 3*[-pressure*units.Pascal] + 3*[0],
+                                    rescale_cell=rescale_cell-1)
+                if not off_diag_strain:
+                    strain *= np.eye(3)
+                dyn.strain_atoms(strain)
 
         if k == stages-1:
             dyn.model.to_folder(name, info='temperature: {}'.format(T),
