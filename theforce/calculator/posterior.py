@@ -54,7 +54,7 @@ class PosteriorStressCalculator(Calculator):
         forces = self.potential([self.atoms], 'forces',
                                 all_reduce=self.atoms.is_distributed)
         # stress
-        stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
+        stress1 = -(forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
         cellgrad, = grad(energy, self.atoms.lll)
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(cellgrad)
@@ -126,7 +126,7 @@ class AutoForceCalculator(Calculator):
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(forces)
         # stress
-        stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
+        stress1 = -(forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
         cellgrad, = grad(energy, self.atoms.lll, allow_unused=True)
         if cellgrad is None:
             cellgrad = torch.zeros_like(self.atoms.lll)
