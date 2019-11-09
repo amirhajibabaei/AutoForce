@@ -24,6 +24,7 @@ def get_params(**kwargs):
         'exponent': 4,
         'pairkernel': True,
         'soapkernel': True,
+        'heterosoap': True,
         'noise': 0.01,
         'noisegrad': True,
         # data
@@ -69,7 +70,8 @@ def get_params(**kwargs):
 def get_kernel(params):
     from theforce.regression.gppotential import GaussianProcessPotential
     from theforce.similarity.pair import PairKernel
-    from theforce.similarity.soap import SoapKernel
+    from theforce.similarity.soap import SoapKernel, NormedSoapKernel
+    from theforce.similarity.heterosoap import HeterogeneousSoapKernel
     from theforce.regression.stationary import RBF
     from theforce.math.cutoff import PolyCut
     from theforce.regression.kernel import White, Positive, DotProd, Normed, Mul, Pow, Add
@@ -101,9 +103,13 @@ def get_kernel(params):
             kerns += [PairKernel(RBF(), a, b, factor=PolyCut(params['cutoff']))
                       for a, b in pairs]
         if params['soapkernel']:
-            kerns += [SoapKernel(Positive(1.0, requires_grad=True)*Normed(DotProd()**params['exponent']),
-                                 atomic_number, params['numbers'], params['lmax'], params['nmax'],
-                                 PolyCut(params['cutoff']), atomic_unit=params['atomic_unit'])
+            if params['heterosoap']:
+                SOAP = HeterogeneousSoapKernel
+            else:
+                SOAP = NormedSoapKernel
+            kerns += [SOAP(Positive(1.0, requires_grad=True)*DotProd()**params['exponent'],
+                           atomic_number, params['numbers'], params['lmax'], params['nmax'],
+                           PolyCut(params['cutoff']), atomic_unit=params['atomic_unit'])
                       for atomic_number in params['numbers']]
             # log
             if params['path_log']:
