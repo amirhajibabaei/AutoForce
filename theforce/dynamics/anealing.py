@@ -58,12 +58,15 @@ def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2.,
     return dyn.get_atoms(), dyn.model
 
 
-def get_strain(stress, target_stress, rescale_cell=0.01):
+def get_strain(stress, target_stress, rescale_cell=0.01, eps=0.01):
     assert len(stress) == len(target_stress) == 6
     assert rescale_cell > 0
     strain = np.zeros((3, 3))
     strain.flat[[0, 4, 8, 5, 2, 1]] = np.where(
         np.asarray(stress) > np.asarray(target_stress), -rescale_cell, rescale_cell)
+    delta = np.asarray(stress) - np.asarray(target_stress)
+    amp = 1 - np.exp(-(delta/eps)**2)
+    strain.flat[[0, 4, 8, 5, 2, 1]] *= amp
     strain.flat[[7, 6, 3]] = strain.flat[[5, 2, 1]]
     return strain
 
@@ -71,7 +74,7 @@ def get_strain(stress, target_stress, rescale_cell=0.01):
 def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None, dt=2., ediff=0.01, volatile=None,
                            target_temperature=1000., stages=1, equilibration=5, rescale_velocities=1.05,
                            pressure=None, stress_equilibration=5, rescale_cell=1.01, off_diag_strain=True,
-                           algorithm='fastfast', name='model', overwrite=True, traj='tempering.traj',
+                           eps=0.01, algorithm='fastfast', name='model', overwrite=True, traj='tempering.traj',
                            logfile='leapfrog.log'):
     assert rescale_velocities > 1 and rescale_cell > 1
 
@@ -106,7 +109,7 @@ def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None
                 spu, e, T, s = dyn.run_updates(stress_equilibration)
                 t += spu*stress_equilibration*dt
                 strain = get_strain(s, 3*[-pressure*units.Pascal] + 3*[0],
-                                    rescale_cell=rescale_cell-1)
+                                    rescale_cell=rescale_cell-1, eps=eps)
                 if not off_diag_strain:
                     strain *= np.eye(3)
                 dyn.strain_atoms(strain)
