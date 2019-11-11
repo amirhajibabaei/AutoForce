@@ -77,6 +77,7 @@ class Leapfrog:
         else:
             snap = self.snapshot()
             potential = initial_model(self.gp, snap, self.ediff)
+            potential._cutoff = cutoff
             self.log('a model is initiated with {} data and {} ref(s)'.format(
                 len(potential.data), len(potential.X)))
         self.atoms.set_calculator(AutoForceCalculator(potential))
