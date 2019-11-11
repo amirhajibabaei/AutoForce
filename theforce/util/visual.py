@@ -66,8 +66,8 @@ def visualize_leapfrog(file, plot=True):
         fig, axes = plt.subplots(2, 2, figsize=(8, 4))
         axes = axes.reshape(-1)
 
-        axes[0].plot(*zip(*energies))
-        axes[0].scatter(*zip(*exact_energies), color='red')
+        axes[0].plot(*zip(*energies), zorder=1)
+        axes[0].scatter(*zip(*exact_energies), color='red', zorder=2)
 
         axes[1].plot(*zip(*temperatures))
 
