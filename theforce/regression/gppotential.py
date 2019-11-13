@@ -395,7 +395,8 @@ class PosteriorPotential(Module):
             df = (f2-f1).abs().max()
         else:
             df = 0
-        if de < ediff and df < fdiff:
+        blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
+        if de < ediff and df < fdiff and not blind:
             self.pop_1data(clear_cached=True)
         return de, df
 
@@ -410,7 +411,8 @@ class PosteriorPotential(Module):
         self.add_inducing(loc, **kwargs)
         e2 = self(loc, **kwargs)
         de = abs(e1-e2)
-        if de < ediff:
+        blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
+        if de < ediff and not blind:
             self.pop_1inducing(clear_cached=True)
         return de
 
