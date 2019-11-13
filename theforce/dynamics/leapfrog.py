@@ -221,6 +221,9 @@ class Leapfrog:
             d2 = self.energy[-2] - self.energy[-3]
             if d1*d2 < 0:
                 ext = True
+                # unless it's a artificial ext!
+                if len(self._ext) > 0 and self.step - self._ext[-1] == 1:
+                    ext = False
 
         # decide
         last = 0 if len(self._fp) == 0 else self._fp[-1]
@@ -231,7 +234,7 @@ class Leapfrog:
                 return False
             return np.random.choice([True, False], p=[prob, 1-prob])  # main
         else:
-            if self.volatile() and self.step-last > 3:
+            if self.volatile() and (self.step == 0 or self.step-last > 3):
                 return True
             return False  # main
 
