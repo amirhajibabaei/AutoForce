@@ -223,7 +223,11 @@ class ParametricCalculator(Calculator):
         stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
         cellgrad, = grad(energy, self.atoms.lll)
         stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
-        stress = (stress1 + stress2).detach().numpy() / self.atoms.get_volume()
+        try:
+            volume = self.atoms.get_volume()
+        except ValueError:
+            volume = -2  # here stress2=0, thus trace(stress) = virial (?)
+        stress = (stress1 + stress2).detach().numpy() / volume
 
         self.results['energy'] = energy.detach().numpy()
         self.results['forces'] = forces.detach().numpy()

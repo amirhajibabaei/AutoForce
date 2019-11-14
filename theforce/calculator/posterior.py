@@ -133,7 +133,11 @@ class AutoForceCalculator(Calculator):
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(cellgrad)
         stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
-        stress = (stress1 + stress2).detach().numpy() / self.atoms.get_volume()
+        try:
+            volume = self.atoms.get_volume()
+        except ValueError:
+            volume = -2  # here stress2=0, thus trace(stress) = virial (?)
+        stress = (stress1 + stress2).detach().numpy() / volume
         # results
         self.results['energy'] = energy.detach().numpy()[0]
         self.results['forces'] = forces.detach().numpy()
