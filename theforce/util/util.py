@@ -25,6 +25,14 @@ def date(fmt="%m/%d/%Y %H:%M:%S"):
     return datetime.datetime.now().strftime(fmt)
 
 
+def timestamp(string=None, fmt="%m/%d/%Y %H:%M:%S"):
+    if string is not None:
+        d = datetime.datetime.strptime(string, fmt)
+    else:
+        d = datetime.datetime.now()
+    return d.timestamp()
+
+
 def mkdir_p(path):
     try:
         os.makedirs(path)
