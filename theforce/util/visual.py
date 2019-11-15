@@ -7,6 +7,7 @@
 import pylab as plt
 import nglview
 from ase.io import read
+from theforce.util.util import timestamp
 
 
 def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False):
@@ -35,6 +36,8 @@ def visualize_leapfrog(file, plot=True):
     data = []
     refs = []
     fp = []
+    times = []
+    t0 = None
     for line in open(file):
         split = line.split()[2:]
 
@@ -46,6 +49,12 @@ def visualize_leapfrog(file, plot=True):
         try:
             energies += [(step, float(split[1]))]
             temperatures += [(step, float(split[2]))]
+            # time
+            t = timestamp(' '.join(line.split()[:2]))
+            if t0 is None:
+                t0 = t
+            times += [(step, t-t0)]
+            t0 = t
         except:
             pass
 
@@ -79,5 +88,5 @@ def visualize_leapfrog(file, plot=True):
         fig.tight_layout()
     else:
         fig = None
-    return energies, temperatures, exact_energies, data, refs, fp, fig
+    return energies, temperatures, exact_energies, data, refs, fp, fig, times
 
