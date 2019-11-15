@@ -58,24 +58,19 @@ def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2.,
     return dyn.get_atoms(), dyn.model
 
 
-def get_strain(stress, target_stress, rescale_cell=0.01, eps=0.01):
-    assert len(stress) == len(target_stress) == 6
-    assert rescale_cell > 0
-    strain = np.zeros((3, 3))
-    strain.flat[[0, 4, 8, 5, 2, 1]] = np.where(
-        np.asarray(stress) > np.asarray(target_stress), -rescale_cell, rescale_cell)
-    delta = np.asarray(stress) - np.asarray(target_stress)
-    amp = 1 - np.exp(-(delta/eps)**2)
-    strain.flat[[0, 4, 8, 5, 2, 1]] *= amp
-    strain.flat[[7, 6, 3]] = strain.flat[[5, 2, 1]]
-    return strain
-
-
 def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None, dt=2., ediff=0.01, volatile=None,
                            target_temperature=1000., stages=1, equilibration=5, rescale_velocities=1.05,
-                           pressure=None, stress_equilibration=5, rescale_cell=1.01, off_diag_strain=True,
-                           eps=0.01, algorithm='fastfast', name='model', overwrite=True, traj='tempering.traj',
+                           pressure=None, stress_equilibration=5, rescale_cell=1.01, eps='random',
+                           algorithm='fastfast', name='model', overwrite=True, traj='tempering.traj',
                            logfile='leapfrog.log'):
+    """
+    pressure (hydrostatic): 
+        defined in units of Pascal and is equal to -(trace of stress tensor)/3 
+    eps:
+        if 'random', strain *= a random number [0, 1)
+        if a positive float, strain *= 1-e^(-|dp/p|/eps) i.e. eps ~ relative p fluctuations
+        else, no action
+    """
     assert rescale_velocities > 1 and rescale_cell > 1
 
     if model is not None:
@@ -108,11 +103,16 @@ def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None
             if pressure is not None:
                 spu, e, T, s = dyn.run_updates(stress_equilibration)
                 t += spu*stress_equilibration*dt
-                strain = get_strain(s, 3*[-pressure*units.Pascal] + 3*[0],
-                                    rescale_cell=rescale_cell-1, eps=eps)
-                if not off_diag_strain:
-                    strain *= np.eye(3)
-                dyn.strain_atoms(strain)
+                p = -s[:3].mean() / units.Pascal
+                # figure out strain
+                dp = p - pressure
+                strain = (rescale_cell if dp > 0 else 1./rescale_cell) - 1
+                if eps is 'random':
+                    strain *= np.random.uniform()
+                elif type(eps) == float and eps > 0 and abs(p) > 0:
+                    strain *= 1 - np.exp(-np.abs(dp/p)/eps)
+                # apply strain
+                dyn.strain_atoms(np.eye(3)*strain)
 
         if k == stages-1:
             dyn.model.to_folder(name, info='temperature: {}'.format(T),
