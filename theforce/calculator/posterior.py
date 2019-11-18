@@ -96,10 +96,11 @@ class PosteriorVarianceCalculator(Calculator):
 class AutoForceCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'free_energy', 'stress']
 
-    def __init__(self, potential, variance=False, **kwargs):
+    def __init__(self, potential, variance=False, process_group=None, **kwargs):
         Calculator.__init__(self, **kwargs)
         self.potential = potential
         self.variance = variance
+        self.process_group = process_group
 
     def calculate(self, _atoms=None, properties=['energy'], system_changes=all_changes):
         if self.potential.is_distributed:
@@ -112,6 +113,8 @@ class AutoForceCalculator(Calculator):
         else:
             atoms = _atoms
             uargs = {}
+        if _atoms is not None and self.process_group is not None:
+            atoms.attach_process_group(self.process_group)
         Calculator.calculate(self, atoms, properties, system_changes)
         self.atoms.update(posgrad=True, cellgrad=True, forced=True, **uargs)
         # energy
