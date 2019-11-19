@@ -150,14 +150,14 @@ def projected_process_auxiliary_matrices_D(K, M, Y, D, chol_inverse=False):
 
 
 # greedy algorithms ------------------------------------------------------------
-def sparser_projection(K, M, Y, D, alpha=1., indices=None):
+def sparser_projection(K, M, Y, D, alpha=1., indices=None, deleted=None):
     mu, _, _ = projected_process_auxiliary_matrices_D(K, M, Y, D)
     delta = K@mu-Y
     delta_max = delta.abs().max()
     var = delta.var()
     indices = indices if indices else torch.arange(
         M.size(0), dtype=int).tolist()
-    deleted = []
+    deleted = deleted if deleted else []
     for _ in range(len(indices)):
         i = torch.randint(M.size(0), (1,))
         m = torch.ones(M.size(0)).bool()
