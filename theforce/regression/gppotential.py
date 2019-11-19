@@ -416,7 +416,7 @@ class PosteriorPotential(Module):
             self.pop_1inducing(clear_cached=True)
         return de
 
-    def select_inducing(self, indices, deleted=None):
+    def select_inducing(self, indices, deleted=None, remake=True):
         i = torch.as_tensor(indices)
         self.Ke = self.Ke.index_select(1, i)
         self.Kf = self.Kf.index_select(1, i)
@@ -424,6 +424,8 @@ class PosteriorPotential(Module):
         if deleted:
             self.gp.clear_cached([self.X.X[j] for j in deleted])
         self.X.X = [self.X.X[j] for j in i]
+        if remake:
+            self.make_munu()
 
     def attach_process_group(self, *args, **kwargs):
         self.gp.attach_process_group(*args, **kwargs)
