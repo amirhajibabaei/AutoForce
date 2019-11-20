@@ -583,6 +583,124 @@ def test_heterosoap():
         s.dim, p.shape, dp.shape))
 
 
+class UniversalSoap(Module):
+
+    def __init__(self, lmax, nmax, radial, atomic_unit=None, flatten=True, normalize=True):
+        super().__init__()
+        self.ylm = Ylm(lmax)
+        self.nmax = nmax
+
+        self._radial = radial
+        if atomic_unit:
+            self.unit = atomic_unit
+        else:
+            self.unit = radial.rc/6
+        self.radial = Exp(-0.5*I()**2/self.unit**2)*radial
+
+        one = torch.ones(lmax+1, lmax+1)
+        self.Yr = 2*torch.torch.tril(one) - torch.eye(lmax+1)
+        self.Yi = 2*torch.torch.triu(one, diagonal=1)
+
+        a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
+                           for l in range(lmax+1)] for n in range(nmax+1)])
+        self.nnl = (a[None]*a[:, None]).sqrt()
+
+        self._shape = (nmax+1, nmax+1, lmax+1)
+        self.dim = (nmax+1)*(nmax+1)*(lmax+1)
+        if flatten:
+            self._shape = (self.dim,)
+        self._size = (119, 119, *self._shape)
+        self.normalize = normalize
+
+        self.params = []
+        self._state = "{}, {}, {}, atomic_unit={}, flatten={}, normalize={}".format(
+            lmax, nmax, radial.state, self.unit, flatten, normalize)
+
+    @property
+    def state_args(self):
+        return self._state
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+    def forward(self, coo, numbers, grad=False, normalize=None):
+        species = torch.unique(numbers, sorted=True)
+        dim0 = len(species)**2
+        bcasted = torch.broadcast_tensors(species[None, ], species[:, None])
+        ab = torch.cat([_.reshape(1, -1) for _ in bcasted])  # alpha, beta
+        xyz = coo/self.unit
+        d = xyz.pow(2).sum(dim=-1).sqrt()
+        n = 2*torch.arange(self.nmax+1).type(xyz.type())
+        r, dr = self.radial(self.unit*d)
+        dr = self.unit*dr
+        f = (r*d[None]**n[:, None])
+        Y = self.ylm(xyz, grad=grad)
+        if grad:
+            Y, dY = Y
+        ff = f[:, None, None]*Y[None]
+        i = torch.arange(r.size(0))
+        c = []
+        for num in species:
+            t = torch.index_select(ff, -1, i[numbers == num])
+            c += [t.sum(dim=-1)]
+        c = torch.stack(c)
+        nnp = c[None, :, None, ]*c[:, None, :, None]
+        p = (nnp*self.Yr).sum(dim=-1) + (nnp*self.Yi).sum(dim=-2)
+        if grad:
+            df = dr*d[None]**n[:, None] + r*n[:, None]*d[None]**(n[:, None]-1)
+            df = df[..., None]*xyz/d[:, None]
+            dc = (df[:, None, None]*Y[None, ..., None] +
+                  f[:, None, None, :, None]*dY[None])
+            dc = torch.stack([(numbers == num).type(r.type())[:, None] * dc
+                              for num in species])
+            dnnp = (c[None, :, None, ..., None, None]*dc[:, None, :, None] +
+                    dc[None, :, None, ]*c[:, None, :, None, ..., None, None])
+            dp = ((dnnp*self.Yr[..., None, None]).sum(dim=-3) +
+                  (dnnp*self.Yi[..., None, None]).sum(dim=-4))
+            p, dp = p*self.nnl, dp*self.nnl[..., None, None]/self.unit
+            if (normalize if normalize else self.normalize):
+                norm = p.norm() + torch.finfo().eps
+                p = p/norm
+                dp = dp/norm
+                dp = dp - p[..., None, None] * (p[..., None, None] * dp
+                                                ).sum(dim=(0, 1, 2, 3, 4))
+            p = torch.sparse_coo_tensor(ab, p.view(dim0, *self._shape),
+                                        size=self._size)
+            dp = torch.sparse_coo_tensor(ab, dp.view(dim0, *self._shape, *xyz.size()),
+                                         size=(*self._size, *xyz.size()))
+            return p, dp
+        else:
+            p = p*self.nnl
+            if (normalize if normalize else self.normalize):
+                norm = p.norm() + torch.finfo().eps
+                p = p/norm
+            p = torch.sparse_coo_tensor(ab, p.view(dim0, *self._shape),
+                                        size=self._size)
+            return p
+
+
+def test_UniversalSoap():
+    import torch
+    from theforce.math.cutoff import PolyCut
+    from theforce.math.soap import RealSeriesSoap
+
+    xyz = (torch.rand(10, 3) - 0.5) * 5
+    xyz.requires_grad = True
+    s = UniversalSoap(3, 3, PolyCut(8.0), flatten=True)
+    numbers = torch.tensor(4*[10]+6*[18])
+    # test grad
+    p, dp = s(xyz, numbers, grad=True)
+    torch.sparse.sum(p).backward()
+    print('fits gradients calculated by autograd: {}'.format(
+        xyz.grad.allclose(torch.sparse.sum(dp, dim=(0, 1, 2)))))
+
+    # test non-overlapping
+    numbers = torch.tensor(4*[11]+6*[19])
+    pp = s(xyz, numbers, grad=False)
+    print(torch.sparse.sum(p*pp).isclose(torch.tensor(0.0)))
+
+
 if __name__ == '__main__' and True:
     test_validity()
     test_units()
@@ -590,4 +708,5 @@ if __name__ == '__main__' and True:
     test_multisoap()
     test_speed()
     test_heterosoap()
+    test_UniversalSoap()
 
