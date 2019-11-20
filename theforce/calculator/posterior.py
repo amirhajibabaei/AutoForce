@@ -116,7 +116,8 @@ class AutoForceCalculator(Calculator):
         if _atoms is not None and self.process_group is not None:
             atoms.attach_process_group(self.process_group)
         Calculator.calculate(self, atoms, properties, system_changes)
-        self.atoms.update(posgrad=True, cellgrad=True, forced=True, **uargs)
+        self.atoms.update(posgrad=True, cellgrad=True,
+                          forced=True, dont_save_grads=True, **uargs)
         # energy
         energy = self.potential([self.atoms], 'energy', enable_grad=True, variance=self.variance,
                                 all_reduce=self.atoms.is_distributed)

@@ -30,9 +30,13 @@ class HeterogeneousSoapKernel(SimilarityKernel):
 
     def precalculate(self, loc, dont_save_grads=False):
         if (self.a == loc._a.unique()).all():
-            d, grad = self.descriptor(loc._r, loc._b, grad=True)
+            if dont_save_grads:
+                d = self.descriptor(loc._r, loc._b, grad=False)
+                grad = torch.zeros(self.dim, 0, 3)
+            else:
+                d, grad = self.descriptor(loc._r, loc._b, grad=True)
+                grad = torch.cat([grad, -grad.sum(dim=1, keepdim=True)], dim=1)
             d = d[None]
-            grad = torch.cat([grad, -grad.sum(dim=1, keepdim=True)], dim=1)
             j = torch.cat([loc._j, loc._i.unique()])
             if j.numel() > 0:
                 empty = torch.tensor([False])

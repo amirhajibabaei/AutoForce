@@ -261,7 +261,7 @@ class TorchAtoms(Atoms):
             self.indices = range(self.natoms)
 
     def update(self, cutoff=None, descriptors=None, forced=False,
-               posgrad=False, cellgrad=False):
+               posgrad=False, cellgrad=False, dont_save_grads=False):
         if cutoff or self.changes.numbers:
             self.build_nl(cutoff if cutoff else self.cutoff)
             forced = True
@@ -280,7 +280,8 @@ class TorchAtoms(Atoms):
                          self.lll).sum(dim=1)
                 r = self.xyz[n] - self.xyz[a] + cells
                 self.loc += [Local(a, n, types[a], types[n],
-                                   r, off, self.descriptors)]
+                                   r, off, self.descriptors,
+                                   dont_save_grads=dont_save_grads)]
             for loc in self.loc:
                 loc.natoms = self.natoms
 
