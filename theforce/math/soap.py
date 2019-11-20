@@ -43,6 +43,7 @@ class HeteroSoap(Module):
             self.shape = (self.dim,)
 
         self.params = []
+        self._state = 'atomic_unit={}, flatten={}'.format(self.unit, flatten)
 
         #m = torch.arange(len(self.numbers))
         #n = torch.arange(self.nmax+1)
@@ -52,8 +53,8 @@ class HeteroSoap(Module):
 
     @property
     def state_args(self):
-        return "{}, {}, {}, {}, unit={}".format(self.ylm.lmax, self.nmax, self._radial.state,
-                                                self.numbers, self.unit)
+        return "{}, {}, {}, {}, {}".format(self.ylm.lmax, self.nmax, self._radial.state,
+                                           self.numbers, self._state)
 
     @property
     def state(self):
