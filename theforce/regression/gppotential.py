@@ -456,7 +456,10 @@ class PosteriorPotential(Module):
             folder = safe_dirname(folder)
         mkdir_p(folder)
         with open(os.path.join(folder, 'cutoff'), 'w') as file:
-            file.write('{}\n'.format(self.data[0].cutoff))
+            try:
+                file.write('{}\n'.format(self._cutoff))
+            except:
+                file.write('{}\n'.format(self.data[0].cutoff))
         self.data.to_traj(os.path.join(folder, 'data.traj'))
         self.X.to_traj(os.path.join(folder, 'inducing.traj'))
         self.gp.to_file(os.path.join(folder, 'gp'))
