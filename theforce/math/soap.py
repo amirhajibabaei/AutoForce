@@ -331,6 +331,7 @@ class NormalizedSoap(Module):
 
         norm = p.norm()
         if norm > 0.0:
+            norm = norm + torch.finfo().eps
             p = p/norm
             if grad:
                 q = q/norm
