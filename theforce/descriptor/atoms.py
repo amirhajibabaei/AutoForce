@@ -407,11 +407,9 @@ class AtomsData:
             assert self.check_content()
         elif traj is not None:
             self.X = []
-            from ase.io import Trajectory
-            t = Trajectory(traj, 'r')
+            from ase.io import read
             self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
-                       for atoms in t]
-            t.close()
+                       for atoms in read(traj, ':')]
         else:
             raise RuntimeError('AtomsData invoked without any input')
         self.posgrad = posgrad
