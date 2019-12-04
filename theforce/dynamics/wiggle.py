@@ -55,8 +55,9 @@ class Wiggle(VelocityVerlet):
         r = atoms.get_positions()
         p = atoms.get_momenta()
         masses = atoms.get_masses()[:, np.newaxis]
-        f += (self.osc.b*r + 2*self.osc.a *
-              (p/masses - self.osc.a*r))*masses  # added
+        c = (atoms.get_scaled_positions()-0.5)@atoms.get_cell()  # added
+        f += (self.osc.b*c + 2*self.osc.a *
+              (p/masses - self.osc.a*c))*masses  # added
         p += 0.5 * self.dt * f
         atoms.set_positions(r + self.dt * p / masses)
         gamma = 1 + self.dt*(self.osc.a + 0.5*self.dt*self.osc.b)  # added
@@ -66,8 +67,9 @@ class Wiggle(VelocityVerlet):
         atoms.set_momenta(p, apply_constraint=False)
         f = atoms.get_forces(md=True)
         self.osc.step()
-        f += (self.osc.b*r + 2*self.osc.a *
-              (p/masses - self.osc.a*r))*masses  # added
+        c = (atoms.get_scaled_positions()-0.5)@atoms.get_cell()  # added
+        f += (self.osc.b*c + 2*self.osc.a *
+              (p/masses - self.osc.a*c))*masses  # added
         atoms.set_momenta(atoms.get_momenta() + 0.5 * self.dt * f)
         return f
 
