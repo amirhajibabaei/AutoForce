@@ -7,6 +7,7 @@
 import numpy as np
 from ase.md.verlet import VelocityVerlet
 import math
+import warnings
 
 
 class Oscillator:
@@ -45,6 +46,7 @@ class Wiggle(VelocityVerlet):
     def __init__(self, *args, amplitude=0.05, period=1000, **kwargs):
         super().__init__(*args, **kwargs)
         self.osc = Oscillator(amplitude=amplitude, period=period)
+        warnings.warn("This dynamics is not stable, it is only experimental")
 
     def step(self, f=None):
         # algorithm is the same as ase.md.verlet.VelocityVerlet
