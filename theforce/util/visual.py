@@ -7,14 +7,19 @@
 import pylab as plt
 import nglview
 from ase.io import read
-from theforce.util.util import timestamp
+from theforce.util.util import timestamp, iterable
 
 
-def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False):
+def no_preprocess(atoms):
+    return atoms
+
+
+def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False, preprocess=no_preprocess):
     if type(traj) == str:
         data = read(traj, ':')
     else:
         data = traj
+    data = [preprocess(atoms) for atoms in iterable(data)]
     view = nglview.show_asetraj(data)
     view.add_unitcell()
     view.add_spacefill()
