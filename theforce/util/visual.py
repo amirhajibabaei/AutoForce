@@ -14,9 +14,9 @@ def no_preprocess(atoms):
     return atoms
 
 
-def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False, preprocess=no_preprocess):
+def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False, preprocess=no_preprocess, sl=':'):
     if type(traj) == str:
-        data = read(traj, ':')
+        data = read(traj, sl)
     else:
         data = traj
     data = [preprocess(atoms) for atoms in iterable(data)]
