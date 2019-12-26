@@ -12,10 +12,23 @@ from scipy.stats import bayes_mvs as stats
 
 class TrajAnalyser:
 
-    def __init__(self, traj):
+    def __init__(self, traj, start=0, stop=-1):
         self.traj = Trajectory(traj)
         self.numbers = self.traj[0].get_atomic_numbers()
         self.masses = self.traj[0].get_masses()
+        self.set_range(start, stop)
+
+    def set_range(self, start, stop):
+        self._start = start
+        self._stop = stop
+
+    @property
+    def start(self):
+        return self._start
+
+    @property
+    def stop(self):
+        return self._stop if self._stop >= 0 else self.last-self._stop
 
     @property
     def last(self):
@@ -32,9 +45,11 @@ class TrajAnalyser:
     def get_pair(self, i, j):
         return self.traj[i], self.traj[j]
 
-    def get_slice(self, start=0, stop=-1, step=1):
-        if stop == -1:
-            stop = self.last
+    def get_slice(self, start=None, stop=None, step=1):
+        if start is None:
+            start = self.start
+        if stop is None:
+            stop = self.stop
         return start, stop, step
 
     def slice(self, **kwargs):
@@ -49,13 +64,13 @@ class TrajAnalyser:
                       for q in prop]]
         return zip(*data)
 
-    def displacements(self, numbers='all', deltas=None, step_range=None, sample_size=100, corr=None, stats=None):
+    def displacements(self, numbers='all', deltas=None, srange=None, sample_size=100, corr=None, stats=None):
         I = self.select(numbers)
-        s = Sampler(*step_range) if step_range else Sampler(0, self.last)
+        s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
         if deltas is None:
             deltas = get_exponential_deltas(s.start, s.stop)
         if corr is None:
-            corr = corrlator
+            corr = correlator
         if stats is None:
             stats = mean_var
         data = [[stats(data) for data in zip(*[iterable(corr(*self.get_pair(*s.sample_pair(delta)), I))
@@ -91,18 +106,18 @@ class Sampler:
         return i, i+delta
 
 
-def get_exponential_deltas(start, end):
-    i = end-start
+def get_exponential_deltas(start, stop, n=6):
+    i = stop-start
     j = 1
-    n = 0
+    k = 0
     while j < i:
         j *= 2
-        n += 1
-    deltas = [2**(n-j-2) for j in range(0, 6)][::-1]
-    return deltas
+        k += 1
+    deltas = [2**(k-j-2) for j in range(0, n)][::-1]
+    return [t for t in deltas if t > 1]
 
 
-def corrlator(a, b, I):
+def correlator(a, b, I):
     r = b.get_positions()[I]-a.get_positions()[I]
     msd = (r**2).sum(axis=-1).mean()
     smd = (r.sum(axis=0)**2).sum()/r.shape[0]
@@ -110,7 +125,7 @@ def corrlator(a, b, I):
 
 
 def mean_var(data):
-    return np.mean(data), np.sqrt(np.var(data))
+    return np.mean(data), np.var(data)
 
 
 def get_slopes(x, y, yerr):
