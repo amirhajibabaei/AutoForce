@@ -48,13 +48,15 @@ class TrajAnalyser:
                       for q in prop]]
         return zip(*data)
 
-    def displacements(self, deltas, numbers='all', sample_size=100, step_range=None, corr=None):
+    def displacements(self, deltas, numbers='all', sample_size=100, step_range=None, corr=None, stats=None):
         I = self.select(numbers)
         s = Sampler(*step_range) if step_range else Sampler(0, self.last)
         if corr is None:
             corr = corrlator
-        data = [mean_var(*zip(*[iterable(corr(*self.get_pair(*s.sample_pair(delta)), I))
-                                for _ in range(sample_size)])) for delta in deltas]
+        if stats is None:
+            stats = mean_var
+        data = [[stats(data) for data in zip(*[iterable(corr(*self.get_pair(*s.sample_pair(delta)), I))
+                                               for _ in range(sample_size)])] for delta in deltas]
         results = [list(zip(*[dat[j] for dat in data]))
                    for j in range(len(data[0]))]
         return results
@@ -81,8 +83,8 @@ def corrlator(a, b, I):
     return msd, smd
 
 
-def mean_var(*args):
-    return [(np.mean(data), np.sqrt(np.var(data))) for data in args]
+def mean_var(data):
+    return np.mean(data), np.sqrt(np.var(data))
 
 
 def mean_squared_displacement(traj, start=0, stop=-1, step=1, origin=None, numbers=None):
