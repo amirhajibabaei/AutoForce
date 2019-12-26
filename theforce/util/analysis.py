@@ -48,9 +48,11 @@ class TrajAnalyser:
                       for q in prop]]
         return zip(*data)
 
-    def displacements(self, deltas, numbers='all', sample_size=100, step_range=None, corr=None, stats=None):
+    def displacements(self, numbers='all', deltas=None, step_range=None, sample_size=100, corr=None, stats=None):
         I = self.select(numbers)
         s = Sampler(*step_range) if step_range else Sampler(0, self.last)
+        if deltas is None:
+            deltas = get_exponential_deltas(s.start, s.stop)
         if corr is None:
             corr = corrlator
         if stats is None:
@@ -59,7 +61,7 @@ class TrajAnalyser:
                                                for _ in range(sample_size)])] for delta in deltas]
         results = [list(zip(*[dat[j] for dat in data]))
                    for j in range(len(data[0]))]
-        return results
+        return deltas, results
 
 
 class Sampler:
@@ -74,6 +76,17 @@ class Sampler:
     def sample_pair(self, delta):
         i = np.random.randint(self.start, self.stop-delta)
         return i, i+delta
+
+
+def get_exponential_deltas(start, end):
+    i = end-start
+    j = 1
+    n = 0
+    while j < i:
+        j *= 2
+        n += 1
+    deltas = [2**(n-j-2) for j in range(0, 6)][::-1]
+    return deltas
 
 
 def corrlator(a, b, I):
