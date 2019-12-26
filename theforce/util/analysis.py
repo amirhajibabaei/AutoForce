@@ -64,6 +64,14 @@ class TrajAnalyser:
                       for q in prop]]
         return zip(*data)
 
+    def ave_vol(self, srange=None, sample_size=100, stats=None):
+        s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
+        if stats is None:
+            stats = mean_var
+        v = stats([self.traj[s.sample()].get_volume()
+                   for _ in range(sample_size)])
+        return v
+
     def displacements(self, numbers='all', deltas=None, srange=None, sample_size=100, corr=None, stats=None):
         I = self.select(numbers)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
