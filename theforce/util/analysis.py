@@ -7,6 +7,7 @@
 import numpy as np
 from ase.io import read, Trajectory
 from theforce.util.util import iterable
+from scipy.stats import bayes_mvs as stats
 
 
 class TrajAnalyser:
@@ -63,6 +64,18 @@ class TrajAnalyser:
                    for j in range(len(data[0]))]
         return deltas, results
 
+    def diffusion_constants(self, dt=1., numbers='all', sample_size=100):
+        deltas, results = self.displacements(
+            numbers=numbers, sample_size=sample_size, stats=stats)
+        time = np.array(deltas)*dt
+        msd = np.array([d.statistic for d in results[0][0]])
+        msd_err = np.array([d.statistic for d in results[0][2]])
+        smd = np.array([d.statistic for d in results[1][0]])
+        smd_err = np.array([d.statistic for d in results[1][2]])
+        Dt = tuple(a/6 for a in get_slopes(time, msd, msd_err))
+        Dj = tuple(a/6 for a in get_slopes(time, smd, smd_err))
+        return Dt, Dj
+
 
 class Sampler:
 
@@ -98,6 +111,13 @@ def corrlator(a, b, I):
 
 def mean_var(data):
     return np.mean(data), np.sqrt(np.var(data))
+
+
+def get_slopes(x, y, yerr):
+    a = np.polyfit(x, y, 1)
+    b = np.polyfit(x, y-yerr, 1)
+    c = np.polyfit(x, y+yerr, 1)
+    return a[0], b[0], c[0]
 
 
 def mean_squared_displacement(traj, start=0, stop=-1, step=1, origin=None, numbers=None):
