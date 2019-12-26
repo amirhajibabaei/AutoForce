@@ -28,6 +28,9 @@ class TrajAnalyser:
         else:
             return np.stack([self.numbers == a for a in iterable(args)]).any(axis=0)
 
+    def get_pair(self, i, j):
+        return self.traj[i], self.traj[j]
+
     def get_slice(self, start=0, stop=-1, step=1):
         if stop == -1:
             stop = self.last
@@ -44,6 +47,42 @@ class TrajAnalyser:
             data += [[getattr(atoms, f'get_{q}')()[I].sum(axis=0)
                       for q in prop]]
         return zip(*data)
+
+    def displacements(self, deltas, numbers='all', sample_size=100, step_range=None, corr=None):
+        I = self.select(numbers)
+        s = Sampler(*step_range) if step_range else Sampler(0, self.last)
+        if corr is None:
+            corr = corrlator
+        data = [mean_var(*zip(*[iterable(corr(*self.get_pair(*s.sample_pair(delta)), I))
+                                for _ in range(sample_size)])) for delta in deltas]
+        results = [list(zip(*[dat[j] for dat in data]))
+                   for j in range(len(data[0]))]
+        return results
+
+
+class Sampler:
+
+    def __init__(self, start, stop):
+        self.start = start
+        self.stop = stop
+
+    def sample(self):
+        return np.random.randint(self.start, self.stop)
+
+    def sample_pair(self, delta):
+        i = np.random.randint(self.start, self.stop-delta)
+        return i, i+delta
+
+
+def corrlator(a, b, I):
+    r = b.get_positions()[I]-a.get_positions()[I]
+    msd = (r**2).sum(axis=-1).mean()
+    smd = (r.sum(axis=0)**2).sum()/r.shape[0]
+    return msd, smd
+
+
+def mean_var(*args):
+    return [(np.mean(data), np.sqrt(np.var(data))) for data in args]
 
 
 def mean_squared_displacement(traj, start=0, stop=-1, step=1, origin=None, numbers=None):
