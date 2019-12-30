@@ -45,6 +45,17 @@ class TrajAnalyser:
     def get_pair(self, i, j):
         return self.traj[i], self.traj[j]
 
+    def get_rand_pair(self, s):
+        succ = False
+        while not succ:
+            try:
+                i, j = s.sample_pair(delta)
+                a, b = self.traj[i], self.traj[j]
+                succ = True
+            except:
+                pass
+        return a, b
+
     def get_slice(self, start=None, stop=None, step=1):
         if start is None:
             start = self.start
@@ -81,7 +92,7 @@ class TrajAnalyser:
             corr = correlator
         if stats is None:
             stats = mean_var
-        data = [[stats(data) for data in zip(*[iterable(corr(*self.get_pair(*s.sample_pair(delta)), I))
+        data = [[stats(data) for data in zip(*[iterable(corr(*self.get_rand_pair(s), I))
                                                for _ in range(sample_size)])] for delta in deltas]
         results = [list(zip(*[dat[j] for dat in data]))
                    for j in range(len(data[0]))]
