@@ -45,7 +45,7 @@ class TrajAnalyser:
     def get_pair(self, i, j):
         return self.traj[i], self.traj[j]
 
-    def get_rand_pair(self, s):
+    def get_rand_pair(self, s, delta):
         succ = False
         while not succ:
             try:
@@ -92,7 +92,7 @@ class TrajAnalyser:
             corr = correlator
         if stats is None:
             stats = mean_var
-        data = [[stats(data) for data in zip(*[iterable(corr(*self.get_rand_pair(s), I))
+        data = [[stats(data) for data in zip(*[iterable(corr(*self.get_rand_pair(s, delta), I))
                                                for _ in range(sample_size)])] for delta in deltas]
         results = [list(zip(*[dat[j] for dat in data]))
                    for j in range(len(data[0]))]
