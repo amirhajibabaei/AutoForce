@@ -28,7 +28,7 @@ class TrajAnalyser:
 
     @property
     def stop(self):
-        return self._stop if self._stop >= 0 else self.last-self._stop
+        return self.last if self._stop == -1 else self._stop
 
     @property
     def last(self):
