@@ -83,6 +83,16 @@ class TrajAnalyser:
                    for _ in range(sample_size)])
         return v
 
+    def msd(self, select='all', wrt=None, **kwargs):
+        I = self.select(select)
+        start, stop, step = self.get_slice(**kwargs)
+        if wrt is None:
+            wrt = start
+        x = self.traj[wrt].get_positions()[I]
+        d = np.array([((atoms.get_positions()[I]-x)**2).sum(axis=-1).mean()
+                      for atoms in self.slice(**kwargs)])
+        return np.arange(start, stop, step), d
+
     def displacements(self, numbers='all', deltas=None, srange=None, sample_size=100, corr=None, stats=None):
         I = self.select(numbers)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
