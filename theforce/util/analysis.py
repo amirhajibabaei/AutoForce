@@ -120,6 +120,10 @@ class TrajAnalyser:
         Dj = tuple(a/6 for a in get_slopes(time, smd, smd_err))
         return Dt, Dj
 
+    def get_positions(self, select='all', **kwargs):
+        I = self.select(select)
+        return np.stack([atoms.get_positions()[I] for atoms in self.slice(**kwargs)])
+
     def write_traj(self, out, **kwargs):
         traj = Trajectory(out, 'w')
         for atoms in self.slice(**kwargs):
