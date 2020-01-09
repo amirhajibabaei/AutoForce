@@ -8,8 +8,8 @@ from math import pi
 import torch
 
 
-def rdf(data, min=1., max=5., bins=100):
-    binargs = dict(bins=bins, min=min, max=max)
+def rdf(data, rmax, bins=100, rmin=0.):
+    binargs = dict(bins=bins, min=rmin, max=rmax)
     numbers = data.numbers_set()
     pairs = data.pairs_set(numbers)
     density = {number: 0 for number in numbers}
@@ -17,7 +17,7 @@ def rdf(data, min=1., max=5., bins=100):
     count = {pair: 0 for pair in pairs}
 
     snaps = 0
-    for atoms in data.X[-1000::10]:
+    for atoms in data:
         snaps += 1
 
         # densities
@@ -26,7 +26,7 @@ def rdf(data, min=1., max=5., bins=100):
             density[n] += f/atoms.get_volume()
 
         # distances
-        atoms.update(cutoff=max)
+        atoms.update(cutoff=rmax)
         for pair in pairs:
             for loc, atomic in zip(*[atoms, atoms.numbers]):
                 if atomic != pair[0]:
@@ -38,7 +38,7 @@ def rdf(data, min=1., max=5., bins=100):
     for number in numbers:
         density[number] /= snaps
 
-    r = torch.linspace(min, max, bins)
+    r = torch.linspace(rmin, rmax, bins)
     dr = r[1]-r[0]
     g = {pair: hist[pair]/(count[pair]*4*pi*r**2*dr*density[pair[1]])
          for pair in pairs}
