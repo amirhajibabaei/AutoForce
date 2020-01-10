@@ -145,6 +145,20 @@ class TrajAnalyser:
             np.savetxt(file, out, header=header)
         return r, gdict
 
+    @staticmethod
+    def read_rdf(file):
+        g = np.loadtxt(file)
+        gdict = {}
+        with open(file) as f:
+            header = f.readline()
+        for a, b in zip(*[header.split(), g.T]):
+            if a == '#':
+                r = b
+            else:
+                key = tuple(int(v) for v in a.split('-'))
+                gdict[key] = b
+        return r, gdict
+
 
 class Sampler:
 
