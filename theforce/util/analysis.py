@@ -132,7 +132,7 @@ class TrajAnalyser:
         for atoms in self.slice(**kwargs):
             traj.write(atoms)
 
-    def self_rdf(self, rmax, nbins, select='all', srange=None, sample_size=100):
+    def rdf(self, rmax, nbins, select='all', srange=None, sample_size=100):
         I = self.select(select)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
         data = AtomsData([TorchAtoms(self.traj[s.sample()][I])
