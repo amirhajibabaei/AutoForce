@@ -61,6 +61,7 @@ def rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
 
     r = torch.linspace(rmin, rmax, bins)
     dr = r[1]-r[0]
+    r += dr/2
     g = {pair: hist[pair]/(count[pair]*4*pi*r**2*dr*density[pair[1]])
          for pair in pairs}
 
@@ -109,6 +110,7 @@ def _rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
 
     r = torch.linspace(rmin, rmax, bins)
     dr = r[1]-r[0]
+    r += dr/2
     g = {pair: hist[pair]/(count[pair]*4*pi*r**2*dr*density[pair[1]])
          for pair in pairs}
 
