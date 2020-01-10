@@ -139,7 +139,8 @@ class TrajAnalyser:
                           for _ in range(sample_size)])
         r, gdict = rdf(data, rmax, nbins)
         if file is not None:
-            header = 'r ' + ' '.join(f'{key}' for key in gdict.keys())
+            #header = 'r ' + ' '.join(f'{key}' for key in gdict.keys())
+            header = ' '.join(f'{k[0]}-{k[1]}' for k in gdict.keys())
             out = np.stack([r, ]+[gdict[key] for key in gdict.keys()]).T
             np.savetxt(file, out, header=header)
         return r, gdict
