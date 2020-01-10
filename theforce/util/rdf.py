@@ -13,13 +13,10 @@ import itertools
 def get_numbers_pairs(atoms_numbers, numbers, pairs):
     if pairs:
         numbers = sorted(list(set([a for b in pairs for a in b])))
-    elif numbers:
-        pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
-                 [(a, a) for a in numbers])
     else:
-        numbers = np.unique(atoms_numbers)
-        pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
-                 [(a, a) for a in numbers])
+        if numbers is None:
+            numbers = np.unique(atoms_numbers)
+        pairs = [a for a in itertools.product(numbers, numbers)]
     print(f'numbers: {numbers} \npairs: {pairs}')
     return numbers, pairs
 
