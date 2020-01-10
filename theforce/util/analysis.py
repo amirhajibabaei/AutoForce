@@ -40,7 +40,8 @@ class TrajAnalyser:
         elif 'all' in args:
             return np.full(self.numbers.shape[0], True)
         else:
-            return np.stack([self.numbers == a for a in iterable(args)]).any(axis=0)
+            return np.stack([self.numbers == a for b in iterable(args)
+                             for a in iterable(b)]).any(axis=0)
 
     def get_pair(self, i, j):
         return self.traj[i], self.traj[j]
@@ -93,8 +94,8 @@ class TrajAnalyser:
                       for atoms in self.slice(**kwargs)])
         return np.arange(start, stop, step), d
 
-    def displacements(self, numbers='all', deltas=None, srange=None, sample_size=100, corr=None, stats=None):
-        I = self.select(numbers)
+    def displacements(self, select='all', deltas=None, srange=None, sample_size=100, corr=None, stats=None):
+        I = self.select(select)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
         if deltas is None:
             deltas = get_exponential_deltas(s.start, s.stop)
@@ -108,9 +109,9 @@ class TrajAnalyser:
                    for j in range(len(data[0]))]
         return deltas, results
 
-    def diffusion_constants(self, dt=1., numbers='all', sample_size=100):
+    def diffusion_constants(self, dt=1., select='all', sample_size=100):
         deltas, results = self.displacements(
-            numbers=numbers, sample_size=sample_size, stats=stats)
+            select=select, sample_size=sample_size, stats=stats)
         time = np.array(deltas)*dt
         msd = np.array([d.statistic for d in results[0][0]])
         msd_err = np.array([d.statistic for d in results[0][2]])
