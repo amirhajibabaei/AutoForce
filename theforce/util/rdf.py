@@ -16,7 +16,9 @@ def get_numbers_pairs(atoms_numbers, numbers, pairs):
     else:
         if numbers is None:
             numbers = np.unique(atoms_numbers)
-        pairs = [a for a in itertools.product(numbers, numbers)]
+        #pairs = [a for a in itertools.product(numbers, numbers)]
+        pairs = [(a, a) for a in numbers]
+        pairs += [a for a in itertools.combinations(numbers, 2)]
     print(f'numbers: {numbers} \npairs: {pairs}')
     return numbers, pairs
 
