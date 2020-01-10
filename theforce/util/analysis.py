@@ -36,9 +36,9 @@ class TrajAnalyser:
 
     def select(self, *args):
         if len(args) == 0:
-            return np.zeros_like(self.numbers)
+            return np.full(self.numbers.shape[0], False)
         elif 'all' in args:
-            return np.ones_like(self.numbers)
+            return np.full(self.numbers.shape[0], True)
         else:
             return np.stack([self.numbers == a for a in iterable(args)]).any(axis=0)
 
