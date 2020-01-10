@@ -132,12 +132,16 @@ class TrajAnalyser:
         for atoms in self.slice(**kwargs):
             traj.write(atoms)
 
-    def rdf(self, rmax, nbins, select='all', srange=None, sample_size=100):
+    def rdf(self, rmax, nbins, select='all', srange=None, sample_size=100, file=None):
         I = self.select(select)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
         data = AtomsData([TorchAtoms(self.traj[s.sample()][I])
                           for _ in range(sample_size)])
         r, gdict = rdf(data, rmax, nbins)
+        if file is not None:
+            header = 'r ' + ' '.join(f'{key}' for key in gdict.keys())
+            out = np.stack([r, ]+[gdict[key] for key in gdict.keys()]).T
+            np.savetxt(file, out, header=header)
         return r, gdict
 
 
