@@ -70,6 +70,13 @@ class TrajAnalyser:
         for i in range(*self.get_slice(**kwargs)):
             yield self.traj[i]
 
+    def get_scalars(self, prop=('volume',), **kwargs):
+        data = []
+        for atoms in self.slice(**kwargs):
+            data += [[getattr(atoms, f'get_{q}')()
+                      for q in prop]]
+        return zip(*data)
+
     def center_of_mass(self, select='all', prop=('positions',), **kwargs):
         I = self.select(select)
         data = []
