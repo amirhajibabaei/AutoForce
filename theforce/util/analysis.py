@@ -208,10 +208,13 @@ class TrajAnalyser:
             I = self.numbers[k] == only
             k = k[I]
             off = off[I]
+        return k, off
+
+    def get_mic(self, atoms, j, k, off):
         cells = (off[..., None].astype(np.float) *
                  atoms.cell).sum(axis=1)
         r = atoms.positions[k] - atoms.positions[j] + cells
-        return k, r
+        return r
 
 
 class Sampler:
