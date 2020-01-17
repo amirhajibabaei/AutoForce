@@ -26,11 +26,11 @@ class TrajAnalyser:
 
     def __init__(self, traj, start=0, stop=-1, transform=no_transform):
         self.traj = Trajectory(traj)
+        self.transform = transform
         self.numbers = self[0].get_atomic_numbers()
         self.masses = self[0].get_masses()
         self.set_range(start, stop)
         self.indices = np.arange(0, self.numbers.shape[0])
-        self.transform = transform
 
     def set_range(self, start, stop):
         self._start = start
