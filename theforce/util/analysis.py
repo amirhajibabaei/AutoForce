@@ -13,21 +13,31 @@ from theforce.util.rdf import rdf
 from scipy.stats import bayes_mvs as stats
 
 
+def no_transform(atoms):
+    return atoms
+
+
+def standard_cell_transform(atoms):
+    atoms.set_cell(atoms.cell.cellpar(), scale_atoms=True)
+    return atoms
+
+
 class TrajAnalyser:
 
-    def __init__(self, traj, start=0, stop=-1):
+    def __init__(self, traj, start=0, stop=-1, transform=no_transform):
         self.traj = Trajectory(traj)
-        self.numbers = self.traj[0].get_atomic_numbers()
-        self.masses = self.traj[0].get_masses()
+        self.numbers = self[0].get_atomic_numbers()
+        self.masses = self[0].get_masses()
         self.set_range(start, stop)
         self.indices = np.arange(0, self.numbers.shape[0])
+        self.transform = transform
 
     def set_range(self, start, stop):
         self._start = start
         self._stop = stop
 
     def __getitem__(self, k):
-        return self.traj[k]
+        return self.transform(self.traj[k])
 
     @property
     def start(self):
@@ -54,14 +64,14 @@ class TrajAnalyser:
         return self.indices[self.select(*args)]
 
     def get_pair(self, i, j):
-        return self.traj[i], self.traj[j]
+        return self[i], self[j]
 
     def get_rand_pair(self, s, delta):
         succ = False
         while not succ:
             try:
                 i, j = s.sample_pair(delta)
-                a, b = self.traj[i], self.traj[j]
+                a, b = self[i], self[j]
                 succ = True
             except:
                 pass
@@ -76,7 +86,7 @@ class TrajAnalyser:
 
     def slice(self, **kwargs):
         for i in range(*self.get_slice(**kwargs)):
-            yield self.traj[i]
+            yield self[i]
 
     def get_scalars(self, prop=('volume',), **kwargs):
         data = []
@@ -97,7 +107,7 @@ class TrajAnalyser:
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
         if stats is None:
             stats = mean_var
-        v = stats([self.traj[s.sample()].get_volume()
+        v = stats([self[s.sample()].get_volume()
                    for _ in range(sample_size)])
         return v
 
@@ -106,7 +116,7 @@ class TrajAnalyser:
         start, stop, step = self.get_slice(**kwargs)
         if wrt is None:
             wrt = start
-        x = self.traj[wrt].get_positions()[I]
+        x = self[wrt].get_positions()[I]
         d = np.array([((atoms.get_positions()[I]-x)**2).sum(axis=-1).mean()
                       for atoms in self.slice(**kwargs)])
         return np.arange(start, stop, step), d
@@ -150,7 +160,7 @@ class TrajAnalyser:
     def rdf(self, rmax, nbins, select='all', srange=None, sample_size=100, file=None):
         I = self.select(select)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
-        data = AtomsData([TorchAtoms(self.traj[s.sample()][I])
+        data = AtomsData([TorchAtoms(self[s.sample()][I])
                           for _ in range(sample_size)])
         r, gdict = rdf(data, rmax, nbins)
         if file is not None:
