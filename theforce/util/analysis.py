@@ -20,6 +20,7 @@ class TrajAnalyser:
         self.numbers = self.traj[0].get_atomic_numbers()
         self.masses = self.traj[0].get_masses()
         self.set_range(start, stop)
+        self.indices = np.arange(0, self.numbers.shape[0])
 
     def set_range(self, start, stop):
         self._start = start
@@ -48,6 +49,9 @@ class TrajAnalyser:
         else:
             return np.stack([self.numbers == a for b in iterable(args)
                              for a in iterable(b)]).any(axis=0)
+
+    def select_indices(self, *args):
+        return self.indices[self.select(*args)]
 
     def get_pair(self, i, j):
         return self.traj[i], self.traj[j]
