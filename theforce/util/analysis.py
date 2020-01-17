@@ -24,6 +24,9 @@ class TrajAnalyser:
         self._start = start
         self._stop = stop
 
+    def __getitem__(self, k):
+        return self.traj[k]
+
     @property
     def start(self):
         return self._start
