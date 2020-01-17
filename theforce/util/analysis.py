@@ -6,6 +6,7 @@
 
 import numpy as np
 from ase.io import read, Trajectory
+from ase.neighborlist import NeighborList, natural_cutoffs
 from theforce.descriptor.atoms import AtomsData, TorchAtoms
 from theforce.util.util import iterable
 from theforce.util.rdf import rdf
@@ -168,6 +169,32 @@ class TrajAnalyser:
                 key = tuple(int(v) for v in a.split('-'))
                 gdict[key] = b
         return r, gdict
+
+    def attach_nl(self, cutoff=None, si=False, bw=True):
+        if cutoff is None:
+            coff = natural_cutoffs(self[0])
+        elif type(cutoff) is float:
+            coff = np.full_like(self[0].numbers, cutoff)
+        elif type(cutoff) is dict:
+            coff = list(map(cutoff.get, self[0].numbers))
+        elif type(cutoff) is list:
+            coff = cutoff
+        self.nl = NeighborList(
+            coff, skin=0.0, self_interaction=si, bothways=bw)
+
+    def get_neighbors(self, i, j, only=None, update=True):
+        atoms = self[i]
+        if update:
+            self.nl.update(atoms)
+        k, off = self.nl.get_neighbors(j)
+        if only:
+            I = self.numbers[k] == only
+            k = k[I]
+            off = off[I]
+        cells = (off[..., None].astype(np.float) *
+                 atoms.cell).sum(axis=1)
+        r = atoms.positions[k] - atoms.positions[j] + cells
+        return k, r
 
 
 class Sampler:
