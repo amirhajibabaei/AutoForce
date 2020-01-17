@@ -186,10 +186,13 @@ class TrajAnalyser:
         self.nl = NeighborList(
             coff, skin=0.0, self_interaction=si, bothways=bw)
 
-    def get_neighbors(self, i, j, only=None, update=True):
-        atoms = self[i]
-        if update:
+    def get_neighbors(self, j, atoms=None, only=None):
+
+        if atoms:
+            if type(atoms) == int:
+                atoms = self[atoms]
             self.nl.update(atoms)
+
         k, off = self.nl.get_neighbors(j)
         if only:
             I = self.numbers[k] == only
