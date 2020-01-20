@@ -10,6 +10,7 @@ from ase.neighborlist import NeighborList, natural_cutoffs
 from theforce.descriptor.atoms import AtomsData, TorchAtoms
 from theforce.util.util import iterable
 from theforce.util.rdf import rdf
+from theforce.descriptor.sphcart import cart_coord_to_sph, sph_coord_to_cart
 from scipy.stats import bayes_mvs as stats
 
 
@@ -147,6 +148,26 @@ class TrajAnalyser:
         Dt = tuple(a/6 for a in get_slopes(time, msd, msd_err))
         Dj = tuple(a/6 for a in get_slopes(time, smd, smd_err))
         return Dt, Dj
+
+    def hist_rtp_displacements(self, delta, rmax=10., bins=[100, 30, 60], select='all',
+                               srange=None, sample_size=100):
+        """
+        delta: steps
+        returns: r, theta, phi, histogram
+        """
+        I = self.select(select)
+        s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
+        _bins = [np.linspace(0, rmax, bins[0]),
+                 np.linspace(0, np.pi, bins[1]),
+                 np.linspace(-np.pi, np.pi, bins[2])]
+        h = np.zeros(shape=np.array(bins)-1)
+        for _ in range(sample_size):
+            a, b = self.get_rand_pair(s, delta)
+            d = (b.positions[I] - a.positions[I]).reshape(-1, 3)
+            rtp = np.array(cart_coord_to_sph(*d.T)).T
+            h += np.histogramdd(rtp, bins=_bins)[0]
+        r, t, p = (a[:-1] + (a[1]-a[0])/2 for a in _bins)
+        return r, t, p, h
 
     def get_positions(self, select='all', **kwargs):
         I = self.select(select)
