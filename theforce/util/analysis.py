@@ -153,7 +153,7 @@ class TrajAnalyser:
                                srange=None, sample_size=100):
         """
         delta: steps
-        returns: r, theta, phi, histogram
+        returns: r, theta, phi, histogram, density (of selected atoms)
         """
         I = self.select(select)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
@@ -161,13 +161,18 @@ class TrajAnalyser:
                  np.linspace(0, np.pi, bins[1]),
                  np.linspace(-np.pi, np.pi, bins[2])]
         h = np.zeros(shape=np.array(bins)-1)
+        vol = []
         for _ in range(sample_size):
             a, b = self.get_rand_pair(s, delta)
+            vol += [a.get_volume(), b.get_volume()]
             d = (b.positions[I] - a.positions[I]).reshape(-1, 3)
             rtp = np.array(cart_coord_to_sph(*d.T)).T
             h += np.histogramdd(rtp, bins=_bins)[0]
         r, t, p = (a[:-1] + (a[1]-a[0])/2 for a in _bins)
-        return r, t, p, h
+        N = I.sum()
+        h /= (N*sample_size)
+        rho = N/np.array(vol).mean()
+        return r, t, p, h, rho
 
     def get_positions(self, select='all', **kwargs):
         I = self.select(select)
