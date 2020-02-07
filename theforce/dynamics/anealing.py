@@ -10,6 +10,7 @@ from ase import units
 from theforce.dynamics.leapfrog import Leapfrog
 from theforce.regression.gppotential import PosteriorPotentialFromFolder
 import numpy as np
+import warnings
 
 
 def learn_pes_by_anealing(atoms, gp, cutoff, calculator=None, model=None, dt=2., ediff=0.01, volatile=None,
@@ -72,6 +73,8 @@ def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None
         else, no action
     """
     assert rescale_velocities > 1 and rescale_cell > 1
+    if pressure is not None:
+        warnings.warn('rescaling cell is not robust!')
 
     if model is not None:
         if type(model) == str:
@@ -113,6 +116,61 @@ def learn_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None
                     strain *= 1 - np.exp(-np.abs(dp/p)/eps)
                 # apply strain
                 dyn.strain_atoms(np.eye(3)*strain)
+
+        if k == stages-1:
+            dyn.model.to_folder(name, info='temperature: {}'.format(T),
+                                overwrite=overwrite)
+        else:
+            dyn.model.to_folder('{}_{}'.format(name, k), info='temperature: {}'.format(T),
+                                overwrite=overwrite)
+    return dyn.get_atoms(), dyn.model
+
+
+def train_pes_by_tempering(atoms, gp, cutoff, ttime, calculator=None, model=None, dt=2., ediff=0.01, volatile=None,
+                           target_temperature=1000., stages=1, equilibration=5, rescale_velocities=1.05,
+                           pressure=None, stress_equilibration=5, rescale_cell=1.01, randomize=True,
+                           algorithm='fastfast', name='model', overwrite=True, traj='tempering.traj',
+                           logfile='leapfrog.log'):
+    assert rescale_velocities > 1 and rescale_cell > 1
+
+    if model is not None:
+        if type(model) == str:
+            model = PosteriorPotentialFromFolder(model)
+        if gp is None:
+            gp = model.gp
+
+    if atoms.get_velocities() is None:
+        t = target_temperature
+        MaxwellBoltzmannDistribution(atoms, t*units.kB)
+        Stationary(atoms)
+        ZeroRotation(atoms)
+
+    dyn = VelocityVerlet(atoms, dt*units.fs, trajectory=traj)
+    dyn = Leapfrog(dyn, gp, cutoff, calculator=calculator, model=model,
+                   ediff=ediff, volatile=volatile, algorithm=algorithm, logfile=logfile)
+
+    t = 0
+    T = '{} (instant)'.format(atoms.get_temperature())
+    checkpoints = np.linspace(0, ttime, stages+1)[1:]
+    for k, target_t in enumerate(checkpoints):
+        print('stage: {}, time: {}, target time: {}, (temperature={})'.format(
+            k, t, target_t, T))
+        while t < target_t:
+            spu, e, T, s = dyn.run_updates(equilibration)
+            t += spu*equilibration*dt
+            dyn.rescale_velocities(
+                rescale_velocities if T < target_temperature else 1./rescale_velocities)
+            if pressure is not None:
+                spu, e, T, s = dyn.run_updates(stress_equilibration)
+                t += spu*stress_equilibration*dt
+                p = -s[:3].mean() / units.Pascal
+                # figure out factor
+                dp = p - pressure
+                factor = (rescale_cell if dp > 0 else 1./rescale_cell)
+                if randomize:
+                    factor = 1 + np.random.uniform(0, 1)*(factor-1)
+                # apply rescaling
+                dyn.rescale_cell(factor)
 
         if k == stages-1:
             dyn.model.to_folder(name, info='temperature: {}'.format(T),

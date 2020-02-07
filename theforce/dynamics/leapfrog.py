@@ -12,6 +12,7 @@ import torch
 import ase
 import numpy as np
 import types
+import warnings
 
 
 def initial_model(gp, atoms, ediff):
@@ -119,8 +120,12 @@ class Leapfrog:
         self.atoms.set_velocities(self.atoms.get_velocities()*factor)
 
     def strain_atoms(self, strain):
+        warnings.warn('Leapfrog.strain_atoms is not robust!')
         cell = (np.eye(3) + strain) @ self.atoms.cell.T
         self.atoms.set_cell(cell, scale_atoms=True)
+
+    def rescale_cell(self, f):
+        self.atoms.set_cell(f*self.atoms.cell, scale_atoms=True)
 
     def get_atoms(self):
         tmp = self.atoms.copy()
