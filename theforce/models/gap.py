@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.descriptor.sesoap import SeSoap
 from theforce.descriptor.radial_funcs import quadratic_cutoff
 from theforce.descriptor.clustersoap import ClusterSoap

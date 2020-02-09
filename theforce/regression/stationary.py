@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 import torch
 from torch.nn import Parameter
 from theforce.regression.kernel import Kernel

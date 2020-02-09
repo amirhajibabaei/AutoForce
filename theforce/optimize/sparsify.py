@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
 from theforce.regression.gppotential import EnergyForceKernel
 from theforce.similarity.soap import SoapKernel

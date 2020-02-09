@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 from math import factorial as fac
 import numpy as np
 from theforce.descriptor.sph_repr import sph_repr

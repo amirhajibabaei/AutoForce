@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 import numpy as np
 import torch
 from torch.nn import Module, Parameter

@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import numpy as np
 import torch
 from torch import ones_like, as_tensor, from_numpy, cat

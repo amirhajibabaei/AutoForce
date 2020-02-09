@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.util.util import iterable
 import itertools
 from ase.neighborlist import primitive_neighbor_list

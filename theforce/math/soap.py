@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.util.util import iterable
 import torch
 from theforce.math.ylm import Ylm

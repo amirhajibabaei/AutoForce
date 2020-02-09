@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.math.soap import HeteroSoap, NormalizedSoap
 from theforce.util.util import iterable

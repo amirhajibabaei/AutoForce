@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[1]:
-
-
 import numpy as np
 from theforce.descriptor.radial_funcs import quadratic_cutoff as radial
 from theforce.descriptor.sesoap import SeSoap

@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.calculator.posterior import AutoForceCalculator
 from theforce.descriptor.atoms import AtomsData, LocalsData, TorchAtoms

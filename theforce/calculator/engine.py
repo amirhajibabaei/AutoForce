@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 import numpy as np
 from ase.neighborlist import NeighborList
 from ase.calculators.calculator import Calculator, all_changes

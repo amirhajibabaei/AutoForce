@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from math import pi
 import torch
 _2pi = torch.tensor(2*pi)

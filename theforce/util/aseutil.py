@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.util.statsutil import moving_average
 from ase.io import read
 import numpy as np

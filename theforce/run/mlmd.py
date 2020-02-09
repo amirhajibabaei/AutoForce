@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 from ase.md.verlet import VelocityVerlet
 from theforce.calculator.posterior import PosteriorVarianceCalculator
 from theforce.run.pes import potential_energy_surface

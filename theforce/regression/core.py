@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 import torch
 from torch.nn import Module, Parameter
 from theforce.regression.algebra import free_form, positive

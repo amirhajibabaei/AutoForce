@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import torch
 from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal

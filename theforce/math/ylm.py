@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 import torch
 from torch.nn.modules import Module
 from math import pi as math_pi

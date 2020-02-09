@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 import torch
 from torch.optim.optimizer import Optimizer
 

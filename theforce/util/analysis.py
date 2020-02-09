@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import numpy as np
 from ase.io import read, Trajectory
 from ase.neighborlist import NeighborList, natural_cutoffs

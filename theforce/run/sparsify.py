@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.regression.algebra import sparser_projection
 from theforce.regression.gppotential import PosteriorPotentialFromFolder
 import os

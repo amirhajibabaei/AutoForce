@@ -1,9 +1,4 @@
 
-# coding: utf-8
-
-# In[ ]:
-
-
 """
 Two classes are defined: GPR and SparseGPR.
 The latter is a thin wrapper around the former.

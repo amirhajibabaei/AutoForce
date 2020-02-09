@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from torch.nn import Module
 from torch import cat
 from theforce.util.util import iterable

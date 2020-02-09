@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.regression.algebra import positive, free_form
 from torch import zeros, cat, stack

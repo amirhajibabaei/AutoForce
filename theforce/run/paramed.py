@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import torch
 from theforce.regression.scores import coeff_of_determination
 from theforce.calculator.parametric import get_coulomb_terms, get_lj_terms, load_parametric_potential
