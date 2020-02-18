@@ -343,7 +343,7 @@ class TorchAtoms(Atoms):
                          group=self.process_group if self.is_distributed else None)
         vel = self.get_velocities()
         if vel is not None:
-            new.set_velocities(vel)
+            new.set_velocities(vel.copy())
         return new
 
     def set_cell(self, *args, **kwargs):
@@ -391,6 +391,19 @@ class TorchAtoms(Atoms):
             except KeyError:
                 pass
         self.set_calculator(SinglePointCalculator(self, **results))
+
+    def detached(self, set_targets=True):
+        results = {}
+        for q in ['energy', 'forces', 'stress', 'xx']:
+            try:
+                results[q] = self.calc.results[q]
+            except KeyError:
+                pass
+        new = self.copy()
+        new.set_calculator(SinglePointCalculator(new, **results))
+        if set_targets:
+            new.set_targets()
+        return new
 
 
 class AtomsData:
@@ -685,4 +698,3 @@ def example():
 
 if __name__ == '__main__':
     example()
-
