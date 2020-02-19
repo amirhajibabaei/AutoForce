@@ -301,6 +301,10 @@ class PosteriorPotential(Module):
             self.has_target_forces = False
 
     @property
+    def inducing(self):
+        return self.X
+
+    @property
     def K(self):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
