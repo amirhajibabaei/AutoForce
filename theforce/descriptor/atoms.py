@@ -333,14 +333,14 @@ class TorchAtoms(Atoms):
         else:
             return True
 
-    def copy(self):
+    def copy(self, update=True, group=True):
         new = TorchAtoms(positions=self.positions.copy(),
                          cell=self.cell.copy(),
                          numbers=self.numbers.copy(),
                          pbc=self.pbc.copy(),
-                         descriptors=self.descriptors,
-                         cutoff=self.cutoff,
-                         group=self.process_group if self.is_distributed else None)
+                         group=self.process_group if group and self.is_distributed else None)
+        if update:
+            new.update(cutoff=self.cutoff, descriptors=self.descriptors)
         vel = self.get_velocities()
         if vel is not None:
             new.set_velocities(vel.copy())
