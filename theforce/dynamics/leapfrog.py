@@ -1,9 +1,11 @@
+# +
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.calculator.posterior import AutoForceCalculator
 from theforce.descriptor.atoms import AtomsData, LocalsData, TorchAtoms
 from theforce.util.util import date
 import torch
 import ase
+from ase.calculators.singlepoint import SinglePointCalculator
 import numpy as np
 import types
 import warnings
@@ -23,12 +25,14 @@ def initial_model(gp, atoms, ediff):
 class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
-                 algorithm='fast', volatile=None, logfile='leapfrog.log'):
+                 algorithm='fast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
         self.ediff = ediff
         self.fdiff = fdiff
+        self.skip = skip
+        self.skip_volatile = skip_volatile
 
         if type(algorithm) == str:
             self.algorithm = getattr(self, 'algorithm_'+algorithm)
@@ -121,29 +125,28 @@ class Leapfrog:
     def rescale_cell(self, f):
         self.atoms.set_cell(f*self.atoms.cell, scale_atoms=True)
 
-    def get_atoms(self):
-        tmp = self.atoms.copy()
-        if self.to_ase:
-            tmp = tmp.as_ase()
-        return tmp
-
-    def snapshot(self):
-        tmp = self.atoms.copy()
-        if self.to_ase:
-            tmp = tmp.as_ase()
-        tmp.set_calculator(self.calculator)
-        self._fp.append(self.step)
-        self._fp_e.append(tmp.get_potential_energy())
-        self.log('exact energy: {}'.format(tmp.get_potential_energy()))
-        tmp.get_forces()
-        ase.io.Trajectory('_FP.traj', 'a').write(tmp)
-        if self.to_ase:
-            tmp = TorchAtoms(ase_atoms=tmp, cutoff=self.cutoff,
-                             descriptors=self.gp.kern.kernels)
+    def snapshot(self, fake=False, copy=None):
+        if copy is None:
+            copy = self.atoms.copy()
+        if fake:
+            energy = self.atoms.get_potential_energy()
+            forces = self.atoms.get_forces()
         else:
-            tmp.set_targets()
-        tmp.single_point()
-        return tmp
+            if self.to_ase:
+                tmp = copy.as_ase()
+            else:
+                tmp = copy
+            tmp.set_calculator(self.calculator)
+            energy = tmp.get_potential_energy()
+            forces = tmp.get_forces()
+            ase.io.Trajectory('_FP.traj', 'a').write(tmp)
+            self._fp.append(self.step)
+            self._fp_e.append(energy)
+            self.log('exact energy: {}'.format(energy))
+        copy.set_calculator(SinglePointCalculator(copy, energy=energy,
+                                                  forces=forces))
+        copy.set_targets()
+        return copy
 
     def algorithm_robust(self, datafirst=True):
         new = self.snapshot()
@@ -187,6 +190,30 @@ class Leapfrog:
             new = self.snapshot()
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
+    def algorithm_ultrafast(self):
+        locs = self.atoms.calc.atoms.loc
+        leaks = self.model.leakages(locs)
+        q = torch.argsort(leaks, descending=True)
+        added_refs = 0
+        for k in q:
+            loc = locs[k]
+            ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
+            change = self.model.add_1inducing(loc, ediff)
+            if change >= ediff:
+                added_refs += 1
+            else:
+                self.log('added refs: {}  ediff at break: {}'.format(
+                    added_refs, change))
+                break
+        if added_refs > 0:
+            a = len(self.model.data)
+            new = self.snapshot(fake=True)
+            de, df = self.model.add_1atoms(new, self.ediff, self.fdiff)
+            if len(self.model.data) > a:
+                self.model.pop_1data(clear_cached=True)
+                new = self.snapshot(copy=new)
+                self.model.add_1atoms(new, self.ediff, self.fdiff)
+
     def update_model(self):
         size1 = self.sizes
         if self.volatile():
@@ -229,11 +256,11 @@ class Leapfrog:
         if ext:
             self.log('extremum')
             self._ext += [self.step]
-            if not self.volatile() and self._ext[-1]-last < 10:
+            if not self.volatile() and self._ext[-1]-last < self.skip:
                 return False
             return np.random.choice([True, False], p=[prob, 1-prob])  # main
         else:
-            if self.volatile() and (self.step == 0 or self.step-last > 3):
+            if self.volatile() and (self.step == 0 or self.step-last > self.skip_volatile):
                 return True
             return False  # main
 
@@ -274,4 +301,3 @@ class Leapfrog:
         stress = np.concatenate(stresses).mean(axis=0)
         self.log('stress: {}'.format(stress))
         return steps_per_update, average_energy, average_temp, stress
-
