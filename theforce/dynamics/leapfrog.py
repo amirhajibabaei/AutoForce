@@ -25,7 +25,8 @@ def initial_model(gp, atoms, ediff):
 class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
-                 algorithm='fast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3):
+                 algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3,
+                 undo_volatile=True):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
@@ -33,6 +34,7 @@ class Leapfrog:
         self.fdiff = fdiff
         self.skip = skip
         self.skip_volatile = skip_volatile
+        self.undo_volatile = undo_volatile
 
         if type(algorithm) == str:
             self.algorithm = getattr(self, 'algorithm_'+algorithm)
@@ -217,6 +219,17 @@ class Leapfrog:
                 self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def update_model(self):
+        # undo if previous update is not necessary
+        if self.volatile() and self._fp[-1] > 0 and self.undo_volatile:
+            if self._fp[-1] != (self._ext[-1] if len(self._ext) > 0 else 0):
+                if self.step_plus != self._fp[-1]:
+                    warnings.warn('step_plus != fp[-1]')
+                else:
+                    if self.data_plus > 0 or self.ref_plus > 0:
+                        self.undo_update()
+                        self.log('undo: {}  data: {}  inducing: {}'.format(
+                            self._fp[-1], *self.sizes))
+        # update
         size1 = self.sizes
         if self.volatile():
             self.algorithm_robust()
@@ -225,6 +238,7 @@ class Leapfrog:
         size2 = self.sizes
         self.data_plus = size2[0]-size1[0]
         self.ref_plus = size2[1]-size1[1]
+        self.step_plus = self.step
         tf = self.data_plus > 0 or self.ref_plus > 0
         if tf:
             self.atoms.calc.results.clear()

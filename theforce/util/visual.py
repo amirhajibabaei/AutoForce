@@ -77,6 +77,12 @@ def visualize_leapfrog(file, plot=True, extremum=False):
         except IndexError:
             pass
 
+        try:
+            if split[1] == 'undo:':
+                acc[-1] = 2
+        except IndexError:
+            pass
+
         if 'extremum' in line:
             ext += [step]
 
@@ -88,7 +94,7 @@ def visualize_leapfrog(file, plot=True, extremum=False):
         axes[0].plot(*zip(*energies), zorder=1)
         if len(exact_energies) > 0:
             axes[0].scatter(*zip(*exact_energies),
-                            color=list(map({0: 'r', 1: 'g'}.get, acc)),
+                            color=list(map({0: 'r', 1: 'g', 2: 'y'}.get, acc)),
                             zorder=2)
         if extremum:
             for e in ext:
