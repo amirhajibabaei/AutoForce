@@ -77,6 +77,8 @@ class Leapfrog:
             snap = self.snapshot()
             potential = initial_model(self.gp, snap, self.ediff)
             potential._cutoff = cutoff
+            self.log('update: {}  data: {}  inducing: {}  FP: {}'.format(
+                True, len(potential.data), len(potential.inducing), len(self._fp)))
             self.log('a model is initiated with {} data and {} ref(s)'.format(
                 len(potential.data), len(potential.X)))
         self.atoms.set_calculator(AutoForceCalculator(potential))
@@ -260,7 +262,8 @@ class Leapfrog:
                 return False
             return np.random.choice([True, False], p=[prob, 1-prob])  # main
         else:
-            if self.volatile() and (self.step == 0 or self.step-last > self.skip_volatile):
+            if self.volatile() and ((self.step == 0 and len(self._fp) == 0)
+                                    or self.step-last > self.skip_volatile):
                 return True
             return False  # main
 
