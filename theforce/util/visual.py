@@ -77,13 +77,17 @@ def visualize_leapfrog(file, plot=True):
         axes[0].plot(*zip(*energies), zorder=1)
         if len(exact_energies) > 0:
             axes[0].scatter(*zip(*exact_energies), color='red', zorder=2)
+        axes[0].set_ylabel('energy')
 
         axes[1].plot(*zip(*temperatures))
+        axes[1].set_ylabel('temperature')
 
         axes[2].plot(*zip(*data))
         axes[2].plot(*zip(*fp))
+        axes[2].set_ylabel('FP calculations')
 
         axes[3].plot(*zip(*refs))
+        axes[3].set_ylabel('inducing')
         fig.tight_layout()
     else:
         fig = None
