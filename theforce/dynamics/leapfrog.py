@@ -250,9 +250,10 @@ class Leapfrog:
             if d1*d2 < 0:
                 ext = True
                 # unless it's a artificial ext!
-                if len(self._ext) > 0 and self.step - self._ext[-1] == 1:
+                #if len(self._ext) > 0 and self.step - self._ext[-1] == 1:
+                #    ext = False
+                if self.step - self._fp[-1] < 3:
                     ext = False
-
         # decide
         last = 0 if len(self._fp) == 0 else self._fp[-1]
         if ext:
