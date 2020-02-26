@@ -26,7 +26,7 @@ class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
                  algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3,
-                 undo_volatile=True):
+                 undo_volatile=True, correct_verlet=True):
         self.dyn = dyn
         self.gp = gp
         self.cutoff = cutoff
@@ -35,6 +35,7 @@ class Leapfrog:
         self.skip = skip
         self.skip_volatile = skip_volatile
         self.undo_volatile = undo_volatile
+        self.correct_verlet = correct_verlet
 
         if type(algorithm) == str:
             self.algorithm = getattr(self, 'algorithm_'+algorithm)
@@ -219,6 +220,7 @@ class Leapfrog:
                 self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def update_model(self):
+        forces_before = self.atoms.get_forces()
         # undo if previous update is not necessary
         if self.volatile() and self._fp[-1] > 0 and self.undo_volatile:
             if self._fp[-1] != (self._ext[-1] if len(self._ext) > 0 else 0):
@@ -242,6 +244,8 @@ class Leapfrog:
         tf = self.data_plus > 0 or self.ref_plus > 0
         if tf:
             self.atoms.calc.results.clear()
+            if self.correct_verlet:
+                self.verlet(forces_before)
         return tf
 
     def undo_update(self):
@@ -253,6 +257,21 @@ class Leapfrog:
         while i > 0:
             self.model.pop_1inducing()
             i -= 1
+
+    def verlet(self, forces_before):
+        atoms = self.atoms
+        f = forces_before
+        p = atoms.get_momenta()
+        p += 0.5 * self.dyn.dt * f
+        masses = atoms.get_masses()[:, np.newaxis]
+        r = atoms.get_positions()
+        atoms.set_positions(r + self.dyn.dt * p / masses)
+        if atoms.constraints:
+            p = (atoms.get_positions() - r) * masses / self.dt
+        atoms.set_momenta(p, apply_constraint=False)
+        f = atoms.get_forces(md=True)
+        atoms.set_momenta(atoms.get_momenta() + 0.5 * self.dyn.dt * f)
+        return f
 
     def doit(self, prob=1):
 
