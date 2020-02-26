@@ -114,7 +114,7 @@ class Leapfrog:
         return self._ext, [self.energy[k] for k in self._ext]
 
     def volatile(self):
-        return len(self._ext) <= self._volatile
+        return len(self._ext) < self._volatile
 
     def rescale_velocities(self, factor):
         self.atoms.set_velocities(self.atoms.get_velocities()*factor)
@@ -250,8 +250,6 @@ class Leapfrog:
             if d1*d2 < 0:
                 ext = True
                 # unless it's a artificial ext!
-                #if len(self._ext) > 0 and self.step - self._ext[-1] == 1:
-                #    ext = False
                 if self.step - self._fp[-1] < 3:
                     ext = False
         # decide
