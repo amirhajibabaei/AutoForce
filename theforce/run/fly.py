@@ -3,6 +3,7 @@ import numpy as np
 from theforce.run.pes import get_params, get_kernel
 from theforce.dynamics.leapfrog import Leapfrog
 from theforce.util.aseutil import make_cell_upper_triangular
+from theforce.regression.gppotential import PosteriorPotentialFromFolder
 import ase.md.velocitydistribution as vd
 from ase.md.npt import NPT
 from ase.io import read
@@ -85,7 +86,7 @@ def kernel(numbers, cutoff, au=1.0, exponent=4, lmax=3, nmax=3, noise=1e-2):
     return gp
 
 
-def strategy(atoms, temperature, cutoff):
+def strategy(atoms, temperature):
     model = suffixed_last('model', ew='/')
     if model is None:
         make_cell_upper_triangular(atoms)
@@ -93,19 +94,23 @@ def strategy(atoms, temperature, cutoff):
     else:
         suff_old = suffix(model, 'model', ew='/')
         atoms = read(f'md_{suff_old}.traj', -1)
-    kern = kernel(np.unique(atoms.numbers), cutoff)
     new_model, suff = suffixed_new('model', ew='/')
     traj = f'md_{suff}.traj'
     log = f'leapfrog_{suff}.log'
     with open('strategy.log', 'a') as f:
         f.write(f'{model} -> {new_model}  {temperature} Kelvin\n')
-    return atoms, kern, model, new_model, traj, log
+    return atoms, model, new_model, traj, log
 
 
-def fly(atoms, temperature, updates, cutoff=6., calc=None, dt=2.,
+def fly(atoms, temperature, updates, cutoff=6., calc=None, kern=None, dt=2.,
         ext_stress=0, pfactor=None, ediff=0.1, fdiff=0.1, skip_volatile=5):
-    atoms, kern, model, new_model, traj, log = strategy(
-        atoms, temperature, cutoff)
+    atoms, model, new_model, traj, log = strategy(atoms, temperature)
+    if model is None:
+        if not kern:
+            kern = kernel(np.unique(atoms.numbers), cutoff)
+    else:
+        model = PosteriorPotentialFromFolder(model)
+        kern = model.gp
     atoms.set_calculator(calc if calc else my_vasp())
     ase_dyn = NPT(atoms, dt*units.fs, temperature*units.kB, ext_stress,
                   25*units.fs, pfactor, trajectory=traj)
