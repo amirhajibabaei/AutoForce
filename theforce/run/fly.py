@@ -102,7 +102,7 @@ def strategy(atoms, temperature):
     return atoms, model, new_model, traj, log
 
 
-def fly(atoms, temperature, updates, cutoff=6., calc=None, kern=None, dt=2.,
+def fly(atoms, temperature, updates, cutoff=6., calc=None, kern=None, dt=2., tsteps=10,
         ext_stress=0, pfactor=None, ediff=0.1, fdiff=0.1, skip_volatile=5):
     atoms, model, new_model, traj, log = strategy(atoms, temperature)
     if model is None:
@@ -113,7 +113,7 @@ def fly(atoms, temperature, updates, cutoff=6., calc=None, kern=None, dt=2.,
         kern = model.gp
     atoms.set_calculator(calc if calc else my_vasp())
     ase_dyn = NPT(atoms, dt*units.fs, temperature*units.kB, ext_stress,
-                  25*units.fs, pfactor, trajectory=traj)
+                  tsteps*dt*units.fs, pfactor, trajectory=traj)
     dyn = Leapfrog(ase_dyn, kern, cutoff, model=model,
                    algorithm='ultrafast',
                    ediff=ediff, fdiff=fdiff,
