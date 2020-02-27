@@ -69,7 +69,7 @@ def visualize_leapfrog(file, plot=True, extremum=False):
                 data += [(step, a)]
                 refs += [(step, b)]
                 fp += [(step, c)]
-                if step == ex_en_step:
+                if c > 0 and step == ex_en_step:
                     if len(data) == 1:
                         acc = [1]
                     else:
