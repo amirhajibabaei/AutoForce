@@ -113,6 +113,10 @@ def visualize_leapfrog(file, plot=True, extremum=False):
         #
         axes[3].plot(*zip(*refs))
         axes[3].set_ylabel('inducing')
+
+        #
+        for ax in axes:
+            ax.set_xlim(0, step)
         fig.tight_layout()
     else:
         fig = None
