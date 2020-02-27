@@ -70,7 +70,7 @@ def visualize_leapfrog(file, plot=True, extremum=False):
                 refs += [(step, b)]
                 fp += [(step, c)]
                 if c > 0 and step == ex_en_step:
-                    if len(data) == 1:
+                    if len(exact_energies) == 1:
                         acc = [1]
                     else:
                         acc += [data[-1][1] - data[-2][1]]
