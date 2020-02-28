@@ -113,12 +113,12 @@ def strategy(atoms, temperature):
     return atoms, model, new_model, traj, log
 
 
-def fly(atoms, temperature, updates, cutoff=6., calc=None, kern=None, dt=2., tsteps=10,
+def fly(atoms, temperature, updates, cutoff=6., au=None, calc=None, kern=None, dt=2., tsteps=10,
         ext_stress=0, pfactor=None, ediff=0.1, fdiff=0.1, skip_volatile=5):
     atoms, model, new_model, traj, log = strategy(atoms, temperature)
     if model is None:
         if not kern:
-            kern = default_kernel(np.unique(atoms.numbers), cutoff)
+            kern = default_kernel(np.unique(atoms.numbers), cutoff, au=au)
     else:
         model = PosteriorPotentialFromFolder(model)
         kern = model.gp
