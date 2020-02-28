@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-from theforce.run.pes import get_params, get_kernel
 from theforce.dynamics.leapfrog import Leapfrog
 from theforce.util.aseutil import make_cell_upper_triangular
 from theforce.regression.gppotential import PosteriorPotentialFromFolder
@@ -72,19 +71,31 @@ def init_velocities(atoms, t):
     vd.ZeroRotation(atoms)
 
 
-def kernel(numbers, cutoff, au=1.0, exponent=4, lmax=3, nmax=3, noise=1e-2):
-    params = get_params(numbers=numbers,
-                        use_gp_chp=False,
-                        cutoff=cutoff,
-                        pairkernel=False,
-                        soapkernel=True,
-                        heterosoap=True,
-                        exponent=exponent, lmax=lmax, nmax=nmax,
-                        atomic_unit=au,
-                        noise=noise)
-    gp = get_kernel(params)
+# +
+def default_au(n):
+    if n == 1:
+        return 0.5
+    else:
+        return 1.
+
+
+def default_kernel(numbers, cutoff=6., au=None, exponent=4, lmax=3, nmax=3, noise=0.01):
+    from theforce.regression.gppotential import GaussianProcessPotential
+    from theforce.similarity.heterosoap import HeterogeneousSoapKernel as SOAP
+    from theforce.math.cutoff import PolyCut
+    from theforce.regression.kernel import White, Positive, DotProd
+    from theforce.util.util import date
+    kerns = [SOAP(DotProd()**exponent, a, numbers, lmax, nmax,
+                  PolyCut(cutoff), atomic_unit=au(a) if au else default_au(a))
+             for a in numbers]
+    gp = GaussianProcessPotential(
+        kerns, noise=White(signal=noise, requires_grad=False))
+    with open('gp.chp', 'a') as f:
+        f.write(f'# {date()}\n{gp}\n')
     return gp
 
+
+# -
 
 def strategy(atoms, temperature):
     model = suffixed_last('model', ew='/')
@@ -107,7 +118,7 @@ def fly(atoms, temperature, updates, cutoff=6., calc=None, kern=None, dt=2., tst
     atoms, model, new_model, traj, log = strategy(atoms, temperature)
     if model is None:
         if not kern:
-            kern = kernel(np.unique(atoms.numbers), cutoff)
+            kern = default_kernel(np.unique(atoms.numbers), cutoff)
     else:
         model = PosteriorPotentialFromFolder(model)
         kern = model.gp
