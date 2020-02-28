@@ -2,6 +2,7 @@ import pylab as plt
 import nglview
 from ase.io import read
 from theforce.util.util import timestamp, iterable
+import re
 
 
 def no_preprocess(atoms):
@@ -28,13 +29,12 @@ def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False, preproce
     return view
 
 
-def visualize_leapfrog(file, plot=True, extremum=False):
+def visualize_leapfrog(file, plot=True, extremum=False, stop=None):
     energies = []
     temperatures = []
     exact_energies = []
-    data = []
-    refs = []
-    fp = []
+    acc = []
+    undo = []
     ext = []
     times = []
     t0 = None
@@ -45,6 +45,9 @@ def visualize_leapfrog(file, plot=True, extremum=False):
             step = int(split[0])
         except IndexError:
             continue
+
+        if stop and step > stop:
+            break
 
         try:
             energies += [(step, float(split[1]))]
@@ -58,30 +61,44 @@ def visualize_leapfrog(file, plot=True, extremum=False):
         except:
             pass
 
+        if 'a model is provided' in line:
+            s = re.search('with (.+?) data and (.+?) ref', line)
+            a = int(s.group(1))
+            b = int(s.group(2))
+            data = [(step, a)]
+            refs = [(step, b)]
+            fp = [(step, 0)]
+
+        if 'updating ...' in line:
+            updating = step
+
+        if split[1] == 'undo:':
+            assert int(split[2]) == exact_energies[-1][0]
+            undo += [exact_energies[-1]]
+            a, b = (int(_) for _ in split[4::2])
+            data += [(step, data[-1][1]), (step, a)]
+            refs += [(step, refs[-1][1]), (step, b)]
+
         if 'exact energy' in line:
             energy = float(split[3])
             exact_energies += [(step, energy)]
-            ex_en_step = step
+            acc += [None]
 
-        try:
-            if split[1] == 'update:':
-                a, b, c = (int(_) for _ in split[4::2])
-                data += [(step, a)]
-                refs += [(step, b)]
-                fp += [(step, c)]
-                if c > 0 and step == ex_en_step:
-                    if len(exact_energies) == 1:
-                        acc = [1]
-                    else:
-                        acc += [data[-1][1] - data[-2][1]]
-        except IndexError:
-            pass
+        if split[1] == 'update:':
+            a, b, c = (int(_) for _ in split[4::2])
+            try:
+                data += [(step, data[-1][1]), (step, a)]
+                refs += [(step, refs[-1][1]), (step, b)]
+                fp += [(step, fp[-1][1]), (step, c)]
+            except NameError:
+                data = [(step, a)]
+                refs = [(step, b)]
+                fp = [(step, c)]
 
-        try:
-            if split[1] == 'undo:':
-                acc[-1] = 2
-        except IndexError:
-            pass
+            if len(acc) > 0 and acc[-1] is None:
+                acc[-1] = data[-1][1]
+                if acc[-1] > 1:
+                    acc[-1] -= data[-2][1]
 
         if 'extremum' in line:
             ext += [step]
@@ -94,8 +111,10 @@ def visualize_leapfrog(file, plot=True, extremum=False):
         axes[0].plot(*zip(*energies), zorder=1)
         if len(exact_energies) > 0:
             axes[0].scatter(*zip(*exact_energies),
-                            color=list(map({0: 'r', 1: 'g', 2: 'y'}.get, acc)),
+                            c=list(map({0: 'r', 1: 'g'}.get, acc)),
                             zorder=2)
+            if len(undo) > 0:
+                axes[0].scatter(*zip(*undo), marker='x', color='k', zorder=2)
         if extremum:
             for e in ext:
                 axes[0].axvline(x=e, lw=0.5, color='k')
