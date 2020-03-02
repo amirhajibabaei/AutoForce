@@ -614,6 +614,9 @@ class LocalsData:
         self.append(others)
         return self
 
+    def subset(self, numbers):
+        return LocalsData([loc for loc in self.X if loc._a.unique() in numbers])
+
 
 def sample_atoms(file, size=-1, chp=None, indices=None):
     """
