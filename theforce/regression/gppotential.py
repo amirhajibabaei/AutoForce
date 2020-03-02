@@ -297,10 +297,11 @@ class PosteriorPotential(Module):
             self.nu = p.precision_matrix
             self.has_target_forces = True
         else:
-            self.Ke = self.gp.kern(data, inducing, cov='energy_energy')
-            self.Kf = self.gp.kern(data, inducing, cov='forces_energy')
-            self.M = self.gp.kern(inducing, inducing, cov='energy_energy')
-            self.X = inducing.subset(self.gp.species)
+            X = inducing.subset(self.gp.species)
+            self.Ke = self.gp.kern(data, X, cov='energy_energy')
+            self.Kf = self.gp.kern(data, X, cov='forces_energy')
+            self.M = self.gp.kern(X, X, cov='energy_energy')
+            self.X = X
             self.make_munu()
             self.has_target_forces = False
 
