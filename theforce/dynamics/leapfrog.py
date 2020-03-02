@@ -159,57 +159,34 @@ class Leapfrog:
             datafirst = np.random.choice([True, False])
         if datafirst:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
-        for loc in new.loc:
-            ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
-            self.model.add_1inducing(loc, ediff)
+        locs = new.loc
+        added_refs, _ = self.model.add_ninducing(
+            locs, self.ediff, descending=False)
         if not datafirst:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_fast(self):
-        added_refs = 0
-        for loc in self.atoms.calc.atoms:
-            ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
-            change = self.model.add_1inducing(loc, ediff)
-            if change >= ediff:
-                added_refs += 1
+        locs = self.atoms.calc.atoms.loc
+        added_refs, _ = self.model.add_ninducing(
+            locs, self.ediff, descending=False)
         if added_refs > 0:
             new = self.snapshot()
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_fastfast(self):
         locs = self.atoms.calc.atoms.loc
-        leaks = self.model.leakages(locs)
-        q = torch.argsort(leaks, descending=True)
-        added_refs = 0
-        for k in q:
-            loc = locs[k]
-            ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
-            change = self.model.add_1inducing(loc, ediff)
-            if change >= ediff:
-                added_refs += 1
-            else:
-                self.log('added refs: {}  ediff at break: {}'.format(
-                    added_refs, change))
-                break
+        added_refs, change = self.model.add_ninducing(locs, self.ediff)
+        self.log('added refs: {}  ediff at break: {}'.format(
+            added_refs, change))
         if added_refs > 0:
             new = self.snapshot()
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_ultrafast(self):
         locs = self.atoms.calc.atoms.loc
-        leaks = self.model.leakages(locs)
-        q = torch.argsort(leaks, descending=True)
-        added_refs = 0
-        for k in q:
-            loc = locs[k]
-            ediff = self.ediff if self.sizes[1] > 1 else torch.finfo().tiny
-            change = self.model.add_1inducing(loc, ediff)
-            if change >= ediff:
-                added_refs += 1
-            else:
-                self.log('added refs: {}  ediff at break: {}'.format(
-                    added_refs, change))
-                break
+        added_refs, change = self.model.add_ninducing(locs, self.ediff)
+        self.log('added refs: {}  ediff at break: {}'.format(
+            added_refs, change))
         if added_refs > 0:
             a = len(self.model.data)
             new = self.snapshot(fake=True)

@@ -422,6 +422,25 @@ class PosteriorPotential(Module):
             self.pop_1inducing(clear_cached=True)
         return de
 
+    def add_ninducing(self, _locs, ediff, detach=True, descending=True):
+        locs = [loc for loc in _locs if loc._a.unique() in self.gp.species]
+        if descending:
+            leaks = self.leakages(locs)
+            q = torch.argsort(leaks, descending=True)
+        else:
+            q = torch.arange(len(locs))
+        added = 0
+        for k in q:
+            loc = locs[k]
+            _ediff = ediff if len(self.X) > 1 else torch.finfo().tiny
+            change = self.add_1inducing(loc, _ediff, detach=detach)
+            if change >= ediff:
+                added += 1
+            else:
+                if descending:
+                    break
+        return added, change
+
     def select_inducing(self, indices, deleted=None, remake=True):
         i = torch.as_tensor(indices)
         self.Ke = self.Ke.index_select(1, i)
