@@ -300,7 +300,7 @@ class PosteriorPotential(Module):
             self.Ke = self.gp.kern(data, inducing, cov='energy_energy')
             self.Kf = self.gp.kern(data, inducing, cov='forces_energy')
             self.M = self.gp.kern(inducing, inducing, cov='energy_energy')
-            self.X = inducing
+            self.X = inducing.subset(self.gp.species)
             self.make_munu()
             self.has_target_forces = False
 
@@ -347,6 +347,7 @@ class PosteriorPotential(Module):
 
     @context_setting
     def add_inducing(self, X, remake=True):
+        assert X._a.unique() in self.gp.species
         Ke = self.gp.kern(self.data, X, cov='energy_energy')
         Kf = self.gp.kern(self.data, X, cov='forces_energy')
         self.Ke = torch.cat([self.Ke, Ke], dim=1)
@@ -403,6 +404,8 @@ class PosteriorPotential(Module):
         return de, df
 
     def add_1inducing(self, _loc, ediff, detach=True):
+        if _loc._a.unique() not in self.gp.species:
+            return 0
         kwargs = {'use_caching': True}
         if detach:
             loc = _loc.detach()
