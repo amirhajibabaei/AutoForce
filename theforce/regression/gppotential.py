@@ -117,6 +117,10 @@ class GaussianProcessPotential(Module):
         return p
 
     @property
+    def species(self):
+        return [kern.a for kern in self.kern.kernels]
+
+    @property
     def requires_grad(self):
         return [p.requires_grad for p in self.params]
 
