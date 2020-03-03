@@ -100,21 +100,24 @@ def default_kernel(numbers, cutoff=6., au=None, exponent=4, lmax=3, nmax=3, nois
 
 def strategy(atoms, temperature):
     model = suffixed_last('model', ew='/')
+    init_atoms = 'new-atoms'
     if model is None:
         make_cell_upper_triangular(atoms)
-        init_velocities(atoms, temperature)
     else:
         suff_old = suffix(model, 'model', ew='/')
-        atoms = read(f'md_{suff_old}.traj', -1)
+        if atoms is None:
+            atoms = read(f'md_{suff_old}.traj', -1)
+            init_atoms = f'resume-md_{suff_old}.traj'
+    init_velocities(atoms, temperature)
     new_model, suff = suffixed_new('model', ew='/')
     traj = f'md_{suff}.traj'
     log = f'leapfrog_{suff}.log'
     with open('strategy.log', 'a') as f:
-        f.write(f'{model} -> {new_model}  {temperature} Kelvin\n')
+        f.write(f'{model} -> {new_model}  {init_atoms}  {temperature} Kelvin\n')
     return atoms, model, new_model, traj, log
 
 
-def fly(atoms, temperature, updates, cutoff=6., au=None, calc=None, kern=None, dt=2., tsteps=10,
+def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=None, dt=2., tsteps=10,
         ext_stress=0, pfactor=None, mask=None, ediff=0.1, fdiff=0.1, skip_volatile=5):
     atoms, model, new_model, traj, log = strategy(atoms, temperature)
     if model is None:
