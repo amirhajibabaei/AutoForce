@@ -65,10 +65,11 @@ def clear_all():
     os.system('rm -rf model_*/ md_*.traj leapfrog_*.log strategy.log')
 
 
-def init_velocities(atoms, t):
-    vd.MaxwellBoltzmannDistribution(atoms, t*units.kB)
-    vd.Stationary(atoms)
-    vd.ZeroRotation(atoms)
+def init_velocities(atoms, t, overwrite=False):
+    if atoms.get_velocities() is None or overwrite:
+        vd.MaxwellBoltzmannDistribution(atoms, t*units.kB)
+        vd.Stationary(atoms)
+        vd.ZeroRotation(atoms)
 
 
 # +
