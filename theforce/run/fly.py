@@ -108,6 +108,8 @@ def strategy(atoms, temperature):
         if atoms is None:
             atoms = read(f'md_{suff_old}.traj', -1)
             init_atoms = f'resume-md_{suff_old}.traj'
+        else:
+            make_cell_upper_triangular(atoms)
     init_velocities(atoms, temperature)
     new_model, suff = suffixed_new('model', ew='/')
     traj = f'md_{suff}.traj'
