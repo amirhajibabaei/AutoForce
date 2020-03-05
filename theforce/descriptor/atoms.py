@@ -41,6 +41,8 @@ class Local:
         self._r = r
         self._m = ones_like(self._i).to(torch.bool)
         self.off = off
+        self._d = None
+        self._argsort = None
         self.stage(descriptors, dont_save_grads=dont_save_grads)
 
     def stage(self, descriptors, dont_save_grads=False):
@@ -71,6 +73,22 @@ class Local:
     @property
     def r(self):
         return self._r[self._m]
+
+    @property
+    def _nn(self):
+        if self._argsort is None:
+            if self._d is None:
+                self._d = self._r.norm(dim=1)
+            self._argsort = self._d.argsort()
+        return self._argsort
+
+    @property
+    def nn(self):
+        return self._j[self._nn][self._m[self._nn]]
+
+    @property
+    def nn_r(self):
+        return self._r[self._nn][self._m[self._nn]]
 
     @property
     def _lex(self):
