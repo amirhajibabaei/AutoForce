@@ -32,6 +32,8 @@ class Local:
         r : r[j] - r[i]
         off: offsets
         """
+        self.index = i
+        self.number = a
         self._i = from_numpy(np.full_like(j, i))
         self._j = from_numpy(j)
         self._a = from_numpy(np.full_like(b, a))
