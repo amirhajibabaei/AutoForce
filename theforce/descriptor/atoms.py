@@ -132,15 +132,15 @@ class Local:
         return atoms
 
     def detach(self, keepids=False):
-        a = self._a.detach().numpy()
+        a = self.number
         b = self._b.detach().numpy()
         r = self._r.clone()
         if keepids:
             i = self._i.detach().numpy()
             j = self._j.detach().numpy()
         else:
-            i = np.zeros(a.shape[0], dtype=np.int)
-            j = np.arange(1, a.shape[0]+1, dtype=np.int)
+            i = np.zeros(r.shape[0], dtype=np.int)
+            j = np.arange(1, r.shape[0]+1, dtype=np.int)
         return Local(i, j, a, b, r)
 
     def __eq__(self, other):
@@ -635,7 +635,7 @@ class LocalsData:
         return self
 
     def subset(self, numbers):
-        return LocalsData([loc for loc in self.X if loc._a.unique() in numbers])
+        return LocalsData([loc for loc in self.X if loc.number in numbers])
 
 
 def sample_atoms(file, size=-1, chp=None, indices=None):
