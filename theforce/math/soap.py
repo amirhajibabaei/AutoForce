@@ -619,7 +619,7 @@ class UniversalSoap(Module):
     def state(self):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
-    def forward(self, coo, numbers, grad=False, normalize=None):
+    def forward(self, coo, numbers, grad=False, normalize=None, sparse_tensor=True):
         species = torch.unique(numbers, sorted=True)
         dim0 = len(species)**2
         bcasted = torch.broadcast_tensors(species[None, ], species[:, None])
@@ -660,19 +660,26 @@ class UniversalSoap(Module):
                 dp = dp/norm
                 dp = dp - p[..., None, None] * (p[..., None, None] * dp
                                                 ).sum(dim=(0, 1, 2, 3, 4))
-            p = torch.sparse_coo_tensor(ab, p.view(dim0, *self._shape),
-                                        size=self._size)
-            dp = torch.sparse_coo_tensor(ab, dp.view(dim0, *self._shape, *xyz.size()),
-                                         size=(*self._size, *xyz.size()))
-            return p, dp
+            p = p.view(dim0, *self._shape)
+            dp = dp.view(dim0, *self._shape, *xyz.size())
+            if sparse_tensor:
+                p = torch.sparse_coo_tensor(ab, p, size=self._size)
+                dp = torch.sparse_coo_tensor(
+                    ab, dp, size=(*self._size, *xyz.size()))
+                return p, dp
+            else:
+                return ab, p, self._size, dp, (*self._size, *xyz.size())
         else:
             p = p*self.nnl
             if (normalize if normalize else self.normalize):
                 norm = p.norm() + torch.finfo().eps
                 p = p/norm
-            p = torch.sparse_coo_tensor(ab, p.view(dim0, *self._shape),
-                                        size=self._size)
-            return p
+            if sparse_tensor:
+                p = torch.sparse_coo_tensor(ab, p.view(dim0, *self._shape),
+                                            size=self._size)
+                return p
+            else:
+                return ab, p.view(dim0, *self._shape), self._size
 
 
 def test_UniversalSoap():
