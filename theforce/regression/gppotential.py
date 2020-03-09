@@ -15,7 +15,10 @@ class EnergyForceKernel(Module):
     def __init__(self, similaritykernels):
         super().__init__()
         self.kernels = iterable(similaritykernels)
-        self.params = [par for kern in self.kernels for par in kern.params]
+
+    @property
+    def params(self):
+        return [par for kern in self.kernels for par in kern.params]
 
     def forward(self, first, second=None, cov='energy_energy', inducing=None):
         sec = first if second is None else second
