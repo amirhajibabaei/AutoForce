@@ -460,6 +460,9 @@ class AtomsData:
         numbers = sorted(list(_num))
         return numbers
 
+    def subset(self, species):
+        return AtomsData([atoms for atoms in self.X if atoms.includes_species(species)])
+
     def pairs_set(self, numbers=None):
         if numbers is None:
             numbers = self.numbers_set()
