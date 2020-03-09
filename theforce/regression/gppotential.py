@@ -15,6 +15,16 @@ class EnergyForceKernel(Module):
     def __init__(self, similaritykernels):
         super().__init__()
         self.kernels = iterable(similaritykernels)
+        self.name_kernels()
+
+    def add_kernels(self, kernels):
+        self.kernels = [kern for kern in self.kernels] + \
+            [kern for kern in iterable(kernels)]
+        self.name_kernels()
+
+    def name_kernels(self):
+        for i, kern in enumerate(self.kernels):
+            kern.name = 'kern_{}'.format(i)
 
     @property
     def params(self):
@@ -108,8 +118,6 @@ class GaussianProcessPotential(Module):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
-        for i, kern in enumerate(self.kern.kernels):
-            kern.name = 'kern_{}'.format(i)
         self.parametric = parametric
 
     @property
@@ -118,6 +126,9 @@ class GaussianProcessPotential(Module):
         if self.parametric is not None:
             p += self.parametric.unique_params
         return p
+
+    def add_kernels(self, kernels):
+        self.kern.add_kernels(kernels)
 
     @property
     def species(self):
