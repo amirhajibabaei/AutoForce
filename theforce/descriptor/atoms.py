@@ -310,6 +310,10 @@ class TorchAtoms(Atoms):
         return torch.from_numpy(self.numbers)
 
     @property
+    def numbers_set(self):
+        return np.unique(self.numbers).tolist()
+
+    @property
     def tpbc(self):
         return torch.from_numpy(self.pbc)
 
