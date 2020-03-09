@@ -286,7 +286,8 @@ class PosteriorPotential(Module):
         self.set_data(data, inducing=inducing, **setting)
 
     @context_setting
-    def set_data(self, data, inducing=None):
+    def set_data(self, _data, inducing=None):
+        data = _data.subset(self.gp.species)
         self.data = data
         if inducing is None:
             raise RuntimeWarning(
@@ -338,6 +339,7 @@ class PosteriorPotential(Module):
 
     @context_setting
     def add_data(self, data, remake=True):
+        assert data[0].includes_species(self.gp.species)
         Ke = self.gp.kern(data, self.X, cov='energy_energy')
         Kf = self.gp.kern(data, self.X, cov='forces_energy')
         self.Ke = torch.cat([self.Ke, Ke], dim=0)
@@ -387,6 +389,8 @@ class PosteriorPotential(Module):
             self.pop_1inducing()
 
     def add_1atoms(self, atoms, ediff, fdiff):
+        if not atoms.includes_species(self.gp.species):
+            return 0, 0
         kwargs = {'use_caching': True}
         e1 = self([atoms], **kwargs)
         if fdiff < float('inf'):
