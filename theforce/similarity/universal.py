@@ -48,16 +48,17 @@ def _ps(ivs):  # should be removed after pytorch's loading of sparse tensors is 
 
 
 class EqAll:
-    def __init__(self):
-        pass
+    def __init__(self, exceptions=[]):
+        self.exceptions = exceptions
 
     def __eq__(self, val):
-        return True
+        return val not in self.exceptions
 
 
 class UniversalSoapKernel(SimilarityKernel):
 
-    def __init__(self, lmax, nmax, exponent, cutoff, atomic_unit=None, chemical=None, normalize=True, a=None):
+    def __init__(self, lmax, nmax, exponent, cutoff, atomic_unit=None, chemical=None, normalize=True,
+                 a=None, a_not=[]):
         if chemical is None:
             chemical = DiracDeltaChemical()
         super().__init__(chemical)
@@ -66,9 +67,9 @@ class UniversalSoapKernel(SimilarityKernel):
             lmax, nmax, radial, atomic_unit=atomic_unit, normalize=normalize)
         self.exponent = exponent
         self.dim = self.descriptor.dim
-        self._args = '{}, {}, {}, {}, atomic_unit={}, chemical={}, normalize={}, a={}'.format(
-            lmax, nmax, exponent, radial.state, atomic_unit, self.kern.state, normalize, a)
-        self._a = EqAll() if a is None else a
+        self._args = '{}, {}, {}, {}, atomic_unit={}, chemical={}, normalize={}, a={}, a_not={}'.format(
+            lmax, nmax, exponent, radial.state, atomic_unit, self.kern.state, normalize, a, a_not)
+        self._a = EqAll(a_not) if a is None else a
 
     @property
     def a(self):
@@ -79,7 +80,7 @@ class UniversalSoapKernel(SimilarityKernel):
         return self._args
 
     def precalculate(self, loc, dont_save_grads=True):
-        if loc._r.size(0) > 0:
+        if loc._r.size(0) > 0 and loc.number == self.a:
             d = self.descriptor(loc._r, loc._b, grad=not dont_save_grads,
                                 sparse_tensor=False)  # fix later: sparse_tensor -> True
             self.save_for_later(loc, {'value': d} if dont_save_grads else
