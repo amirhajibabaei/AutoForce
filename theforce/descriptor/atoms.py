@@ -317,6 +317,9 @@ class TorchAtoms(Atoms):
     def tpbc(self):
         return torch.from_numpy(self.pbc)
 
+    def includes_species(self, species):
+        return any([a in iterable(species) for a in self.numbers_set])
+
     def __getattr__(self, attr):
         try:
             return torch.cat([env.__dict__[attr] for env in self.loc])
