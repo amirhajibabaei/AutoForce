@@ -360,6 +360,13 @@ class PosteriorPotential(Module):
     def remake_all(self):
         self.set_data(self.data, self.X)
 
+    def add_kernels(self, kernels, remake_all=True):
+        self.gp.add_kernels(kernels)
+        self.data.apply('add_descriptors', kernels, dont_save_grads=False)
+        self.inducing.stage(kernels, dont_save_grads=True)
+        if remake_all:
+            self.remake_all()
+
     @context_setting
     def add_data(self, data, remake=True):
         assert data[0].includes_species(self.gp.species)

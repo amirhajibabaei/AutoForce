@@ -622,7 +622,7 @@ class LocalsData:
 
     def stage(self, descriptors, dont_save_grads=True):
         for loc in self:
-            loc.stage(descriptors, dont_save_grads=dont_save_grads)
+            loc.stage(iterable(descriptors), dont_save_grads=dont_save_grads)
 
     def to_traj(self, trajname, mode='w'):
         from ase.io import Trajectory
