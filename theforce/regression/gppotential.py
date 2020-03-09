@@ -118,7 +118,7 @@ class GaussianProcessPotential(Module):
 
     @property
     def species(self):
-        return [kern.a for kern in self.kern.kernels]
+        return [a for kern in self.kern.kernels for a in iterable(kern.a)]
 
     @property
     def requires_grad(self):

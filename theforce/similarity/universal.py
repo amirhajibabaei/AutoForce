@@ -57,7 +57,7 @@ class EqAll:
 
 class UniversalSoapKernel(SimilarityKernel):
 
-    def __init__(self, lmax, nmax, exponent, cutoff, atomic_unit=None, chemical=None, normalize=True):
+    def __init__(self, lmax, nmax, exponent, cutoff, atomic_unit=None, chemical=None, normalize=True, a=None):
         if chemical is None:
             chemical = DiracDeltaChemical()
         super().__init__(chemical)
@@ -68,7 +68,7 @@ class UniversalSoapKernel(SimilarityKernel):
         self.dim = self.descriptor.dim
         self._args = '{}, {}, {}, {}, atomic_unit={}, chemical={}, normalize={}'.format(
             lmax, nmax, exponent, radial.state, atomic_unit, self.kern.state, normalize)
-        self._a = EqAll()
+        self._a = EqAll() if a is None else a
 
     @property
     def a(self):
