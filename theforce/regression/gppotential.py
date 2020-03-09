@@ -3,6 +3,7 @@ from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.kernel import White
 from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_D
+from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.optimize.optimizers import ClampedSGD
 import copy
@@ -296,6 +297,8 @@ class PosteriorPotential(Module):
             self.gp = gp
         elif type(gp) == list:
             self.gp = GaussianProcessPotential(gp)
+        elif issubclass(gp.__class__, SimilarityKernel):
+            self.gp = GaussianProcessPotential([gp])
         else:
             raise RuntimeError(f'type {type(gp)} is not recognized')
         if group is not None:

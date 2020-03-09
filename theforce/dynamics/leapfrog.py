@@ -28,7 +28,7 @@ class Leapfrog:
                  algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3,
                  undo_volatile=True, correct_verlet=True):
         self.dyn = dyn
-        self.gp = gp
+        self.gp = PosteriorPotential(gp).gp
         self.cutoff = cutoff
         self.ediff = ediff
         self.fdiff = fdiff
