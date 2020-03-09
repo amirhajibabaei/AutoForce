@@ -274,7 +274,7 @@ class TorchAtoms(Atoms):
         else:
             self.indices = range(self.natoms)
 
-    def update(self, cutoff=None, descriptors=None, forced=False,
+    def update(self, cutoff=None, descriptors=None, forced=False, stage=True,
                posgrad=False, cellgrad=False, dont_save_grads=False):
         if cutoff or self.changes.numbers:
             self.build_nl(cutoff if cutoff else self.cutoff)
@@ -294,12 +294,32 @@ class TorchAtoms(Atoms):
                          self.lll).sum(dim=1)
                 r = self.xyz[n] - self.xyz[a] + cells
                 self.loc += [Local(a, n, types[a], types[n],
-                                   r, off, self.descriptors,
+                                   r, off, self.descriptors if stage else [],
                                    dont_save_grads=dont_save_grads)]
             for loc in self.loc:
                 loc.natoms = self.natoms
 
             self.changes.update_references()
+
+    def stage(self, descriptors=None, dont_save_grads=True):
+        descs = iterable(descriptors) if descriptors else self.descriptors
+        for loc in self.loc:
+            loc.stage(descs, dont_save_grads=dont_save_grads)
+
+    def set_descriptors(self, descriptors, stage=True, dont_save_grads=True):
+        self.descriptors = [d for d in iterable(descriptors)]
+        if stage:
+            self.stage(dont_save_grads=dont_save_grads)
+
+    def add_descriptors(self, descriptors, stage=True, dont_save_grads=True):
+        self.descriptors = [d for d in self.descriptors] + \
+            [d for d in iterable(descriptors)]
+        names = [d.name for d in self.descriptors]
+        if len(set(names)) != len(self.descriptors):
+            raise RuntimeError(
+                f'two or more descriptors have the same names: {names}')
+        if stage:
+            self.stage(iterable(descriptors), dont_save_grads=dont_save_grads)
 
     @property
     def natoms(self):
