@@ -290,14 +290,20 @@ def context_setting(method):
 
 class PosteriorPotential(Module):
 
-    def __init__(self, gp, data, inducing=None, group=None, **setting):
+    def __init__(self, gp, data=None, inducing=None, group=None, **setting):
         super().__init__()
-        self.gp = gp
+        if type(gp) == GaussianProcessPotential:
+            self.gp = gp
+        elif type(gp) == list:
+            self.gp = GaussianProcessPotential(gp)
+        else:
+            raise RuntimeError(f'type {type(gp)} is not recognized')
         if group is not None:
             self.attach_process_group(group)
         else:
             self.is_distributed = False
-        self.set_data(data, inducing=inducing, **setting)
+        if data is not None:
+            self.set_data(data, inducing=inducing, **setting)
 
     @context_setting
     def set_data(self, _data, inducing=None):
