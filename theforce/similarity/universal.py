@@ -66,8 +66,8 @@ class UniversalSoapKernel(SimilarityKernel):
             lmax, nmax, radial, atomic_unit=atomic_unit, normalize=normalize)
         self.exponent = exponent
         self.dim = self.descriptor.dim
-        self._args = '{}, {}, {}, {}, atomic_unit={}, chemical={}, normalize={}'.format(
-            lmax, nmax, exponent, radial.state, atomic_unit, self.kern.state, normalize)
+        self._args = '{}, {}, {}, {}, atomic_unit={}, chemical={}, normalize={}, a={}'.format(
+            lmax, nmax, exponent, radial.state, atomic_unit, self.kern.state, normalize, a)
         self._a = EqAll() if a is None else a
 
     @property
