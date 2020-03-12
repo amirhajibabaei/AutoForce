@@ -280,7 +280,18 @@ class TorchAtoms(Atoms):
         else:
             self.indices = range(self.natoms)
 
-    def update(self, cutoff=None, descriptors=None, forced=False, stage=True,
+    def local(self, a, stage=True, dont_save_grads=True):
+        n, off = self.nl.get_neighbors(a)
+        cells = (from_numpy(off[..., None].astype(np.float)) *
+                 self.lll).sum(dim=1)
+        r = self.xyz[n] - self.xyz[a] + cells
+        loc = Local(a, n, self.numbers[a], self.numbers[n],
+                    r, off, self.descriptors if stage else [],
+                    dont_save_grads=dont_save_grads)
+        loc.natoms = self.natoms
+        return loc
+
+    def update(self, cutoff=None, descriptors=None, forced=False, build_locals=True, stage=True,
                posgrad=False, cellgrad=False, dont_save_grads=False):
         if cutoff or self.changes.numbers:
             self.build_nl(cutoff if cutoff else self.cutoff)
@@ -290,21 +301,11 @@ class TorchAtoms(Atoms):
             forced = True
         if forced or self.changes.atoms:
             self.nl.update(self)
-            self.loc = []
             types = self.get_atomic_numbers()
             self.xyz.requires_grad = posgrad
             self.lll.requires_grad = cellgrad
-            for a in self.indices:
-                n, off = self.nl.get_neighbors(a)
-                cells = (from_numpy(off[..., None].astype(np.float)) *
-                         self.lll).sum(dim=1)
-                r = self.xyz[n] - self.xyz[a] + cells
-                self.loc += [Local(a, n, types[a], types[n],
-                                   r, off, self.descriptors if stage else [],
-                                   dont_save_grads=dont_save_grads)]
-            for loc in self.loc:
-                loc.natoms = self.natoms
-
+            self.loc = [self.local(a, stage=stage, dont_save_grads=dont_save_grads)
+                        for a in self.indices] if build_locals else None
             self.changes.update_references()
 
     def stage(self, descriptors=None, dont_save_grads=True):
