@@ -250,10 +250,16 @@ class TorchAtoms(Atoms):
     def attach_process_group(self, group):
         self.process_group = group
         self.is_distributed = True
+        workers = torch.distributed.get_world_size(
+            group=self.process_group)
+        indices = balance_work(self.natoms, workers)
+        rank = torch.distributed.get_rank(group=self.process_group)
+        self.indices = range(*indices[rank])
 
     def detach_process_group(self):
         del self.process_group
         self.is_distributed = False
+        self.indices = range(self.natoms)
 
     def build_nl(self, rc):
         self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
