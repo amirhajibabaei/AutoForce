@@ -301,7 +301,6 @@ class TorchAtoms(Atoms):
             forced = True
         if forced or self.changes.atoms:
             self.nl.update(self)
-            types = self.get_atomic_numbers()
             self.xyz.requires_grad = posgrad
             self.lll.requires_grad = cellgrad
             self.loc = [self.local(a, stage=stage, dont_save_grads=dont_save_grads)
