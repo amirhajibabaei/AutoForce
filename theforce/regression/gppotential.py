@@ -412,11 +412,13 @@ class PosteriorPotential(Module):
         if remake:
             self.make_munu()
 
-    def downsize(self, n, m):
+    def downsize(self, n, m, remake=True):
         while len(self.data) > n:
-            self.pop_1data()
+            self.pop_1data(remake=False)
         while len(self.X) > m:
-            self.pop_1inducing()
+            self.pop_1inducing(remake=False)
+        if remake:
+            self.make_munu()
 
     def add_1atoms(self, atoms, ediff, fdiff):
         if not atoms.includes_species(self.gp.species):
