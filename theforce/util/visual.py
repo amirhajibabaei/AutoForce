@@ -29,10 +29,11 @@ def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False, preproce
     return view
 
 
-def visualize_leapfrog(file, plot=True, extremum=False, stop=None):
+def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None):
     energies = []
     temperatures = []
     exact_energies = []
+    ml_energies = []
     acc = []
     undo = []
     ext = []
@@ -83,6 +84,8 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None):
             energy = float(split[3])
             exact_energies += [(step, energy)]
             acc += [None]
+            if step > 0:
+                ml_energies += [energies[-1]]
 
         if split[1] == 'update:':
             a, b, c = (int(_) for _ in split[4::2])
@@ -113,6 +116,8 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None):
             axes[0].scatter(*zip(*exact_energies),
                             c=list(map({0: 'r', 1: 'g'}.get, acc)),
                             zorder=2)
+            if mlcolor:
+                axes[0].scatter(*zip(*ml_energies),  color=mlcolor)
             if len(undo) > 0:
                 axes[0].scatter(*zip(*undo), marker='x', color='k', zorder=2)
         if extremum:
