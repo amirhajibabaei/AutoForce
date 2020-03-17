@@ -362,17 +362,18 @@ class PosteriorPotential(Module):
         return e_ok and f_ok
 
     def is_well(self, a=None, b=None):
-        x = True if a is None else self._stats[0] < a*self._stats[1]
-        y = True if b is None else self._stats[2] < b*self._stats[3]
+        x = True if a is None else abs(self._stats[0]) < a*self._stats[1]
+        y = True if b is None else abs(self._stats[2]) < b*self._stats[3]
         return all([self.is_ok(), x, y])
 
-    def tune_noise(self, a=None, b=None, lr=1.):
+    def tune_noise(self, a=None, b=None, lr=1., weighted=lambda a: a):
 
         def step():
             opt.zero_grad()
             self.make_munu()
-            loss = -torch.distributions.normal.Normal(
-                0., self._stats[1]).log_prob(self._ediff).sum()
+            losses = -torch.distributions.normal.Normal(
+                0., self._stats[1]).log_prob(self._ediff)
+            loss = weighted(losses).sum()
             loss.backward()
             opt.step()
 
