@@ -375,6 +375,7 @@ class PosteriorPotential(Module):
             opt.step()
 
         noise = list(self.gp.noise.parameters())[0]
+        noise.requires_grad = True
         opt = torch.optim.Adam([noise], lr=lr)
         steps = 0
         while not self.is_ok():
