@@ -346,6 +346,13 @@ class PosteriorPotential(Module):
         self._stats = [self._ediff.mean(), self._ediff.var().sqrt(),
                        self._fdiff.mean(), self._fdiff.var().sqrt()]
 
+    def is_ok(self):
+        e_ok = (self._stats[0]-self._stats[1]) * \
+            (self._stats[0]+self._stats[1]) < 0
+        f_ok = (self._stats[2]-self._stats[3]) * \
+            (self._stats[2]+self._stats[3]) < 0
+        return e_ok and f_ok
+
     @property
     def ref_M(self):
         return self.M + self.ridge*torch.eye(self.M.size(0))
