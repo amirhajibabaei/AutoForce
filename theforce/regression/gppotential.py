@@ -353,6 +353,30 @@ class PosteriorPotential(Module):
             (self._stats[2]+self._stats[3]) < 0
         return e_ok and f_ok
 
+    def is_well(self, a=0.01, b=0.01):
+        return self.is_ok() and self._stats[0] < a*self._stats[1] and self._stats[2] < b*self._stats[3]
+
+    def tune_noise(self, a=0.01, b=0.01):
+
+        def step():
+            opt.zero_grad()
+            self.make_munu()
+            loss = -torch.distributions.normal.Normal(
+                0., self._stats[1]).log_prob(self._ediff).sum()
+            loss.backward()
+            opt.step()
+
+        noise = list(self.gp.noise.parameters())[0]
+        opt = torch.optim.Adam([noise], lr=1.)
+        steps = 0
+        while not self.is_ok():
+            step()
+            steps += 1
+        while not self.is_well(a, b):
+            step()
+            steps += 1
+        return steps
+
     @property
     def ref_M(self):
         return self.M + self.ridge*torch.eye(self.M.size(0))
