@@ -340,6 +340,9 @@ class PosteriorPotential(Module):
     def make_munu(self):
         self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
             self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
+        diff = self.K@self.mu-self.gp.Y(self.data)
+        self._ediff = diff[:len(self.data)]/torch.tensor(self.data.natoms)
+        self._fdiff = diff[len(self.data):]
 
     @property
     def ref_M(self):
