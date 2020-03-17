@@ -30,8 +30,8 @@ class Leapfrog:
         self.dyn = dyn
         self.gp = PosteriorPotential(gp).gp
         self.cutoff = cutoff
-        self.ediff = ediff
-        self.fdiff = fdiff
+        self._ediff = ediff
+        self._fdiff = fdiff
         self.skip = skip
         self.skip_volatile = skip_volatile
         self.undo_volatile = undo_volatile
@@ -78,8 +78,9 @@ class Leapfrog:
             self.log('a model is provided with {} data and {} ref(s)'.format(
                 len(potential.data), len(potential.X)))
         else:
+            assert ediff is not None
             snap = self.snapshot()
-            potential = initial_model(self.gp, snap, self.ediff)
+            potential = initial_model(self.gp, snap, ediff)
             potential._cutoff = cutoff
             self.log('update: {}  data: {}  inducing: {}  FP: {}'.format(
                 True, len(potential.data), len(potential.inducing), len(self._fp)))
@@ -92,6 +93,20 @@ class Leapfrog:
     def log(self, mssge, mode='a'):
         with open(self.logfile, mode) as f:
             f.write('{} {} {}\n'.format(date(), self.step, mssge))
+
+    @property
+    def ediff(self):
+        if self._ediff is None:
+            return self.model._stats[1] * 2  # dummy number
+        else:
+            return self._ediff
+
+    @property
+    def fdiff(self):
+        if self._fdiff is None:
+            return self.model._stats[3] * 2  # dummy number
+        else:
+            return self._fdiff
 
     @property
     def atoms(self):
