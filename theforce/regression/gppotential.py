@@ -366,7 +366,7 @@ class PosteriorPotential(Module):
         y = True if b is None else abs(self._stats[2]) < b*self._stats[3]
         return all([self.is_ok(), x, y])
 
-    def tune_noise(self, a=None, b=None, lr=1., weighted=lambda a: a):
+    def tune_noise(self, a=None, b=None, lr=1., min_steps=0, weighted=lambda a: a, verbose=False):
 
         def step():
             opt.zero_grad()
@@ -376,15 +376,24 @@ class PosteriorPotential(Module):
             loss = weighted(losses).sum()
             loss.backward()
             opt.step()
+            return loss
 
         noise = list(self.gp.noise.parameters())[0]
         noise.requires_grad = True
         opt = torch.optim.Adam([noise], lr=lr)
         steps = 0
-        while not self.is_well(a, b):
-            step()
+        _min = None
+        while not self.is_well(a, b) or steps < min_steps:
+            loss = step()
             steps += 1
-        return steps
+            if (_min is None) or loss < _min:
+                _min = loss
+                _min_arg = self.gp.noise.signal
+                _min_step = steps
+            if verbose:
+                print(
+                    f'{steps}  loss: {loss}  noise: {self.gp.noise.signal}  global: ({_min_step})')
+        return steps, _min, _min_arg
 
     @property
     def ref_M(self):
