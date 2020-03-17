@@ -343,6 +343,8 @@ class PosteriorPotential(Module):
         diff = self.K@self.mu-self.gp.Y(self.data)
         self._ediff = diff[:len(self.data)]/torch.tensor(self.data.natoms)
         self._fdiff = diff[len(self.data):]
+        self._stats = [self._ediff.mean(), self._ediff.var().sqrt(),
+                       self._fdiff.mean(), self._fdiff.var().sqrt()]
 
     @property
     def ref_M(self):
