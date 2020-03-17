@@ -346,6 +346,14 @@ class PosteriorPotential(Module):
         self._stats = [self._ediff.mean(), self._ediff.var().sqrt(),
                        self._fdiff.mean(), self._fdiff.var().sqrt()]
 
+    @property
+    def sigma_e(self):
+        return self._stats[1]
+
+    @property
+    def sigma_f(self):
+        return self._stats[3]
+
     def is_ok(self):
         e_ok = (self._stats[0]-self._stats[1]) * \
             (self._stats[0]+self._stats[1]) < 0
