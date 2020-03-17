@@ -26,7 +26,7 @@ class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
                  algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3,
-                 undo_volatile=True, correct_verlet=True, tune=10):
+                 undo_volatile=True, correct_verlet=True, tune=(None, None)):
         self.dyn = dyn
         self.gp = PosteriorPotential(gp).gp
         self.cutoff = cutoff
@@ -36,8 +36,7 @@ class Leapfrog:
         self.skip_volatile = skip_volatile
         self.undo_volatile = undo_volatile
         self.correct_verlet = correct_verlet
-        self._tune = 0
-        self.tune = tune
+        self._tune = tune
 
         if type(algorithm) == str:
             self.algorithm = getattr(self, 'algorithm_'+algorithm)
@@ -225,13 +224,11 @@ class Leapfrog:
             self.atoms.calc.results.clear()
             if self.correct_verlet:
                 self.verlet(forces_before)
-            if not self.volatile():
-                self._tune += self.ref_plus
-            if self._tune > self.tune:
-                self.model.tune_noise()
-                self._tune = 0
+            if not self.volatile() and not self.model.is_well():
+                self.model.tune_noise(*self._tune)
+                e, ev, f, fv = (float(v) for v in self.model._stats)
                 self.log(
-                    f'tuning noise: {self.model.gp.noise.signal}  stats: {self.model._stats}')
+                    f'tuning noise: {self.model.gp.noise.signal}  stats: {(e, ev)}  {(f, fv)}')
         return tf
 
     def undo_update(self):
