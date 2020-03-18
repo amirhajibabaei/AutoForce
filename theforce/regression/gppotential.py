@@ -9,6 +9,7 @@ from theforce.optimize.optimizers import ClampedSGD
 import copy
 import os
 import functools
+import warnings
 
 
 class EnergyForceKernel(Module):
@@ -554,7 +555,6 @@ class PosteriorPotential(Module):
         train_gpp(self.gp, *args, **kwargs)
 
     def save(self, file, supress_warnings=True):
-        import warnings
         cached = self.gp.cached
         self.gp.del_cached()
         data = self.data
@@ -566,7 +566,7 @@ class PosteriorPotential(Module):
         self.data = data
         self.gp.cahced = cached
 
-    def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True):
+    def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=True):
         if not overwrite:
             folder = safe_dirname(folder)
         mkdir_p(folder)
@@ -580,6 +580,12 @@ class PosteriorPotential(Module):
         self.gp.to_file(os.path.join(folder, 'gp'))
         self.save(os.path.join(folder, 'model'),
                   supress_warnings=supress_warnings)
+        # pickles (inducing are pickled with model)
+        if pickle_data:
+            with warnings.catch_warnings():
+                if supress_warnings:
+                    warnings.simplefilter("ignore")
+                torch.save(self.data, os.path.join(folder, 'data.pckl'))
         # info
         with open(os.path.join(folder, 'info'), 'w') as file:
             file.write('data: {}, inducing: {}\n'.format(
@@ -654,9 +660,13 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True):
         cutoff = float(file.readline().split()[0])
         self._cutoff = cutoff
     if load_data:
-        self.data = AtomsData(traj=os.path.join(folder, 'data.traj'))
-        if update_data:
-            self.data.update(cutoff=cutoff, descriptors=self.gp.kern.kernels)
+        if os.path.isfile(os.path.join(folder, 'data.pckl')):
+            self.data = torch.load(os.path.join(folder, 'data.pckl'))
+        else:
+            self.data = AtomsData(traj=os.path.join(folder, 'data.traj'))
+            if update_data:
+                self.data.update(
+                    cutoff=cutoff, descriptors=self.gp.kern.kernels)
     return self
 
 
