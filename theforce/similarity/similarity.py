@@ -3,6 +3,7 @@ from torch import cat
 from theforce.util.util import iterable
 from theforce.util.caching import method_caching
 from theforce.util.parallel import method_forker
+import torch
 
 
 class SimilarityKernel(Module):
@@ -50,7 +51,11 @@ class SimilarityKernel(Module):
             setattr(loc, self.name+'_'+key, val)
 
     def saved(self, atoms_or_loc, key):
-        return getattr(atoms_or_loc, self.name+'_'+key)
+        attr = self.name+'_'+key
+        try:
+            return torch.cat([loc.__dict__[attr] for loc in atoms_or_loc])
+        except TypeError:
+            return atoms_or_loc.__dict__[attr]
 
     @property
     def state_args(self):

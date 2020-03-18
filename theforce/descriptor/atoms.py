@@ -346,7 +346,8 @@ class TorchAtoms(Atoms):
     def includes_species(self, species):
         return any([a in iterable(species) for a in self.numbers_set])
 
-    def __getattr__(self, attr):
+    def cat(self, attr):
+        """__getattr__ -> renamed to cat"""
         try:
             return torch.cat([env.__dict__[attr] for env in self.loc])
         except KeyError:
