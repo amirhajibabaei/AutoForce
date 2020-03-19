@@ -194,6 +194,7 @@ class Leapfrog:
         copy.set_calculator(SinglePointCalculator(copy, energy=energy,
                                                   forces=forces))
         copy.set_targets()
+        copy.gather_()
         return copy
 
     def algorithm_robust(self, datafirst=True):
@@ -202,14 +203,14 @@ class Leapfrog:
             datafirst = np.random.choice([True, False])
         if datafirst:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
-        locs = new.loc
+        locs = new.gathered()
         added_refs, _ = self.model.add_ninducing(
             locs, self.ediff, descending=False)
         if not datafirst:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_fast(self):
-        locs = self.atoms.calc.atoms.loc
+        locs = self.atoms.calc.atoms.gathered()
         added_refs, _ = self.model.add_ninducing(
             locs, self.ediff, descending=False)
         if added_refs > 0:
@@ -217,7 +218,7 @@ class Leapfrog:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_fastfast(self):
-        locs = self.atoms.calc.atoms.loc
+        locs = self.atoms.calc.atoms.gathered()
         added_refs, change = self.model.add_ninducing(locs, self.ediff)
         self.log('added refs: {}  ediff at break: {}'.format(
             added_refs, change))
@@ -226,7 +227,7 @@ class Leapfrog:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_ultrafast(self):
-        locs = self.atoms.calc.atoms.loc
+        locs = self.atoms.calc.atoms.gathered()
         added_refs, change = self.model.add_ninducing(locs, self.ediff)
         self.log('added refs: {}  ediff at break: {}'.format(
             added_refs, change))
