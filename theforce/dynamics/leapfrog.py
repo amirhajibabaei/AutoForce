@@ -194,7 +194,9 @@ class Leapfrog:
         copy.set_calculator(SinglePointCalculator(copy, energy=energy,
                                                   forces=forces))
         copy.set_targets()
-        copy.gather_()
+        if copy.is_distributed:
+            copy.gather_()
+            copy.detach_process_group()
         return copy
 
     def algorithm_robust(self, datafirst=True):
