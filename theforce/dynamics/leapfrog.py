@@ -90,6 +90,9 @@ class Leapfrog:
         self.energy = [self.atoms.get_potential_energy()]
         self.temperature = [self.atoms.get_temperature()]
 
+        # for parallelism
+        self.fp_is_allowed = True
+
     def detach_writers(self):
         wr = []
         el = []
@@ -246,7 +249,7 @@ class Leapfrog:
             a = len(self.model.data)
             new = self.snapshot(fake=True)
             de, df = self.model.add_1atoms(new, self.ediff, self.fdiff)
-            if len(self.model.data) > a:
+            if len(self.model.data) > a and self.fp_is_allowed:
                 self.head()
 
     def update_model(self):
