@@ -2,7 +2,7 @@
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.calculator.posterior import AutoForceCalculator
 from theforce.descriptor.atoms import AtomsData, LocalsData, TorchAtoms
-from theforce.util.util import date
+from theforce.util.util import date, class_of_method
 import torch
 import ase
 from ase.calculators.singlepoint import SinglePointCalculator
@@ -90,9 +90,36 @@ class Leapfrog:
         self.energy = [self.atoms.get_potential_energy()]
         self.temperature = [self.atoms.get_temperature()]
 
+    def detach_writers(self):
+        wr = []
+        el = []
+        for f, i, args, kw in self.dyn.observers:
+            if f.__name__ == 'write':
+                # for traj
+                name = f.__self__.backend.fd.name
+                cls = class_of_method(f)  # cls=Trajectory
+                wr += [((cls, name), i, args, kw)]
+            else:
+                el += [(f, i, args, kw)]
+        self.dyn.observers = el
+        self._writers = wr
+
+    def attach_writers(self):
+        for (cls, f), i, args, kw in self._writers:
+            self.dyn.observers += [(cls(f, mode='a', atoms=self.dyn.atoms).write,
+                                    i, args, kw)]
+
+    @property
+    def rank(self):
+        if torch.distributed.is_initialized():
+            return torch.distributed.get_rank()
+        else:
+            return 0
+
     def log(self, mssge, mode='a'):
-        with open(self.logfile, mode) as f:
-            f.write('{} {} {}\n'.format(date(), self.step, mssge))
+        if self.rank == 0:
+            with open(self.logfile, mode) as f:
+                f.write('{} {} {}\n'.format(date(), self.step, mssge))
 
     @property
     def ediff(self):
