@@ -173,6 +173,17 @@ class Leapfrog:
     def rescale_cell(self, f):
         self.atoms.set_cell(f*self.atoms.cell, scale_atoms=True)
 
+    def _exact(self, copy):
+        tmp = copy.as_ase() if self.to_ase else copy
+        tmp.set_calculator(self.calculator)
+        energy = tmp.get_potential_energy()
+        forces = tmp.get_forces()
+        ase.io.Trajectory('_FP.traj', 'a').write(tmp)
+        self._fp.append(self.step)
+        self._fp_e.append(energy)
+        self.log('exact energy: {}'.format(energy))
+        return energy, forces
+
     def snapshot(self, fake=False, copy=None):
         if copy is None:
             copy = self.atoms.copy()
@@ -180,17 +191,7 @@ class Leapfrog:
             energy = self.atoms.get_potential_energy()
             forces = self.atoms.get_forces()
         else:
-            if self.to_ase:
-                tmp = copy.as_ase()
-            else:
-                tmp = copy
-            tmp.set_calculator(self.calculator)
-            energy = tmp.get_potential_energy()
-            forces = tmp.get_forces()
-            ase.io.Trajectory('_FP.traj', 'a').write(tmp)
-            self._fp.append(self.step)
-            self._fp_e.append(energy)
-            self.log('exact energy: {}'.format(energy))
+            energy, forces = self._exact(copy)
         copy.set_calculator(SinglePointCalculator(copy, energy=energy,
                                                   forces=forces))
         copy.set_targets()
