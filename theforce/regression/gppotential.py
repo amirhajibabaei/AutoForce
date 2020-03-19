@@ -129,6 +129,10 @@ class GaussianProcessPotential(Module):
             p += self.parametric.unique_params
         return p
 
+    @property
+    def descriptors(self):
+        return self.kern.kernels
+
     def add_kernels(self, kernels):
         self.kern.add_kernels(kernels)
 
@@ -329,6 +333,10 @@ class PosteriorPotential(Module):
             self.X = X
             self.make_munu()
             self.has_target_forces = False
+
+    @property
+    def descriptors(self):
+        return self.gp.descriptors
 
     @property
     def inducing(self):
