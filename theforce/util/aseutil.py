@@ -1,7 +1,19 @@
+# +
 from theforce.util.statsutil import moving_average
 from ase.io import read
 import numpy as np
 from ase.io import Trajectory
+import inspect
+
+
+def dyn_trajname(dyn):
+    return [o.__self__.backend.fd.name for obs in observers for o in obs
+            if inspect.ismethod(o)]
+
+
+def dyn_pop_trajwriter(dyn):
+    dyn.observers = [tuple(o for o in obs if not inspect.ismethod(o))
+                     for obs in dyn.observers]
 
 
 def downsize_traj(file, l, outfile):
@@ -43,4 +55,3 @@ def make_cell_upper_triangular(atms):
     assert np.allclose(v, vv)
     assert np.allclose(atms.cell.flat[[3, 6, 7]], 0)
     atms.cell.flat[[3, 6, 7]] = 0
-
