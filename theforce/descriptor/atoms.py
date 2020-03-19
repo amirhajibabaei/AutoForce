@@ -1,15 +1,17 @@
 import numpy as np
 import torch
 from torch import ones_like, as_tensor, from_numpy, cat
+import torch.distributed as dist
 from ase.atoms import Atoms
 from ase.neighborlist import NeighborList
 from ase.calculators.singlepoint import SinglePointCalculator
 import copy
 import warnings
-from theforce.util.util import iterable
+from theforce.util.util import iterable, mkdir_p
 from theforce.util.parallel import balance_work
 import random
 import itertools
+import os
 
 
 def lex3(x):
@@ -458,6 +460,25 @@ class TorchAtoms(Atoms):
         if set_targets:
             new.set_targets()
         return new
+
+    def pickle_locals(self, folder='atoms'):
+        mkdir_p(folder)
+        for loc in self.loc:
+            f = os.path.join(folder, f'loc_{loc.index}.pckl')
+            torch.save(loc, f)
+
+    def pickles(self, folder='atoms'):
+        return [torch.load(os.path.join(folder, f'loc_{i}.pckl'))
+                for i in range(self.natoms)]
+
+    def gathered(self, folder='atoms'):
+        if self.is_distributed and len(self.loc) < self.natoms:
+            self.pickle_locals(folder=folder)
+            dist.barrier(self.process_group)
+            loc = self.pickles()
+        else:
+            loc = self.loc
+        return loc
 
 
 class AtomsData:
