@@ -239,9 +239,12 @@ class Leapfrog:
             new = self.snapshot(fake=True)
             de, df = self.model.add_1atoms(new, self.ediff, self.fdiff)
             if len(self.model.data) > a:
-                self.model.pop_1data(clear_cached=True)
-                new = self.snapshot(copy=new)
-                self.model.add_1atoms(new, self.ediff, self.fdiff)
+                added = self.model.data[-1]
+                energy, forces = self._exact(added)
+                added.calc.results['energy'] = energy
+                added.calc.results['forces'] = forces
+                added.set_targets()
+                self.model.make_munu()
 
     def update_model(self):
         forces_before = self.atoms.get_forces()
