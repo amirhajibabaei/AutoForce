@@ -1,3 +1,4 @@
+# +
 import re
 import datetime
 import os
@@ -46,3 +47,20 @@ def safe_dirname(d, append='x'):
 def meminfo():
     return os.getpid(), psutil.Process(os.getpid()).memory_info().rss
 
+
+def class_of_method(method):
+    # answered by estani at:
+    # https://stackoverflow.com/questions/961048/get-class-that-defined-method
+    method_name = method.__name__
+    if method.__self__:
+        classes = [method.__self__.__class__]
+    else:
+        # unbound method
+        classes = [method.im_class]
+    while classes:
+        c = classes.pop()
+        if method_name in c.__dict__:
+            return c
+        else:
+            classes = list(c.__bases__) + classes
+    return None
