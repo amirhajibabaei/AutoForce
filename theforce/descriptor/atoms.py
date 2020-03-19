@@ -480,6 +480,9 @@ class TorchAtoms(Atoms):
             loc = self.loc
         return loc
 
+    def gather_(self, folder='atoms'):
+        self.loc = self.gathered(folder=folder)
+
 
 class AtomsData:
 
