@@ -7,7 +7,7 @@ import inspect
 
 
 def dyn_trajname(dyn):
-    return [o.__self__.backend.fd.name for obs in observers for o in obs
+    return [o.__self__.backend.fd.name for obs in dyn.observers for o in obs
             if inspect.ismethod(o)]
 
 
