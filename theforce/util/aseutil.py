@@ -11,7 +11,7 @@ def dyn_trajname(dyn):
             if inspect.ismethod(o)]
 
 
-def dyn_pop_trajwriter(dyn):
+def dyn_detach_trajwriter(dyn):
     dyn.observers = [tuple(o for o in obs if not inspect.ismethod(o))
                      for obs in dyn.observers]
 
