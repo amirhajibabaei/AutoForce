@@ -232,9 +232,10 @@ class Leapfrog:
             new = self.snapshot()
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
-    def head(self):
+    def head(self, energy_and_forces=None):
         added = self.model.data[-1]
-        energy, forces = self._exact(added)
+        if energy_and_forces is None:
+            energy, forces = self._exact(added)
         added.calc.results['energy'] = energy
         added.calc.results['forces'] = forces
         added.set_targets()
@@ -374,3 +375,24 @@ class Leapfrog:
         stress = np.concatenate(stresses).mean(axis=0)
         self.log('stress: {}'.format(stress))
         return steps_per_update, average_energy, average_temp, stress
+
+    def move1(self):
+        self.dyn.run(1)
+        self.step += 1
+        self.energy += [self.atoms.get_potential_energy()]
+        self.temperature += [self.atoms.get_temperature()]
+        self.log('{} {}'.format(self.energy[-1], self.temperature[-1]))
+
+    def leap(self, maxupdates, prob=1, fp_is_allowed=True):
+        self.fp_is_allowed = fp_is_allowed
+        updates = 0
+        increment = 0
+        while updates < maxupdates and increment == 0:
+            self.move1()
+            if prob > 0 and self.doit(prob=prob):
+                self.log('updating ...')
+                self.log('update: {}  data: {}  inducing: {}  FP: {}'.format(
+                    self.update_model(), *self.sizes, len(self._fp)))
+                updates += 1
+                increment = self.data_plus
+        return updates, increment
