@@ -26,7 +26,7 @@ class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
                  algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3,
-                 undo_volatile=True, correct_verlet=True, tune=(None, None)):
+                 undo_volatile=True, correct_verlet=True, tune=(None, None), group=None):
         self.dyn = dyn
         self.gp = PosteriorPotential(gp).gp
         self.cutoff = cutoff
@@ -49,6 +49,8 @@ class Leapfrog:
             dyn.atoms = TorchAtoms(dyn.atoms)
         else:
             self.to_ase = False
+        if group is not None:
+            self.atoms.attach_process_group(group)
         self.atoms.update(cutoff=cutoff, descriptors=self.gp.kern.kernels)
 
         # calc
