@@ -114,6 +114,14 @@ class Leapfrog:
             self.dyn.observers += [(cls(f, mode='a', atoms=self.dyn.atoms).write,
                                     i, args, kw)]
 
+    def attach_process_group(self, group):
+        self.atoms.attach_process_group(group)
+        self.atoms.calc.atoms.attach_process_group(group)
+
+    def detach_process_group(self):
+        self.atoms.detach_process_group()
+        self.atoms.calc.atoms.detach_process_group()
+
     @property
     def rank(self):
         if torch.distributed.is_initialized():
