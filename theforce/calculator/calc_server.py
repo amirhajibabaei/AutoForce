@@ -15,8 +15,8 @@ def get_calc(script):
 
 def calculate(_file, calc):
     file = _file.decode("utf-8")
-    if '/' in file:
-        i, o = file.split('/')
+    if ':' in file:
+        i, o = file.split(':')
     else:
         i = o = file
     try:

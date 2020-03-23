@@ -8,6 +8,7 @@ import ase
 from theforce.descriptor.atoms import TorchAtoms
 import socket
 from ase.io import read
+import os
 
 
 class PosteriorCalculator(Calculator):
@@ -98,15 +99,30 @@ class SocketCalculator(Calculator):
         self.ip = ip
         self.port = port
 
+    @property
+    def is_distributed(self):
+        return torch.distributed.is_initialized()
+
+    @property
+    def rank(self):
+        if self.is_distributed:
+            return torch.distributed.get_rank()
+        else:
+            return 0
+
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
         # write and send request
-        s = socket.socket()
-        s.connect((self.ip, self.port))
-        self.atoms.write('socket_send.xyz')
-        s.send(b'socket_send.xyz/socket_recv.xyz')
-        assert int(s.recv(1024).decode('utf-8')) == 0
-        s.close()
+        if self.rank == 0:
+            s = socket.socket()
+            s.connect((self.ip, self.port))
+            self.atoms.write('socket_send.xyz')
+            cwd = os.getcwd()
+            s.send(f'{cwd}/socket_send.xyz:{cwd}/socket_recv.xyz'.encode())
+            assert int(s.recv(1024).decode('utf-8')) == 0
+            s.close()
+        if self.is_distributed:
+            torch.distributed.barrier()
         # read
         atms = read('socket_recv.xyz')
         self.results['energy'] = atms.get_potential_energy()
