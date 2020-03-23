@@ -22,7 +22,9 @@ def calculate(_file, calc):
     try:
         atoms = read(i)
         atoms.set_calculator(calc)
+        atoms.get_potential_energy()
         atoms.get_forces()
+        atoms.get_stress()
         atoms.write(o)
     except FileNotFoundError:
         warnings.warn(f'unable to read {i} -> calculation skipped')
