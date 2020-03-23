@@ -1,6 +1,7 @@
 import sys
 from ase.io import read
 from theforce.util.server import Server
+import warnings
 
 
 def get_calc(script):
@@ -18,10 +19,13 @@ def calculate(_file, calc):
         i, o = file.split('/')
     else:
         i = o = file
-    atoms = read(i)
-    atoms.set_calculator(calc)
-    atoms.get_forces()
-    atoms.write(o)
+    try:
+        atoms = read(i)
+        atoms.set_calculator(calc)
+        atoms.get_forces()
+        atoms.write(o)
+    except FileNotFoundError:
+        warnings.warn(f'unable to read {i} -> calculation skipped')
 
 
 if __name__ == '__main__':
