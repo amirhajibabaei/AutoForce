@@ -1,3 +1,4 @@
+# +
 import numpy as np
 from ase.calculators.calculator import Calculator, all_changes
 import torch
@@ -5,6 +6,8 @@ from torch.autograd import grad
 import warnings
 import ase
 from theforce.descriptor.atoms import TorchAtoms
+import socket
+from ase.io import read
 
 
 class PosteriorCalculator(Calculator):
@@ -87,6 +90,36 @@ class PosteriorVarianceCalculator(Calculator):
         self.results['free_energy'] = self.results['energy']
 
 
+class SocketCalculator(Calculator):
+    implemented_properties = ['energy', 'forces', 'stress']
+
+    def __init__(self, ip='localhost', port=6666, **kwargs):
+        Calculator.__init__(self, **kwargs)
+        self.ip = ip
+        self.port = port
+
+    def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+        Calculator.calculate(self, atoms, properties, system_changes)
+        # write and send request
+        s = socket.socket()
+        s.connect((self.ip, self.port))
+        self.atoms.write('socket_send.xyz')
+        s.send(b'socket_send.xyz/socket_recv.xyz')
+        assert int(s.recv(1024).decode('utf-8')) == 0
+        s.close()
+        # read
+        atms = read('socket_recv.xyz')
+        self.results['energy'] = atms.get_potential_energy()
+        self.results['forces'] = atms.get_forces()
+        self.results['stress'] = atms.get_stress()
+
+    def close(self):
+        s = socket.socket()
+        s.connect((self.ip, self.port))
+        s.send(b'end')
+        s.close()
+
+
 class AutoForceCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'free_energy', 'stress']
 
@@ -143,4 +176,3 @@ class AutoForceCalculator(Calculator):
         self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
         if self.variance:
             self.results['energy_variance'] = variance
-
