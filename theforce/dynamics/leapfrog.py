@@ -292,9 +292,9 @@ class Leapfrog:
                 self.verlet(forces_before)
             if not self.volatile() and not self.model.is_well():
                 self.model.tune_noise(*self._tune)
-                e, ev, f, fv = (float(v) for v in self.model._stats)
-                self.log(
-                    f'tuning noise: {self.model.gp.noise.signal}  stats: {(e, ev)}  {(f, fv)}')
+                self.log(f'tuning noise: {self.model.gp.noise.signal}')
+            stats = ' '.join(str(float(v)) for v in self.model._stats)
+            self.log(f'stats: {stats}')
         return tf
 
     def undo_update(self):
