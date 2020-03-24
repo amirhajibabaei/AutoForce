@@ -166,10 +166,12 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None,
         axes[2].plot(*zip(*data), color=color_a)
         axes[2].set_ylabel('data', color=color_a)
         axes[2].tick_params(axis='y', colors=color_a)
+        axes[2].set_ylim(data[0][1], data[0][1]+fp[-1][1] + 3)
         ax = axes[2].twinx()
         ax.plot(*zip(*fp), color=color_b)
         ax.set_ylabel('FP calculations', color=color_b)
         ax.tick_params(axis='y', colors=color_b)
+        ax.set_ylim(fp[0][1], fp[-1][1] + 3)
 
         # ---------------------
         axes[3].plot(*zip(*refs), color=color_a)
