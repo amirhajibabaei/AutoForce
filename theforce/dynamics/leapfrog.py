@@ -237,7 +237,7 @@ class Leapfrog:
         locs = self.atoms.calc.atoms.gathered()
         added_refs, change = self.model.add_ninducing(locs, self.ediff)
         self.log('added refs: {}  ediff at break: {}'.format(
-            added_refs, change))
+            added_refs, float(change)))
         if added_refs > 0:
             new = self.snapshot()
             self.model.add_1atoms(new, self.ediff, self.fdiff)
@@ -255,7 +255,7 @@ class Leapfrog:
         locs = self.atoms.calc.atoms.gathered()
         added_refs, change = self.model.add_ninducing(locs, self.ediff)
         self.log('added refs: {}  ediff at break: {}'.format(
-            added_refs, change))
+            added_refs, float(change)))
         if added_refs > 0:
             a = len(self.model.data)
             new = self.snapshot(fake=True)
