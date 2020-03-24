@@ -1,8 +1,10 @@
+# +
 import pylab as plt
 import nglview
 from ase.io import read
 from theforce.util.util import timestamp, iterable
 import re
+from torch import tensor
 
 
 def no_preprocess(atoms):
@@ -78,7 +80,7 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None,
         if 'ediff at break' in line:
             e = line.split()[-1]
             if 'tensor' in e:
-                e = re.sub('[^0-9.]', '', e)
+                e = float(eval(e))
             ediff += [(step, float(e))]
 
         if split[1] == 'undo:':
@@ -187,4 +189,3 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None,
     else:
         fig = None
     return energies, temperatures, exact_energies, data, refs, fp, fig, times
-
