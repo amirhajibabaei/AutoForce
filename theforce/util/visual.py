@@ -144,10 +144,11 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None)
         #
         axes[3].plot(*zip(*refs))
         axes[3].set_ylabel('inducing')
-        ax = axes[3].twinx()
-        ax.scatter(*zip(*ediff), color='deepskyblue')
-        ax.set_ylim(0,)
-        ax.set_ylabel('ediff at break')
+        if len(ediff) > 0:
+            ax = axes[3].twinx()
+            ax.scatter(*zip(*ediff), color='deepskyblue')
+            ax.set_ylim(0,)
+            ax.set_ylabel('ediff at break')
 
         #
         for ax in axes:
