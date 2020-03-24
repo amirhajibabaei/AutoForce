@@ -34,6 +34,7 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None)
     temperatures = []
     exact_energies = []
     ml_energies = []
+    ediff = []
     acc = []
     undo = []
     ext = []
@@ -72,6 +73,12 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None)
 
         if 'updating ...' in line:
             updating = step
+
+        if 'ediff at break' in line:
+            e = line.split()[-1]
+            if 'tensor' in e:
+                e = re.sub('[^0-9.]', '', e)
+            ediff += [(step, float(e))]
 
         if split[1] == 'undo:':
             assert int(split[2]) == exact_energies[-1][0]
@@ -137,6 +144,10 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None)
         #
         axes[3].plot(*zip(*refs))
         axes[3].set_ylabel('inducing')
+        ax = axes[3].twinx()
+        ax.scatter(*zip(*ediff), color='deepskyblue')
+        ax.set_ylim(0,)
+        ax.set_ylabel('ediff at break')
 
         #
         for ax in axes:
