@@ -29,12 +29,13 @@ def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False, preproce
     return view
 
 
-def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None):
+def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None, colors=None):
     energies = []
     temperatures = []
     exact_energies = []
     ml_energies = []
     ediff = []
+    stats = []
     acc = []
     undo = []
     ext = []
@@ -94,6 +95,9 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None)
             if step > 0:
                 ml_energies += [energies[-1]]
 
+        if 'stats' in line:
+            stats += [[step] + [float(v) for v in line.split()[-4:]]]
+
         if split[1] == 'update:':
             a, b, c = (int(_) for _ in split[4::2])
             try:
@@ -116,9 +120,15 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None)
     if plot:
         fig, axes = plt.subplots(2, 2, figsize=(8, 4))
         axes = axes.reshape(-1)
+        if colors:
+            color_a, color_b = colors
+        else:
+            color_a, color_b = 'chocolate', 'cornflowerblue'
 
-        #
-        axes[0].plot(*zip(*energies), zorder=1)
+        # ---------------------
+        axes[0].plot(*zip(*energies), zorder=1, color=color_a)
+        axes[0].set_ylabel('energy', color=color_a)
+        axes[0].tick_params(axis='y', colors=color_a)
         if len(exact_energies) > 0:
             axes[0].scatter(*zip(*exact_energies),
                             c=list(map({0: 'r', 1: 'g'}.get, acc)),
@@ -130,25 +140,45 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None)
         if extremum:
             for e in ext:
                 axes[0].axvline(x=e, lw=0.5, color='k')
-        axes[0].set_ylabel('energy')
 
         #
-        axes[1].plot(*zip(*temperatures))
-        axes[1].set_ylabel('temperature')
+        ax = axes[0].twinx()
+        ax.plot(*zip(*temperatures), color=color_b, alpha=0.7)
+        ax.set_ylabel('temperature', color=color_b)
+        ax.tick_params(axis='y', colors=color_b)
 
-        #
-        axes[2].plot(*zip(*data))
-        axes[2].plot(*zip(*fp))
-        axes[2].set_ylabel('FP calculations')
+        # ---------------------
+        if len(stats) > 0:
+            t, e, ee, f, fe = zip(*stats)
+            ax = axes[1]
+            ax.errorbar(t, f, yerr=fe, capsize=5, fmt='.', color=color_a)
+            ax.set_ylabel('fdiff', color=color_a)
+            ax.tick_params(axis='y', colors=color_a)
+            #
+            ax = axes[1].twinx()
+            ax.errorbar(t, e, yerr=ee, capsize=5, fmt='.', color=color_b)
+            ax.set_ylabel('ediff', color=color_b)
+            ax.tick_params(axis='y', colors=color_b)
 
-        #
-        axes[3].plot(*zip(*refs))
-        axes[3].set_ylabel('inducing')
+        # ---------------------
+        axes[2].plot(*zip(*data), color=color_a)
+        axes[2].set_ylabel('data', color=color_a)
+        axes[2].tick_params(axis='y', colors=color_a)
+        ax = axes[2].twinx()
+        ax.plot(*zip(*fp), color=color_b)
+        ax.set_ylabel('FP calculations', color=color_b)
+        ax.tick_params(axis='y', colors=color_b)
+
+        # ---------------------
+        axes[3].plot(*zip(*refs), color=color_a)
+        axes[3].set_ylabel('inducing', color=color_a)
+        axes[3].tick_params(axis='y', colors=color_a)
         if len(ediff) > 0:
             ax = axes[3].twinx()
-            ax.scatter(*zip(*ediff), color='deepskyblue')
+            ax.scatter(*zip(*ediff), color=color_b)
             ax.set_ylim(0,)
-            ax.set_ylabel('ediff at break')
+            ax.set_ylabel('ediff at break', color=color_b)
+            ax.tick_params(axis='y', colors=color_b)
 
         #
         for ax in axes:
