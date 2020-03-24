@@ -129,6 +129,10 @@ def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=No
         model = PosteriorPotentialFromFolder(model)
         kern = model.gp
     atoms.set_calculator(calc if calc else my_vasp())
+    if hasattr(pfactor, '__iter__'):
+        psteps, bulk_modulus = pfactor
+        ptime = psteps*dt
+        pfactor = (ptime**2)*bulk_modulus
     ase_dyn = NPT(atoms, dt*units.fs, temperature*units.kB, ext_stress,
                   tsteps*dt*units.fs, pfactor, mask=mask, trajectory=traj)
     dyn = Leapfrog(ase_dyn, kern, cutoff, model=model,
