@@ -575,6 +575,8 @@ class PosteriorPotential(Module):
         self.gp.cahced = cached
 
     def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=True):
+        if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
+            return
         if not overwrite:
             folder = safe_dirname(folder)
         mkdir_p(folder)
