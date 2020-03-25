@@ -94,10 +94,18 @@ class PosteriorVarianceCalculator(Calculator):
 class SocketCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
-    def __init__(self, ip='localhost', port=6666, **kwargs):
+    def __init__(self, ip='localhost', port=6666, script=None, **kwargs):
         Calculator.__init__(self, **kwargs)
         self.ip = ip
         self.port = port
+        self.script = script
+
+    def ping(self):
+        s = socket.socket()
+        s.connect((self.ip, self.port))
+        s.send(b'?')
+        print(f'server says: {s.recv(1024)}')
+        s.close()
 
     @property
     def is_distributed(self):
@@ -110,6 +118,14 @@ class SocketCalculator(Calculator):
         else:
             return 0
 
+    @property
+    def message(self):
+        cwd = os.getcwd()
+        msg = f'{cwd}/socket_send.xyz:{cwd}/socket_recv.xyz'
+        if self.script is not None:
+            msg += f':{cwd}/{self.script}'
+        return msg
+
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
         # write and send request
@@ -118,7 +134,7 @@ class SocketCalculator(Calculator):
             s.connect((self.ip, self.port))
             self.atoms.write('socket_send.xyz')
             cwd = os.getcwd()
-            s.send(f'{cwd}/socket_send.xyz:{cwd}/socket_recv.xyz'.encode())
+            s.send(self.message.encode())
             assert int(s.recv(1024).decode('utf-8')) == 0
             s.close()
         if self.is_distributed:
