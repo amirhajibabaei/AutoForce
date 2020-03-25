@@ -120,7 +120,7 @@ def strategy(atoms, temperature):
 
 
 def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=None, dt=2., tsteps=10,
-        ext_stress=0, pfactor=None, mask=None, ediff=0.1, fdiff=0.1, skip_volatile=5, distributed=False):
+        ext_stress=0, pfactor=None, mask=None, ediff=0.1, fdiff=0.1, skip_volatile=5, group=None):
     atoms, model, new_model, traj, log = strategy(atoms, temperature)
     if model is None:
         if not kern:
@@ -135,11 +135,6 @@ def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=No
         pfactor = (ptime**2)*bulk_modulus
     ase_dyn = NPT(atoms, dt*units.fs, temperature*units.kB, ext_stress,
                   tsteps*dt*units.fs, pfactor, mask=mask, trajectory=traj)
-    if distributed:
-        torch.distributed.init_process_group('mpi')
-        group = torch.distributed.group.WORLD
-    else:
-        group = None
     dyn = Leapfrog(ase_dyn, kern, cutoff, model=model,
                    algorithm='ultrafast',
                    ediff=ediff, fdiff=fdiff,
@@ -151,6 +146,6 @@ def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=No
     dyn.model.to_folder(new_model)
     if calc is None:
         clean_vasp()
-    if distributed:
+    if group is not None:
         torch.distributed.barrier()
     return dyn.model
