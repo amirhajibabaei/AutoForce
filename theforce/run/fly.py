@@ -151,4 +151,6 @@ def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=No
     dyn.model.to_folder(new_model)
     if calc is None:
         clean_vasp()
+    if distributed:
+        torch.distributed.barrier()
     return dyn.model
