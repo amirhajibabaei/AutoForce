@@ -13,10 +13,18 @@ def get_calc(script):
     return scope['calc']
 
 
-def calculate(_file, calc):
+def calculate(_file, _calc):
+    calc = _calc
     file = _file.decode("utf-8")
     if ':' in file:
-        i, o = file.split(':')
+        msg = file.split(':')
+        if len(msg) == 2:
+            i, o = msg
+        elif len(msg) == 3:
+            i, o, c = msg
+            calc = get_calc(c)
+        else:
+            raise RuntimeError(f'message > 3 -> {msg}')
     else:
         i = o = file
     try:
@@ -31,7 +39,9 @@ def calculate(_file, calc):
 
 
 if __name__ == '__main__':
-    calc = get_calc(sys.argv[1] if len(sys.argv) > 1 else 'calculator.py')
+    calc = sys.argv[1] if len(sys.argv) > 1 else 'calculator.py'
+    if calc != 'None':
+        calc = get_calc(calc)
     ip = sys.argv[2] if len(sys.argv) > 2 else 'localhost'
     port = int(sys.argv[3]) if len(sys.argv) > 3 else 6666
     s = Server(ip, port, callback=calculate, args=(calc,))
