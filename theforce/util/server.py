@@ -9,7 +9,7 @@ class Server:
         self.callback = callback if callback else lambda a: 0
         self.args = args
 
-    def listen(self, end=b'end'):
+    def listen(self, end=b'end', ping=b'?'):
         self.socket.listen(5)
         resume = True
         while resume:
@@ -17,6 +17,8 @@ class Server:
             request = c.recv(1024)
             if request == end:
                 resume = False
+            elif request == ping:
+                c.send(b'!')
             else:
                 self.callback(request, *self.args)
                 c.send(b'0')
