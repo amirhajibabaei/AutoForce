@@ -672,6 +672,7 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True):
     if load_data:
         if os.path.isfile(os.path.join(folder, 'data.pckl')):
             self.data = torch.load(os.path.join(folder, 'data.pckl'))
+            strip_uid(self.data)
         else:
             self.data = AtomsData(traj=os.path.join(folder, 'data.traj'))
             if update_data:
