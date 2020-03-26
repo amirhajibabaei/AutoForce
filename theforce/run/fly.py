@@ -126,7 +126,7 @@ def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=No
         if not kern:
             kern = default_kernel(np.unique(atoms.numbers), cutoff, au=au)
     else:
-        model = PosteriorPotentialFromFolder(model)
+        model = PosteriorPotentialFromFolder(model, group=group)
         kern = model.gp
     atoms.set_calculator(calc if calc else my_vasp())
     if hasattr(pfactor, '__iter__'):
