@@ -482,6 +482,11 @@ class TorchAtoms(Atoms):
 
     def gather_(self, folder='atoms'):
         self.loc = self.gathered(folder=folder)
+        self.detach_process_group()
+
+    def distribute_(self, group):
+        self.attach_process_group(group)
+        self.loc = [self.loc[i] for i in self.indices]
 
 
 class AtomsData:
@@ -499,6 +504,22 @@ class AtomsData:
             raise RuntimeError('AtomsData invoked without any input')
         self.posgrad = posgrad
         self.cellgrad = cellgrad
+
+    @property
+    def is_distributed(self):
+        return self.X[0].is_distributed
+
+    @property
+    def process_group(self):
+        return self.X[0].process_group
+
+    def gather_(self, folder='atoms'):
+        for atoms in self.X:
+            atoms.gather_()
+
+    def distribute_(self, group):
+        for atoms in self.X:
+            atoms.distribute_(group)
 
     def check_content(self):
         return all([atoms.__class__ == TorchAtoms for atoms in self])
