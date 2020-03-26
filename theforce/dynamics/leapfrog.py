@@ -13,12 +13,13 @@ import warnings
 
 def initial_model(gp, atoms, ediff):
     i = atoms.first_of_each_atom_type()
-    inducing = LocalsData([atoms.loc[j] for j in i])
+    locs = atoms.gathered()
+    inducing = LocalsData([locs[j] for j in i])
     data = AtomsData([atoms])
     model = PosteriorPotential(gp, data, inducing, use_caching=True)
     for j in range(atoms.natoms):
         if j not in i:
-            model.add_1inducing(atoms.loc[j], ediff)
+            model.add_1inducing(locs[j], ediff)
     return model
 
 
@@ -74,7 +75,7 @@ class Leapfrog:
         # model
         if model:
             if type(model) == str:
-                potential = PosteriorPotentialFromFolder(model)
+                potential = PosteriorPotentialFromFolder(model, group=group)
             else:
                 potential = model
             self.log('a model is provided with {} data and {} ref(s)'.format(
@@ -208,9 +209,6 @@ class Leapfrog:
         copy.set_calculator(SinglePointCalculator(copy, energy=energy,
                                                   forces=forces))
         copy.set_targets()
-        if copy.is_distributed:
-            copy.gather_()
-            copy.detach_process_group()
         return copy
 
     def algorithm_robust(self, datafirst=True):
