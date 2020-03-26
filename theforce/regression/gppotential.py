@@ -329,6 +329,9 @@ class PosteriorPotential(Module):
             X = inducing.subset(self.gp.species)
             self.Ke = self.gp.kern(data, X, cov='energy_energy')
             self.Kf = self.gp.kern(data, X, cov='forces_energy')
+            if data.is_distributed:
+                torch.distributed.all_reduce(self.Ke)
+                torch.distributed.all_reduce(self.Kf)
             self.M = self.gp.kern(X, X, cov='energy_energy')
             self.X = X
             self.make_munu()
@@ -435,6 +438,9 @@ class PosteriorPotential(Module):
         assert data[0].includes_species(self.gp.species)
         Ke = self.gp.kern(data, self.X, cov='energy_energy')
         Kf = self.gp.kern(data, self.X, cov='forces_energy')
+        if (data[0].is_distributed if type(data) == list else data.is_distributed):
+            torch.distributed.all_reduce(Ke)
+            torch.distributed.all_reduce(Kf)
         self.Ke = torch.cat([self.Ke, Ke], dim=0)
         self.Kf = torch.cat([self.Kf, Kf], dim=0)
         self.data += data
@@ -446,6 +452,9 @@ class PosteriorPotential(Module):
         assert X.number in self.gp.species
         Ke = self.gp.kern(self.data, X, cov='energy_energy')
         Kf = self.gp.kern(self.data, X, cov='forces_energy')
+        if self.data.is_distributed:
+            torch.distributed.all_reduce(Ke)
+            torch.distributed.all_reduce(Kf)
         self.Ke = torch.cat([self.Ke, Ke], dim=1)
         self.Kf = torch.cat([self.Kf, Kf], dim=1)
         a = self.gp.kern(self.X, X, cov='energy_energy')
@@ -487,14 +496,16 @@ class PosteriorPotential(Module):
         if not atoms.includes_species(self.gp.species):
             return 0, 0
         kwargs = {'use_caching': True}
-        e1 = self([atoms], **kwargs)
+        e1 = self([atoms], all_reduce=atoms.is_distributed, **kwargs)
         if fdiff < float('inf'):
-            f1 = self([atoms], 'forces', **kwargs)
+            f1 = self([atoms], 'forces',
+                      all_reduce=atoms.is_distributed, **kwargs)
         self.add_data([atoms], **kwargs)
-        e2 = self([atoms], **kwargs)
+        e2 = self([atoms], all_reduce=atoms.is_distributed, **kwargs)
         de = abs(e1-e2)
         if fdiff < float('inf'):
-            f2 = self([atoms], 'forces', **kwargs)
+            f2 = self([atoms], 'forces',
+                      all_reduce=atoms.is_distributed, **kwargs)
             df = (f2-f1).abs().max()
         else:
             df = 0
@@ -574,7 +585,10 @@ class PosteriorPotential(Module):
         self.data = data
         self.gp.cahced = cached
 
-    def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=True):
+    def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=False):
+        if pickle_data and self.data.is_distributed:
+            raise NotImplementedError(
+                'trying to pickle data which is distributed! call gathere_() first!')
         if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
             return
         if not overwrite:
@@ -661,7 +675,7 @@ class PosteriorPotential(Module):
         return out
 
 
-def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True):
+def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
     from theforce.descriptor.atoms import AtomsData
     from theforce.util.caching import strip_uid
     self = torch.load(os.path.join(folder, 'model'))
@@ -673,8 +687,11 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True):
         if os.path.isfile(os.path.join(folder, 'data.pckl')):
             self.data = torch.load(os.path.join(folder, 'data.pckl'))
             strip_uid(self.data)
+            if group:
+                self.data.distribute_(group)
         else:
-            self.data = AtomsData(traj=os.path.join(folder, 'data.traj'))
+            self.data = AtomsData(traj=os.path.join(folder, 'data.traj'),
+                                  group=group)
             if update_data:
                 self.data.update(
                     cutoff=cutoff, descriptors=self.gp.kern.kernels)
