@@ -43,6 +43,7 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None,
     ext = []
     times = []
     t0 = None
+    progress = None
     for line in open(file):
         split = line.split()[2:]
 
@@ -76,6 +77,7 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None,
 
         if 'updating ...' in line:
             updating = step
+            progress = line.split()[-1]
 
         if 'ediff at break' in line:
             e = line.split()[-1]
@@ -188,6 +190,22 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None,
         for ax in axes:
             ax.set_xlim(0, step)
         fig.tight_layout()
+
+        #
+        if progress:
+            from matplotlib.patches import Rectangle as Rect
+            fig.subplots_adjust(top=0.85)
+            ax = fig.add_axes([0.3, 0.9, 0.4, 0.07])
+            fig.text(0.7, 0.925, progress)
+            ax.axis('off')
+            a, b = (int(v) for v in progress.split('/'))
+            wy = b*0.05
+            ax.set_xlim(-wy, b+wy)
+            ax.set_ylim(-0.2, 1.2)
+            ax.add_patch(Rect((0, 0), b, 1, fc=(0, 0, 1, 0.1)))
+            ax.add_patch(Rect((0, 0), a, 1, fc=(0, 0, 1, 1)))
+            ax.set_xlabel(progress)
+
     else:
         fig = None
     return energies, temperatures, exact_energies, data, refs, fp, fig, times
