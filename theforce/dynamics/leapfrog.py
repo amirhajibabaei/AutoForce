@@ -364,10 +364,10 @@ class Leapfrog:
         stresses = []
         while updates < maxupdates:
             if prob > 0 and self.doit(prob=prob):
-                self.log('updating ...')
+                updates += 1
+                self.log(f'updating ... {updates}/{maxupdates}')
                 self.log('update: {}  data: {}  inducing: {}  FP: {}'.format(
                     self.update_model(), *self.sizes, len(self._fp)))
-                updates += 1
             self.dyn.run(1)
             self.step += 1
             steps += 1
@@ -398,9 +398,9 @@ class Leapfrog:
         while updates < maxupdates and increment == 0:
             self.move1()
             if prob > 0 and self.doit(prob=prob):
-                self.log('updating ...')
+                updates += 1
+                self.log(f'updating ... {updates}/{maxupdates}')
                 self.log('update: {}  data: {}  inducing: {}  FP: {}'.format(
                     self.update_model(), *self.sizes, len(self._fp)))
-                updates += 1
                 increment = self.data_plus
         return updates, increment
