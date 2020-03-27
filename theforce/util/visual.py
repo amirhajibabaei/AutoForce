@@ -77,7 +77,11 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None,
 
         if 'updating ...' in line:
             updating = step
-            progress = line.split()[-1]
+            a = line.split()
+            try:
+                progress = a[5]
+            except IndexError:
+                pass
 
         if 'ediff at break' in line:
             e = line.split()[-1]
