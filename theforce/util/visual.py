@@ -31,7 +31,7 @@ def show_trajectory(traj, radiusScale=0.3, remove_ball_and_stick=False, preproce
     return view
 
 
-def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None, colors=None):
+def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None, colors=None, tlim=None):
     energies = []
     temperatures = []
     exact_energies = []
@@ -192,7 +192,9 @@ def visualize_leapfrog(file, plot=True, extremum=False, stop=None, mlcolor=None,
 
         #
         for ax in axes:
-            ax.set_xlim(0, step)
+            if tlim is None:
+                tlim = (0, step)
+            ax.set_xlim(*tlim)
         fig.tight_layout()
 
         #
