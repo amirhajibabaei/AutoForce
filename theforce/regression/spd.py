@@ -18,6 +18,44 @@ class SPD(torch.Tensor):
     def __init__(self, data, lbound=1e-3):
         self.data = data
         self.lbound = lbound
+        self._inverse = None
+
+    def inverse(self):
+        if self._inverse is None:
+            self._inverse = self.data.cholesky().cholesky_inverse()
+        return self._inverse
+
+    def append_(self, column, diagonal, lbound=None):
+        a = column.view(-1, 1)
+        i = torch.as_tensor(diagonal).view(1, 1)
+        alpha = self.inverse()@a
+        v = (i-a.T@alpha)
+        if v < (lbound if lbound else self.lbound):
+            return False
+        beta = v.sqrt()
+        self.data = bordered(self.data, a, a.T, i)
+        self._inverse = bordered(self.inverse() + (alpha@alpha.T)/v,
+                                 -alpha/v, None, torch.ones(1, 1)/v)
+        return True
+
+    def pop_(self, i):
+        k = torch.cat([torch.arange(i), torch.arange(i+1, self.size(0))])
+        self.data = self.data.index_select(0, k).index_select(1, k)
+        alpha = self._inverse[i].index_select(0, k).view(-1, 1)
+        beta = self._inverse[i, i]
+        self._inverse = (self._inverse.index_select(0, k).index_select(1, k) -
+                         alpha@alpha.T/beta)
+
+    def test(self):
+        a = (self.data@self.inverse() - torch.eye(self.size(0))).abs().max()
+        return a
+
+
+class _SPD(torch.Tensor):
+
+    def __init__(self, data, lbound=1e-3):
+        self.data = data
+        self.lbound = lbound
         self._cholesky = None
 
     def cholesky(self):
@@ -69,7 +107,9 @@ def test_rbf():
         a = kern(xx, x)
         if K.append_(a, 1.):
             x = torch.cat([x, xx])
-    print(test_spd(K))
+    K.pop_(3)
+    K.pop_(0)
+    print(K.test())
 
 
 if __name__ == '__main__':
