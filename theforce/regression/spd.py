@@ -89,6 +89,56 @@ class _SPD(torch.Tensor):
         return True
 
 
+class Manifold:
+
+    def __init__(self, K, y):
+        self.K = SPD(K)
+        self.y = y.view(-1, 1)
+        self._mu = None
+
+    def __call__(self, col):
+        return col@self.mu
+
+    @property
+    def mu(self):
+        if self._mu is None:
+            self._mu = self.K.inverse()@self.y
+        return self._mu
+
+    def append_(self, col, diag, y):
+        if self.K.append_(col, diag):
+            self.y = torch.cat([self.y, y.view(1, 1)])
+            self._mu = None
+            return True
+        else:
+            return False
+
+    def pop_(self, j):
+        self.K.pop_(j)
+        self.y = torch.cat([self.y[:j], self.y[j+1:]])
+        self._mu = None
+
+    def forward_(self, col, diag, y):
+        beta = (diag - col.view(1, -1)@self.K.inverse()@col.view(-1, 1)).sqrt()
+        delta = self(col)-y
+        if delta.abs() > beta:
+            return self.append_(col, diag, y)
+        else:
+            return False
+
+    def backward_(self, diff=None):
+        indices = list(range(self.K.size(0)))
+        for j in indices[-1::-1]:
+            Lambda = self.K.inverse()[j]
+            beta = 1./Lambda[j].sqrt()
+            Lambda = (Lambda*beta).view(-1, 1)
+            delta = (self.K[j]@Lambda)@(Lambda.T@self.y)
+            if delta.abs() < (diff if diff else beta):
+                self.pop_(j)
+                del indices[j]
+        return indices
+
+
 def test_spd(self):
     a = (self.data@self.inverse() - torch.eye(self.size(0))).abs().max()
     b = (self._cholesky@self._inverse_of_cholesky -
