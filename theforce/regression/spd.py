@@ -138,6 +138,40 @@ class Manifold:
                 del indices[j]
         return indices
 
+    def swap_(self, _col, diag, y, j=None):
+        col = _col.view(-1)
+        # closest to col
+        if j is None:
+            j = col.argmax()
+        # inverse without j'th col
+        lam1 = self.K.inverse()[j]
+        beta = 1./lam1[j].sqrt()
+        lam1 = (lam1*beta).view(-1, 1)
+        Ki = self.K.inverse() - lam1@lam1.T
+        # inverse with new col
+        alpha = Ki@col
+        beta = (diag - col@alpha).sqrt()
+        if beta**2 < self.K.lbound:
+            return None
+        alpha[j] = -1.
+        lam2 = (alpha/beta).view(-1, 1)
+        Ki = Ki + lam2@lam2.T
+        # old y with altered model
+        mu = Ki@self.y+Ki[:, j].view(-1, 1)*(y-self.y[j])
+        yj = self.K[j].view(1, -1)@mu + (col[j]-self.K[j, j])*mu[j]
+        # swap
+        del1 = self(col)-y
+        del2 = yj-self.y[j]
+        if del2.abs() < del1.abs():
+            self.K[j] = self.K[:, j] = col
+            self.K[j, j] = diag
+            self.y[j] = y
+            self.K._inverse = Ki
+            self._mu = mu
+            return j
+        else:
+            return None
+
 
 def test_spd(self):
     a = (self.data@self.inverse() - torch.eye(self.size(0))).abs().max()
