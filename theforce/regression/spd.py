@@ -118,10 +118,10 @@ class Manifold:
         self.y = torch.cat([self.y[:j], self.y[j+1:]])
         self._mu = None
 
-    def forward_(self, col, diag, y):
+    def forward_(self, col, diag, y, diff=None):
         beta = (diag - col.view(1, -1)@self.K.inverse()@col.view(-1, 1)).sqrt()
         delta = self(col)-y
-        if delta.abs() > beta:
+        if delta.abs() > (diff if diff else beta):
             return self.append_(col, diag, y)
         else:
             return False
