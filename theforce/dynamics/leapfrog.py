@@ -192,7 +192,8 @@ class Leapfrog:
         tmp.set_calculator(self.calculator)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
-        ase.io.Trajectory('_FP.traj', 'a').write(tmp)
+        if self.rank == 0:
+            ase.io.Trajectory('_FP.traj', 'a').write(tmp)
         self._fp.append(self.step)
         self._fp_e.append(energy)
         self.log('exact energy: {}'.format(energy))
