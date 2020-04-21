@@ -5,6 +5,7 @@ class Server:
 
     def __init__(self, ip, port, callback=None, args=()):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((ip, port))
         self.callback = callback if callback else lambda a: 0
         self.args = args
