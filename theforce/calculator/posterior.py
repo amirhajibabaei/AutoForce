@@ -6,6 +6,7 @@ from torch.autograd import grad
 import warnings
 import ase
 from theforce.descriptor.atoms import TorchAtoms
+from theforce.util.util import date
 import socket
 from ase.io import read
 import os
@@ -99,6 +100,12 @@ class SocketCalculator(Calculator):
         self.ip = ip
         self.port = port
         self.script = script
+        self.log('created', 'w')
+
+    def log(self, msg, mode='a'):
+        if self.rank == 0:
+            with open('socalc.log', mode) as f:
+                f.write(f'{date()}   {msg}\n')
 
     def ping(self):
         s = socket.socket()
@@ -129,16 +136,17 @@ class SocketCalculator(Calculator):
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
         # write and send request
+        self.log('s')
         if self.rank == 0:
             s = socket.socket()
             s.connect((self.ip, self.port))
             self.atoms.write('socket_send.xyz')
-            cwd = os.getcwd()
             s.send(self.message.encode())
             assert int(s.recv(1024).decode('utf-8')) == 0
             s.close()
         if self.is_distributed:
             torch.distributed.barrier()
+        self.log('e')
         # read
         atms = read('socket_recv.xyz')
         self.results['energy'] = atms.get_potential_energy()
