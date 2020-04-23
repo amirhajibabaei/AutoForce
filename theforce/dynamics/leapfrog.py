@@ -9,6 +9,7 @@ from ase.calculators.singlepoint import SinglePointCalculator
 import numpy as np
 import types
 import warnings
+import psutil
 
 
 def initial_model(gp, atoms, ediff):
@@ -263,6 +264,7 @@ class Leapfrog:
                 self.head()
 
     def update_model(self):
+        self.log(f'mem_i {psutil.virtual_memory().percent}')
         forces_before = self.atoms.get_forces()
         # undo if previous update is not necessary
         if self.volatile() and self._fp[-1] > 0 and self.undo_volatile:
@@ -294,6 +296,7 @@ class Leapfrog:
                 self.log(f'tuning noise: {self.model.gp.noise.signal}')
             stats = ' '.join(str(float(v)) for v in self.model._stats)
             self.log(f'stats: {stats}')
+        self.log(f'mem_f {psutil.virtual_memory().percent}')
         return tf
 
     def undo_update(self):
