@@ -44,3 +44,16 @@ def make_cell_upper_triangular(atms):
     assert np.allclose(v, vv)
     assert np.allclose(atms.cell.flat[[3, 6, 7]], 0)
     atms.cell.flat[[3, 6, 7]] = 0
+
+
+def get_repeat_reciprocal(atoms, spacing=0.1):
+    return np.ceil(np.linalg.norm(
+        atoms.get_reciprocal_cell(), axis=1)/spacing).astype(int)
+
+
+def get_repeat(atoms, spacing=10.):
+    return np.ceil(spacing/atoms.cell.cellpar()[:3]).astype(int)
+
+
+def reciprocal_spacing(atoms):
+    return np.linalg.norm(atoms.get_reciprocal_cell(), axis=1)
