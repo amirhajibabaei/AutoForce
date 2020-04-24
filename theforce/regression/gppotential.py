@@ -349,9 +349,19 @@ class PosteriorPotential(Module):
     def K(self):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
-    def make_munu(self):
-        self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
-            self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
+    def make_munu(self, algo=1):
+        if algo == 0:
+            # allocates too much memory
+            self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
+                self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
+        else:
+            L, self.ridge = jitcholesky(self.M)
+            A = torch.cat((self.K, self.gp.noise.signal * L.t()))
+            Y = torch.cat((self.gp.Y(self.data), torch.zeros(L.size(0))))
+            Q, R = torch.qr(A)
+            self.mu = R.inverse()@Q.t()@Y
+            self.nu = None
+            self.choli = L.inverse()
         diff = self.K@self.mu-self.gp.Y(self.data)
         self._ediff = diff[:len(self.data)]/torch.tensor(self.data.natoms)
         self._fdiff = diff[len(self.data):]
