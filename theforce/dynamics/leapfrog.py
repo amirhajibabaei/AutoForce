@@ -28,7 +28,7 @@ class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
                  algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3,
-                 undo_volatile=True, correct_verlet=True, tune=(None, None), group=None):
+                 undo_volatile=True, free_fall=100, correct_verlet=True, tune=(None, None), group=None):
         self.dyn = dyn
         self.gp = PosteriorPotential(gp).gp
         self.cutoff = cutoff
@@ -37,6 +37,7 @@ class Leapfrog:
         self.skip = skip
         self.skip_volatile = skip_volatile
         self.undo_volatile = undo_volatile
+        self.free_fall = free_fall
         self.correct_verlet = correct_verlet
         self._tune = tune
 
@@ -348,6 +349,12 @@ class Leapfrog:
             if self.volatile() and ((self.step == 0 and len(self._fp) == 0)
                                     or self.step-last > self.skip_volatile):
                 return True
+            #
+            if self.free_fall:
+                last_ext = 0 if len(self._ext) == 0 else self._ext[-1]
+                if self.step - last_ext > self.free_fall:
+                    self.log('free fall!')
+                    return True
             return False  # main
 
     def run(self, maxsteps, prob=1):
