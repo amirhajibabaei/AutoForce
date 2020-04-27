@@ -27,7 +27,7 @@ def initial_model(gp, atoms, ediff):
 class Leapfrog:
 
     def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
-                 algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=3,
+                 algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=5,
                  undo_volatile=True, free_fall=100, correct_verlet=True, tune=(None, None), group=None):
         self.dyn = dyn
         self.gp = PosteriorPotential(gp).gp

@@ -120,7 +120,7 @@ def strategy(atoms, temperature):
 
 
 def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=None, dt=2., tsteps=10,
-        ext_stress=0, pfactor=None, mask=None, ediff=0.1, fdiff=0.1, skip_volatile=5, group=None):
+        ext_stress=0, pfactor=None, mask=None, ediff=0.1, fdiff=0.1, group=None, lf_kwargs={}):
     atoms, model, new_model, traj, log = strategy(atoms, temperature)
     if model is None:
         if not kern:
@@ -139,9 +139,9 @@ def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=No
                    algorithm='ultrafast',
                    ediff=ediff, fdiff=fdiff,
                    correct_verlet=False,
-                   skip_volatile=skip_volatile,
                    logfile=log,
-                   group=group)
+                   group=group,
+                   **lf_kwargs)
     dyn.run_updates(updates)
     dyn.model.to_folder(new_model)
     if calc is None:
