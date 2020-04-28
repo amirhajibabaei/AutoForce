@@ -2,6 +2,12 @@ import sys
 from ase.io import read
 from theforce.util.server import Server
 import warnings
+from theforce.util.util import date
+
+
+def reserve_ofile(o, msg='reserved'):
+    with open(o, 'w') as f:
+        f.write(f'{date()} {msg}\n')
 
 
 def get_calc(script):
@@ -28,6 +34,7 @@ def calculate(_file, _calc):
     else:
         i = o = file
     try:
+        reserve_ofile(o)
         atoms = read(i)
         atoms.set_calculator(calc)
         atoms.get_potential_energy()
