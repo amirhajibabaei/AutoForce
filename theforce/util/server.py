@@ -21,7 +21,10 @@ class Server:
             elif request == ping:
                 c.send(b'!')
             else:
-                self.callback(request, *self.args)
-                c.send(b'0')
+                try:
+                    self.callback(request, *self.args)
+                    c.send(b'0')
+                except:
+                    c.send(b'-1')
             c.close()
         self.socket.close()
