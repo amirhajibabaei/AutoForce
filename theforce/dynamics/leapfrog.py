@@ -350,9 +350,9 @@ class Leapfrog:
                                     or self.step-last > self.skip_volatile):
                 return True
             #
-            if self.free_fall:
+            elif self.free_fall and self.step - last > self.skip:
                 last_ext = 0 if len(self._ext) == 0 else self._ext[-1]
-                if self.step - last_ext > self.free_fall:
+                if self.step - last_ext == self.free_fall:  # "==" is crucial
                     self.log('free fall!')
                     return True
             return False  # main
