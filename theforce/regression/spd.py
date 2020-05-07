@@ -1,4 +1,5 @@
 import torch
+from torch.nn import Parameter
 from math import pi
 from theforce.regression.algebra import free_form, positive
 
