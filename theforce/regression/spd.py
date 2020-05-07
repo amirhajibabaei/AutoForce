@@ -190,17 +190,18 @@ class Manifold:
 
 class Model:
 
-    def __init__(self, kern):
+    def __init__(self, kern, cat=True):
         self.kern = kern
         self.x = []
         self.man = None
+        self.cat = cat
 
-    def forward_(self, x, y, diff=None, cat=True):
+    def forward_(self, x, y, diff=None):
         if self.man is None:
             self.man = Manifold(self.kern(x, x), y)
             self.x += [x]
             return True
-        elif self.man.forward_(self.kern(x, torch.cat(self.x) if cat else self.x),
+        elif self.man.forward_(self.kern(x, torch.cat(self.x) if self.cat else self.x),
                                self.kern(x, x), y, diff=diff):
             self.x += [x]
             return True
