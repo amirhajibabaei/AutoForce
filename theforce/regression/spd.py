@@ -217,6 +217,22 @@ class Model:
                 self.forward_(e, f, diff=diff)
         return self.man.log_prob()
 
+    def opt_step(self, opt, diff=None):
+        opt.zero_grad()
+        loss = -self.log_prob(diff=diff)
+        loss.backward()
+        opt.step()
+        return loss
+
+    def optimize(self, opt, delta=None, maxsteps=1000, diff=None):
+        _loss = self.opt_step(opt, diff=diff)
+        for step in range(maxsteps-1):
+            loss = self.opt_step(opt, diff=diff)
+            if delta and (loss-_loss).abs() < delta:
+                break
+            _loss = loss
+        return step+1, loss
+
 
 def test_spd(self):
     a = (self.data@self.inverse() - torch.eye(self.size(0))).abs().max()
