@@ -1,5 +1,6 @@
 import torch
 from math import pi
+from theforce.regression.algebra import free_form, positive
 
 
 def bordered(m, c, r, d):
@@ -190,19 +191,38 @@ class Manifold:
 
 class Model:
 
-    def __init__(self, kern, cat=True):
+    def __init__(self, kern, cat=True, signal=None, force_norm=False):
         self.kern = kern
         self.x = []
         self.man = None
         self.cat = cat
+        self.params = kern.params
+        self.signal = signal
+        self.force_norm = force_norm
+
+    @property
+    def signal(self):
+        return 1. if self._signal is None else positive(self._signal)
+
+    @signal.setter
+    def signal(self, value):
+        if value is None:
+            self._signal = None
+        else:
+            v = torch.as_tensor(value)
+            assert v > 0
+            self._signal = Parameter(free_form(v))
+            self.params.append(self._signal)
 
     def forward_(self, x, y, diff=None):
+        alpha = self.kern(x, x)
+        norm = alpha if self.force_norm else 1.
         if self.man is None:
-            self.man = Manifold(self.kern(x, x), y)
+            self.man = Manifold(alpha*self.signal/norm, y)
             self.x += [x]
             return True
-        elif self.man.forward_(self.kern(x, torch.cat(self.x) if self.cat else self.x),
-                               self.kern(x, x), y, diff=diff):
+        elif self.man.forward_(self.kern(x, torch.cat(self.x) if self.cat else self.x)*self.signal/norm,
+                               alpha*self.signal/norm, y, diff=diff):
             self.x += [x]
             return True
         else:
