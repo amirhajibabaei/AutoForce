@@ -1,4 +1,5 @@
 import torch
+from math import pi
 
 
 def bordered(m, c, r, d):
@@ -51,7 +52,7 @@ class SPD(torch.Tensor):
         return a
 
 
-class _SPD(torch.Tensor):
+class CholSPD(torch.Tensor):
 
     def __init__(self, data, lbound=1e-3):
         self.data = data
@@ -88,11 +89,22 @@ class _SPD(torch.Tensor):
                                  -alpha/v, None, torch.ones(1, 1)/v)
         return True
 
+    def log_prob(self, _y):
+        y = torch.as_tensor(_y).view(-1, 1)
+        f = -0.5*(y.T@self.inverse()@y + 2*self._cholesky.diag().log().sum() +
+                  y.size(0)*torch.log(torch.tensor(2*pi)))
+        return f
+
 
 class Manifold:
 
-    def __init__(self, K, y):
-        self.K = SPD(K)
+    def __init__(self, K, y, backend=CholSPD):
+        """
+        With backend CholSPD, log_prob becomes available.
+        With backend SPD, backward_ (with pop_, swap_) becomes available.
+        forward_ is available in any case.
+        """
+        self.K = backend(K)
         self.y = y.view(-1, 1)
         self._mu = None
 
@@ -171,6 +183,9 @@ class Manifold:
             return j
         else:
             return None
+
+    def log_prob(self):
+        return self.K.log_prob(self.y)
 
 
 def test_spd(self):
