@@ -188,6 +188,36 @@ class Manifold:
         return self.K.log_prob(self.y)
 
 
+class Model:
+
+    def __init__(self, kern):
+        self.kern = kern
+        self.x = []
+        self.man = None
+
+    def forward_(self, x, y, diff=None, cat=True):
+        if self.man is None:
+            self.man = Manifold(self.kern(x, x), y)
+            self.x += [x]
+            return True
+        elif self.man.forward_(self.kern(x, torch.cat(self.x) if cat else self.x),
+                               self.kern(x, x), y, diff=diff):
+            self.x += [x]
+            return True
+        else:
+            return False
+
+    def log_prob(self, remake=True, diff=None):
+        if remake:
+            x = self.x
+            y = self.man.y
+            self.x = []
+            self.man = None
+            for e, f in zip(*[x, y]):
+                self.forward_(e, f, diff=diff)
+        return self.man.log_prob()
+
+
 def test_spd(self):
     a = (self.data@self.inverse() - torch.eye(self.size(0))).abs().max()
     b = (self._cholesky@self._inverse_of_cholesky -
