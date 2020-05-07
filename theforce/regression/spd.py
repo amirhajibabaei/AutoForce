@@ -229,6 +229,12 @@ class Model:
         else:
             return False
 
+    def __call__(self, x):
+        norm = self.kern(x, x) if self.force_norm else 1.
+        a = self.kern(x, torch.cat(self.x) if self.cat else
+                      self.x)*self.signal/norm
+        return self.man(a)
+
     def log_prob(self, remake=True, diff=None):
         if remake:
             x = self.x
