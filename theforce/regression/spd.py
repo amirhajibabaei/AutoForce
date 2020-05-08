@@ -1,3 +1,4 @@
+# +
 import torch
 from torch.nn import Parameter
 from math import pi
@@ -252,10 +253,12 @@ class Model:
         opt.step()
         return loss
 
-    def optimize(self, opt, delta=None, maxsteps=1000, diff=None):
+    def optimize(self, opt, delta=None, maxsteps=1000, diff=None, verbose=True):
         _loss = self.opt_step(opt, diff=diff)
         for step in range(maxsteps-1):
             loss = self.opt_step(opt, diff=diff)
+            if verbose:
+                print(step, float(loss), len(model.x))
             if delta and (loss-_loss).abs() < delta:
                 break
             _loss = loss
