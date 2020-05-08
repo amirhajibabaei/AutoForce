@@ -258,7 +258,7 @@ class Model:
         for step in range(maxsteps-1):
             loss = self.opt_step(opt, diff=diff)
             if verbose:
-                print(step, float(loss), len(model.x))
+                print(step, float(loss), len(self.x))
             if delta and (loss-_loss).abs() < delta:
                 break
             _loss = loss
