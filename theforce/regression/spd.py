@@ -259,13 +259,13 @@ class Model:
         opt.step()
         return loss
 
-    def optimize(self, opt, delta=None, maxsteps=1000, diff=None, verbose=True):
+    def optimize(self, opt, delta=None, per_data=False, maxsteps=1000, diff=None, verbose=True):
         _loss = self.opt_step(opt, diff=diff)
         for step in range(maxsteps-1):
             loss = self.opt_step(opt, diff=diff)
             if verbose:
-                print(step, float(loss), len(self.x))
-            if delta and (loss-_loss).abs() < delta:
+                print(step, float(loss), len(self.x), float(loss)/len(self.x))
+            if delta and (loss-_loss).abs() < delta*(len(x) if per_data else 1.):
                 break
             _loss = loss
         return step+1, loss
