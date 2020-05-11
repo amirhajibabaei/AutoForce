@@ -265,7 +265,7 @@ class Model:
             loss = self.opt_step(opt, diff=diff)
             if verbose:
                 print(step, float(loss), len(self.x), float(loss)/len(self.x))
-            if delta and (loss-_loss).abs() < delta*(len(x) if per_data else 1.):
+            if delta and (loss-_loss).abs() < delta*(len(self.x) if per_data else 1.):
                 break
             _loss = loss
         return step+1, loss
