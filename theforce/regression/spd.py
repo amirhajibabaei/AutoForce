@@ -196,6 +196,7 @@ class Model:
     def __init__(self, kern, cat=True, signal=None, force_norm=False):
         self.kern = kern
         self.x = []
+        self.norm = []
         self.man = None
         self.cat = cat
         self.params = kern.params
@@ -218,22 +219,26 @@ class Model:
 
     def forward_(self, x, y, diff=None):
         alpha = self.kern(x, x)
-        norm = alpha if self.force_norm else 1.
+        norm = alpha.sqrt() if self.force_norm else 1.
+        norm_all = torch.cat(self.norm).view(1, -1) if self.force_norm and len(self.norm) > 0 else 1.
         if self.man is None:
-            self.man = Manifold(alpha*self.signal/norm, y)
+            self.man = Manifold(alpha*self.signal/norm**2, y)
             self.x += [x]
+            self.norm += [norm]
             return True
-        elif self.man.forward_(self.kern(x, torch.cat(self.x) if self.cat else self.x)*self.signal/norm,
-                               alpha*self.signal/norm, y, diff=diff):
+        elif self.man.forward_(self.kern(x, torch.cat(self.x) if self.cat else self.x)*self.signal/(norm*norm_all),
+                               alpha*self.signal/norm**2, y, diff=diff):
             self.x += [x]
+            self.norm += [norm]
             return True
         else:
             return False
 
     def __call__(self, x):
-        norm = self.kern(x, x) if self.force_norm else 1.
+        norm = self.kern(x, x).sqrt() if self.force_norm else 1.
+        norm_all = torch.cat(self.norm).view(1, -1) if self.force_norm and len(self.norm) > 0 else 1.
         a = self.kern(x, torch.cat(self.x) if self.cat else
-                      self.x)*self.signal/norm
+                      self.x)*self.signal/(norm*norm_all)
         return self.man(a)
 
     def log_prob(self, remake=True, diff=None):
@@ -241,6 +246,7 @@ class Model:
             x = self.x
             y = self.man.y
             self.x = []
+            self.norm = []
             self.man = None
             for e, f in zip(*[x, y]):
                 self.forward_(e, f, diff=diff)
