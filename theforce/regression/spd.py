@@ -217,17 +217,29 @@ class Model:
             self._signal = Parameter(free_form(v))
             self.params.append(self._signal)
 
-    def forward_(self, x, y, diff=None):
+    def kernel(self, x):
         alpha = self.kern(x, x)
         norm = alpha.sqrt() if self.force_norm else 1.
-        norm_all = torch.cat(self.norm).view(1, -1) if self.force_norm and len(self.norm) > 0 else 1.
+        if self.force_norm and len(self.norm) > 0:
+            norm_all = torch.cat(self.norm).view(1, -1)
+        else:
+            norm_all = 1.
+        diag = alpha*self.signal/norm**2
+        if len(self.x) == 0:
+            return norm, diag, None
+        else:
+            xx = torch.cat(self.x) if self.cat else self.x
+            a = self.kern(x, xx)*self.signal/(norm*norm_all)
+            return norm, diag, a
+
+    def forward_(self, x, y, diff=None):
+        norm, diag, a = self.kernel(x)
         if self.man is None:
-            self.man = Manifold(alpha*self.signal/norm**2, y)
+            self.man = Manifold(diag, y)
             self.x += [x]
             self.norm += [norm]
             return True
-        elif self.man.forward_(self.kern(x, torch.cat(self.x) if self.cat else self.x)*self.signal/(norm*norm_all),
-                               alpha*self.signal/norm**2, y, diff=diff):
+        elif self.man.forward_(a, diag, y, diff=diff):
             self.x += [x]
             self.norm += [norm]
             return True
@@ -235,10 +247,7 @@ class Model:
             return False
 
     def __call__(self, x):
-        norm = self.kern(x, x).sqrt() if self.force_norm else 1.
-        norm_all = torch.cat(self.norm).view(1, -1) if self.force_norm and len(self.norm) > 0 else 1.
-        a = self.kern(x, torch.cat(self.x) if self.cat else
-                      self.x)*self.signal/(norm*norm_all)
+        norm, diag, a = self.kernel(x)
         return self.man(a)
 
     def log_prob(self, remake=True, diff=None):
