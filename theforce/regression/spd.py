@@ -134,7 +134,16 @@ class Manifold:
         self._mu = None
 
     def forward_(self, col, diag, y, diff=None):
-        beta = (diag - col.view(1, -1)@self.K.inverse()@col.view(-1, 1)).sqrt()
+        """
+        returns:
+        True       accepted
+        False      rejected because delta<diff
+        0          rejected because v<lbound
+        """
+        v = diag - col.view(1, -1)@self.K.inverse()@col.view(-1, 1)
+        if v < self.K.lbound:
+            return 0
+        beta = v.sqrt()
         delta = self(col)-y
         if delta.abs() > (diff if diff else beta):
             return self.append_(col, diag, y)
