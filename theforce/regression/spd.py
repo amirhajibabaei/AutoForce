@@ -202,7 +202,7 @@ class Manifold:
 
 class Model:
 
-    def __init__(self, kern, cat=True, signal=None, force_norm=False):
+    def __init__(self, kern, cat=True, signal=None, noise=None, force_norm=False):
         self.kern = kern
         self.x = []
         self.norm = []
@@ -210,6 +210,7 @@ class Model:
         self.cat = cat
         self.params = kern.params
         self.signal = signal
+        self.noise = noise
         self.force_norm = force_norm
 
     @property
@@ -226,6 +227,20 @@ class Model:
             self._signal = Parameter(free_form(v))
             self.params.append(self._signal)
 
+    @property
+    def noise(self):
+        return 0. if self._noise is None else positive(self._noise)
+
+    @noise.setter
+    def noise(self, value):
+        if value is None:
+            self._noise = None
+        else:
+            v = torch.as_tensor(value)
+            assert v > 0
+            self._noise = Parameter(free_form(v))
+            self.params.append(self._noise)
+
     def kernel(self, x):
         alpha = self.kern(x, x)
         norm = alpha.sqrt() if self.force_norm else 1.
@@ -233,7 +248,7 @@ class Model:
             norm_all = torch.cat(self.norm).view(1, -1)
         else:
             norm_all = 1.
-        diag = alpha*self.signal/norm**2
+        diag = (alpha+self.noise)*self.signal/norm**2
         if len(self.x) == 0:
             return norm, diag, None
         else:
