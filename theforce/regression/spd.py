@@ -203,6 +203,9 @@ class Manifold:
 class Model:
 
     def __init__(self, kern, cat=True, signal=None, noise=1e-3, force_norm=False):
+        """
+        noise (=sigma^2) is chosen 1e-3, equal to default K.lbound
+        """
         self.kern = kern
         self.x = []
         self.norm = []
@@ -248,7 +251,7 @@ class Model:
             norm_all = torch.cat(self.norm).view(1, -1)
         else:
             norm_all = 1.
-        diag = (alpha/norm**2+self.noise**2)*self.signal
+        diag = (alpha/norm**2+self.noise)*self.signal
         if len(self.x) == 0:
             return norm, diag, None
         else:
