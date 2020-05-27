@@ -1,3 +1,4 @@
+# +
 import numpy as np
 
 
@@ -13,6 +14,21 @@ def sign(a):
         return 1
     else:
         return -1
+
+
+def error_function(_a, _b):
+    """
+    error includes a max term plus mean of weighted differences
+    """
+    species = set(_a.keys()).union(set(_b.keys()))
+    a = normalized_formula(_a)
+    b = normalized_formula(_b)
+    x = np.array([a[s] for s in species])
+    y = np.array([b[s] for s in species])
+    rho = (x + y)/2
+    diff = abs(x-y)
+    err = diff.max() + (diff*np.exp(-rho)).mean()
+    return err
 
 
 def dope(prim, target, mul=(1, 2, 3, 4, 6)):
@@ -47,9 +63,7 @@ def dope(prim, target, mul=(1, 2, 3, 4, 6)):
             for s in species:
                 if sol[s] + d > 0:
                     sol[s] += d
-                    tmp = normalized_formula(sol)
-                    diff = [abs(tmp[s]-tar[s]) for ss in species]
-                    e = max(diff) + np.mean(diff)
+                    e = error_function(sol, target)
                     if e < ae:
                         best = s
                         ae = e
@@ -60,8 +74,7 @@ def dope(prim, target, mul=(1, 2, 3, 4, 6)):
 
         assert [sol[s] > 0 for s in species]
         assert [sol[s] == initial[s]+delta[s] for s in species]
-        tmp = normalized_formula(sol)
-        err = max([abs(tmp[s]-tar[s]) for ss in species])
+        err = error_function(sol, target)
 
         return initial, sol, delta, err
 
