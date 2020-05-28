@@ -312,6 +312,12 @@ class PosteriorPotential(Module):
             self.is_distributed = False
         if data is not None:
             self.set_data(data, inducing=inducing, **setting)
+        else:
+            self.data = []
+
+    @property
+    def ndata(self):
+        return len(self.data)
 
     @context_setting
     def set_data(self, _data, inducing=None):
