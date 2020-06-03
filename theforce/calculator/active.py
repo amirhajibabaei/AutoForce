@@ -75,9 +75,9 @@ class ActiveCalculator(Calculator):
                 self.initiate_model()
             self.log('size: {} {}'.format(*self.size))
         # kernel
-        a = self.model.gp.kern(self.atoms, self.model.X)
+        self._K = self.model.gp.kern(self.atoms, self.model.X)
         # energy
-        energy = (a@self.model.mu).sum()
+        energy = (self._K@self.model.mu).sum()
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(enegy)
         # forces
@@ -108,7 +108,7 @@ class ActiveCalculator(Calculator):
         if self.skip > 0:
             self.skip -= 1
         else:
-            self.update(a)
+            self.update()
         #
         self.step += 1
 
@@ -167,8 +167,8 @@ class ActiveCalculator(Calculator):
         _x[self.atoms.indices] = beta
         return torch.distributed.all_reduce(_x)
 
-    def update_inducing(self, a):
-        b = self.model.choli@a.T
+    def update_inducing(self):
+        b = self.model.choli@self._K.T
         alpha = torch.cat([self.model.gp.kern(x, x)
                            for x in self.atoms]).view(-1)
         beta = (1 - (b.T@b).diag()/alpha).clamp(min=0.).sqrt()
@@ -213,12 +213,12 @@ class ActiveCalculator(Calculator):
                 added, *self.size))
         return added
 
-    def update(self, a):
+    def update(self):
         if self.model.ndata < self.tweak.volatile:
             n = self.update_data(False)
-            m = self.update_inducing(a)
+            m = self.update_inducing()
         else:
-            m = self.update_inducing(a)
+            m = self.update_inducing()
             n = self.update_data(True) if m > 0 else 0
         if n > 0:
             self.skip += self.tweak.skip_after_fp
@@ -229,8 +229,6 @@ class ActiveCalculator(Calculator):
                 self.model.tune_noise()
                 self.log(f'noise: {self.model.gp.noise.signal}')
                 self._tune_noise = 0
-        if m > 0 or n > 0:
-            self.results.clear()
 
     @property
     def rank(self):
