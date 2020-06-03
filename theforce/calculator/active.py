@@ -17,6 +17,7 @@ class Tweak:
         self.fdiff = fdiff
         self.beta = beta
         self.skip_after_fp = 3
+        self.tune_noise = 3
 
 
 class ActiveCalculator(Calculator):
@@ -37,6 +38,7 @@ class ActiveCalculator(Calculator):
         self.model._cutoff = max([d.descriptor._radial.rc
                                   for d in self.model.descriptors])
         self.skip = 0
+        self._tune_noise = 0
 
     def get_model(self, model):
         if type(model) == str:
@@ -216,6 +218,10 @@ class ActiveCalculator(Calculator):
             n = self.update_data(True) if m > 0 else 0
         if n > 0:
             self.skip += self.tweak.skip_after_fp
+            self._tune_noise += 1
+            if self._tune_noise >= self.tweak.tune_noise:
+                self.model.tune_noise()
+                self._tune_noise = 0
 
     @property
     def rank(self):
