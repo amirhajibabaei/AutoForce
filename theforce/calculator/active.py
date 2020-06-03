@@ -16,6 +16,7 @@ class Tweak:
         self.ediff = ediff
         self.fdiff = fdiff
         self.beta = beta
+        self.volatile = 3
         self.skip_after_fp = 3
         self.tune_noise = 3
 
@@ -210,7 +211,7 @@ class ActiveCalculator(Calculator):
         return added
 
     def update(self, a):
-        if self.model.ndata < 3:
+        if self.model.ndata < self.tweak.volatile:
             n = self.update_data(False)
             m = self.update_inducing(a)
         else:
@@ -219,7 +220,9 @@ class ActiveCalculator(Calculator):
         if n > 0:
             self.skip += self.tweak.skip_after_fp
             self._tune_noise += 1
-            if self._tune_noise >= self.tweak.tune_noise:
+            doit = (self.model.ndata > self.tweak.volatile and
+                    (not self.model.is_well(a, b)))
+            if self._tune_noise >= self.tweak.tune_noise and doit:
                 self.model.tune_noise()
                 self.log(f'noise: {self.model.gp.noise.signal}')
                 self._tune_noise = 0
