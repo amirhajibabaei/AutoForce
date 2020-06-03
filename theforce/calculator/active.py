@@ -221,7 +221,7 @@ class ActiveCalculator(Calculator):
             self.skip += self.tweak.skip_after_fp
             self._tune_noise += 1
             doit = (self.model.ndata > self.tweak.volatile and
-                    (not self.model.is_well(a, b)))
+                    (not self.model.is_well()))
             if self._tune_noise >= self.tweak.tune_noise and doit:
                 self.model.tune_noise()
                 self.log(f'noise: {self.model.gp.noise.signal}')
