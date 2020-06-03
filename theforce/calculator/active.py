@@ -236,6 +236,7 @@ def parse_logfile(file='accalc.log'):
     energies = []
     temperatures = []
     exact_energies = []
+    errors = []
     for line in open(file):
         split = line.split()[2:]
 
@@ -252,4 +253,7 @@ def parse_logfile(file='accalc.log'):
 
         if 'exact energy' in line:
             exact_energies += [(step, float(split[3]))]
-    return energies, exact_energies
+
+        if 'errors' in line:
+            errors += [(step, [float(v) for v in split[3:8:2]])]
+    return energies, exact_energies, errors
