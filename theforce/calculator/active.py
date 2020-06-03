@@ -16,6 +16,7 @@ class Tweak:
         self.ediff = ediff
         self.fdiff = fdiff
         self.beta = beta
+        self.skip_after_fp = 3
 
 
 class ActiveCalculator(Calculator):
@@ -117,7 +118,7 @@ class ActiveCalculator(Calculator):
         for j in range(atoms.natoms):
             if j not in i:
                 self.model.add_1inducing(locs[j], self.tweak.ediff)
-        self.skip += 3
+        self.skip += 1 + self.tweak.skip_after_fp
 
     def _exact(self, copy):
         tmp = copy.as_ase() if self.to_ase else copy
@@ -208,7 +209,7 @@ class ActiveCalculator(Calculator):
             m = self.update_inducing(a)
             n = self.update_data(True) if m > 0 else 0
         if n > 0:
-            self.skip += 3
+            self.skip += self.tweak.skip_after_fp
 
     @property
     def rank(self):
