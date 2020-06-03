@@ -1,3 +1,4 @@
+# +
 import numpy as np
 import torch
 from torch.autograd import grad
@@ -16,8 +17,9 @@ class Tweak:
         self.ediff = ediff
         self.fdiff = fdiff
         self.beta = beta
-        self.beta_lbound = 1e-6
+        self.beta_lbound = 0
         self.volatile = 3
+        self.max_volatile = 10
         self.skip_after_fp = 3
         self.tune_noise = 3
 
@@ -39,7 +41,8 @@ class ActiveCalculator(Calculator):
         self.log('active calculator says Hello!', mode='w')
         self.model._cutoff = max([d.descriptor._radial.rc
                                   for d in self.model.descriptors])
-        self.skip = 0
+        self.exact_calc = 0
+        self.skip_calc = 0
         self._tune_noise = 0
 
     def get_model(self, model):
@@ -105,10 +108,7 @@ class ActiveCalculator(Calculator):
         self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
         self.log('{} {}'.format(float(energy), self.atoms.get_temperature()))
         #
-        if self.skip > 0:
-            self.skip -= 1
-        else:
-            self.update()
+        self.update()
         #
         self.step += 1
 
@@ -122,7 +122,7 @@ class ActiveCalculator(Calculator):
         for j in range(atoms.natoms):
             if j not in i:
                 self.model.add_1inducing(locs[j], self.tweak.ediff)
-        self.skip += 1 + self.tweak.skip_after_fp
+        self.skip_calc += 1
 
     def _exact(self, copy):
         tmp = copy.as_ase() if self.to_ase else copy
@@ -138,6 +138,9 @@ class ActiveCalculator(Calculator):
             df = abs(self.results['forces'] - forces)
             self.log(
                 f'errors:  dE: {dE}  df_max: {df.max()}  df_mean: {df.mean()}')
+        #
+        self.skip_calc += self.tweak.skip_after_fp
+        self.exact_calc += 1
         return energy, forces
 
     def snapshot(self, fake=False, copy=None):
@@ -202,6 +205,9 @@ class ActiveCalculator(Calculator):
         return added
 
     def update_data(self, try_fake=True):
+        if self.skip_calc > 0:
+            self.skip_calc -= 1
+            return 0
         n = self.model.ndata
         new = self.snapshot(fake=try_fake)
         self.model.add_1atoms(new, self.tweak.ediff, self.tweak.fdiff)
@@ -214,14 +220,13 @@ class ActiveCalculator(Calculator):
         return added
 
     def update(self):
-        if self.model.ndata < self.tweak.volatile:
+        if self.model.ndata < self.tweak.volatile and self.exact_calc < self.tweak.max_volatile:
             n = self.update_data(False)
             m = self.update_inducing()
         else:
             m = self.update_inducing()
             n = self.update_data(True) if m > 0 else 0
         if n > 0:
-            self.skip += self.tweak.skip_after_fp
             self._tune_noise += 1
             doit = (self.model.ndata > self.tweak.volatile and
                     (not self.model.is_well()))
