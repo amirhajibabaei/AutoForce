@@ -128,6 +128,12 @@ class ActiveCalculator(Calculator):
         if self.rank == 0:
             ase.io.Trajectory('_calc.traj', 'a').write(tmp)
         self.log('exact energy: {}'.format(energy))
+        #
+        if self.model.ndata > 0:
+            dE = self.results['energy'] - energy
+            df = abs(self.results['forces'] - forces)
+            self.log(
+                f'errors:  dE: {dE}  df_max: {df.max()}  df_mean: {df.mean()}')
         return energy, forces
 
     def snapshot(self, fake=False, copy=None):
