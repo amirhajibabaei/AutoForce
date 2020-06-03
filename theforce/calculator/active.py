@@ -16,6 +16,7 @@ class Tweak:
         self.ediff = ediff
         self.fdiff = fdiff
         self.beta = beta
+        self.beta_lbound = 1e-6
         self.volatile = 3
         self.skip_after_fp = 3
         self.tune_noise = 3
@@ -179,6 +180,8 @@ class ActiveCalculator(Calculator):
         added_diff = 0
         for k in q:
             loc = self.atoms.local(k)
+            if beta[k] < self.tweak.beta_lbound:
+                break
             if loc.number in self.model.gp.species:
                 if beta[k] > self.tweak.beta:
                     self.model.add_inducing(loc)
