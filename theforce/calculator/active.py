@@ -221,6 +221,7 @@ class ActiveCalculator(Calculator):
             self._tune_noise += 1
             if self._tune_noise >= self.tweak.tune_noise:
                 self.model.tune_noise()
+                self.log(f'noise: {self.model.gp.noise.signal}')
                 self._tune_noise = 0
 
     @property
