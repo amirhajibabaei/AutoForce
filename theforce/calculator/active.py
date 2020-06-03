@@ -229,6 +229,8 @@ class ActiveCalculator(Calculator):
                 self.model.tune_noise()
                 self.log(f'noise: {self.model.gp.noise.signal}')
                 self._tune_noise = 0
+        if m > 0 or n > 0:
+            self.results.clear()
 
     @property
     def rank(self):
