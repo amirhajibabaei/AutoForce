@@ -130,7 +130,7 @@ class SocketCalculator(Calculator):
         cwd = os.getcwd()
         msg = f'{cwd}/socket_send.xyz:{cwd}/socket_recv.xyz'
         if self.script is not None:
-            msg += f':{cwd}/{self.script}'
+            msg = f'{msg}:{os.path.abspath(self.script)}'
         return msg
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
