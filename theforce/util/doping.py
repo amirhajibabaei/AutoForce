@@ -31,7 +31,7 @@ def error_function(_a, _b):
     return err
 
 
-def dope(prim, target, mul=(1, 2, 3, 4, 6)):
+def configure_doping(prim, target, mul=(1, 2, 3, 4, 6)):
     """
     return the best solution:
        repeat, initial, solution, delta, errors
@@ -93,3 +93,18 @@ def dope(prim, target, mul=(1, 2, 3, 4, 6)):
     solution = best[1]
     delta = best[2]
     return repeat, initial, solution, delta, errors
+
+
+def random_doping(atoms, delta):
+    to = []
+    subs = []
+    for a, b in delta.items():
+        if b > 0:
+            to += b*[a]
+        elif b < 0:
+            subs += np.random.choice(
+                [at.index for at in atoms if at.number == a], abs(b)).tolist()
+    subs = np.random.permutation(subs).tolist()
+    doped = atoms.copy()
+    doped.numbers[subs] = to
+    return doped, subs, to
