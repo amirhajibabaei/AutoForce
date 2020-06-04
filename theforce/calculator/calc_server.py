@@ -10,13 +10,13 @@ def reserve_ofile(o, msg='reserved'):
         f.write(f'{date()} {msg}\n')
 
 
-def get_calc(script):
+def get_calc(script, ref='calc'):
     scope = {}
     try:
         exec(open(script).read(), scope)
     except TypeError:
         exec(script.read(), scope)
-    return scope['calc']
+    return scope[ref]
 
 
 def calculate(_file, _calc):
@@ -29,6 +29,9 @@ def calculate(_file, _calc):
         elif len(msg) == 3:
             i, o, c = msg
             calc = get_calc(c)
+        elif len(msg) == 4:
+            i, o, c, ref = msg
+            calc = get_calc(c, ref=ref)
         else:
             raise RuntimeError(f'message > 3 -> {msg}')
     else:
