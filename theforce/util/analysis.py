@@ -23,6 +23,7 @@ class TrajAnalyser:
         self.traj = Trajectory(traj)
         self.transform = transform
         self.numbers = self[0].get_atomic_numbers()
+        self.species = np.unique(self.numbers).tolist()
         self.masses = self[0].get_masses()
         self.set_range(start, stop)
         self.indices = np.arange(0, self.numbers.shape[0])
