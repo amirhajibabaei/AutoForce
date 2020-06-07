@@ -93,6 +93,11 @@ class Local:
         return self._r[self._nn][self._m[self._nn]]
 
     @property
+    def vor(self):
+        r = self.r
+        return self.j[(r[:, None] - r[None]).mul(r[None]).sum(dim=-1).le(0.).all(dim=1)]
+
+    @property
     def _lex(self):
         """This is defined as a property in order to avoid memory leak."""
         if self.off is None:
