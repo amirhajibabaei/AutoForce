@@ -348,6 +348,10 @@ class PosteriorPotential(Module):
         return self.gp.descriptors
 
     @property
+    def cutoff(self):
+        return max([d.cutoff for d in self.gp.descriptors])
+
+    @property
     def inducing(self):
         return self.X
 
@@ -613,10 +617,7 @@ class PosteriorPotential(Module):
             folder = safe_dirname(folder)
         mkdir_p(folder)
         with open(os.path.join(folder, 'cutoff'), 'w') as file:
-            try:
-                file.write('{}\n'.format(self._cutoff))
-            except:
-                file.write('{}\n'.format(self.data[0].cutoff))
+            file.write('{}\n'.format(self.cutoff))
         self.data.to_traj(os.path.join(folder, 'data.traj'))
         self.X.to_traj(os.path.join(folder, 'inducing.traj'))
         self.gp.to_file(os.path.join(folder, 'gp'))
@@ -698,9 +699,6 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group
     from theforce.util.caching import strip_uid
     self = torch.load(os.path.join(folder, 'model'))
     strip_uid(self.X)
-    with open(os.path.join(folder, 'cutoff'), 'r') as file:
-        cutoff = float(file.readline().split()[0])
-        self._cutoff = cutoff
     if load_data:
         if os.path.isfile(os.path.join(folder, 'data.pckl')):
             self.data = torch.load(os.path.join(folder, 'data.pckl'))
@@ -712,7 +710,7 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group
                                   group=group)
             if update_data:
                 self.data.update(
-                    cutoff=cutoff, descriptors=self.gp.kern.kernels)
+                    cutoff=self.cutoff, descriptors=self.gp.kern.kernels)
     return self
 
 
