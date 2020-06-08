@@ -71,6 +71,8 @@ class UniversalSoapKernel(SimilarityKernel):
             lmax, nmax, exponent, radial.state, atomic_unit, self.kern.state, normalize, a, a_not)
         self._a = EqAll(a_not) if a is None else a
 
+        self.cutoff = radial.rc
+
     @property
     def a(self):
         return self._a

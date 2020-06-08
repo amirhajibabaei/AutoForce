@@ -1,15 +1,18 @@
+# +
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.math.soap import HeteroSoap, NormalizedSoap
+from theforce.math.cutoff import PolyCut
 from theforce.util.util import iterable
 import torch
 
 
 class HeterogeneousSoapKernel(SimilarityKernel):
 
-    def __init__(self, kernel, a, b, lmax, nmax, radial, atomic_unit=None, normalize=True):
+    def __init__(self, kernel, a, b, lmax, nmax, cutoff, atomic_unit=None, normalize=True):
         super().__init__(kernel)
         self.a = a
         self.b = sorted(iterable(b))
+        radial = PolyCut(cutoff) if type(cutoff) == float else cutoff
         self.descriptor = HeteroSoap(lmax, nmax, radial, self.b,
                                      atomic_unit=atomic_unit)
         if normalize:
@@ -17,6 +20,8 @@ class HeterogeneousSoapKernel(SimilarityKernel):
         self.dim = self.descriptor.dim
         self._args = '{}, {}, {}, {}, {}, atomic_unit={}, normalize={}'.format(
             a, b, lmax, nmax, radial.state, atomic_unit, normalize)
+
+        self.cutoff = radial.rc
 
     @property
     def state_args(self):
@@ -219,4 +224,3 @@ def example():
 if __name__ == '__main__':
     example()
     test_grad()
-

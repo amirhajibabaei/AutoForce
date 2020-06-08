@@ -1,15 +1,18 @@
+# +
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.math.soap import RealSeriesSoap, TailoredSoap, NormalizedSoap, MultiSoap
+from theforce.math.cutoff import PolyCut
 from theforce.util.util import iterable
 import torch
 
 
 class SoapKernel(SimilarityKernel):
 
-    def __init__(self, kernel, a, b, lmax, nmax, radial, atomic_unit=None):
+    def __init__(self, kernel, a, b, lmax, nmax, cutoff, atomic_unit=None):
         super().__init__(kernel)
         self.a = a
         self.b = sorted(iterable(b))
+        radial = PolyCut(cutoff) if type(cutoff) == float else cutoff
         if atomic_unit == None or type(atomic_unit) == float or type(atomic_unit) == int:
             units = {_b: atomic_unit for _b in self.b}
         elif type(atomic_unit) == list or type(atomic_unit) == tuple:
@@ -23,6 +26,8 @@ class SoapKernel(SimilarityKernel):
         self.dim = self.descriptor.dim
         self._args = '{}, {}, {}, {}, {}, atomic_unit={}'.format(
             a, b, lmax, nmax, radial.state, atomic_unit)
+
+        self.cutoff = radial.rc
 
     @property
     def state_args(self):
@@ -230,4 +235,3 @@ def example():
 if __name__ == '__main__':
     example()
     test_grad()
-
