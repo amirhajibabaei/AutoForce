@@ -133,6 +133,10 @@ class GaussianProcessPotential(Module):
     def descriptors(self):
         return self.kern.kernels
 
+    @property
+    def cutoff(self):
+        return max([d.cutoff for d in self.descriptors])
+
     def add_kernels(self, kernels):
         self.kern.add_kernels(kernels)
 
@@ -349,7 +353,7 @@ class PosteriorPotential(Module):
 
     @property
     def cutoff(self):
-        return max([d.cutoff for d in self.gp.descriptors])
+        return self.gp.cutoff
 
     @property
     def inducing(self):
