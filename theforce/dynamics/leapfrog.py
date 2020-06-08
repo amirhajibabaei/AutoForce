@@ -26,12 +26,11 @@ def initial_model(gp, atoms, ediff):
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, cutoff, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
+    def __init__(self, dyn, gp, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
                  algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=5,
                  undo_volatile=True, free_fall=100, correct_verlet=True, tune=(None, None), group=None):
         self.dyn = dyn
         self.gp = PosteriorPotential(gp).gp
-        self.cutoff = cutoff
         self._ediff = ediff
         self._fdiff = fdiff
         self.skip = skip
@@ -54,7 +53,8 @@ class Leapfrog:
             self.to_ase = False
         if group is not None:
             self.atoms.attach_process_group(group)
-        self.atoms.update(cutoff=cutoff, descriptors=self.gp.kern.kernels)
+        self.atoms.update(cutoff=self.gp.cutoff,
+                          descriptors=self.gp.descriptors)
 
         # calc
         if calculator:
@@ -86,7 +86,6 @@ class Leapfrog:
             assert ediff is not None
             snap = self.snapshot()
             potential = initial_model(self.gp, snap, ediff)
-            potential._cutoff = cutoff
             self.log('update: {}  data: {}  inducing: {}  FP: {}'.format(
                 True, len(potential.data), len(potential.inducing), len(self._fp)))
             self.log('a model is initiated with {} data and {} ref(s)'.format(

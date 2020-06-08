@@ -119,7 +119,7 @@ def strategy(atoms, temperature):
     return atoms, model, new_model, traj, log
 
 
-def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=None, dt=2., tsteps=10,
+def fly(temperature, updates, atoms=None, cutoff=None, au=None, calc=None, kern=None, dt=2., tsteps=10,
         ext_stress=0, pfactor=None, mask=None, ediff=0.1, fdiff=0.1, group=None, lf_kwargs={}):
     atoms, model, new_model, traj, log = strategy(atoms, temperature)
     if model is None:
@@ -135,7 +135,7 @@ def fly(temperature, updates, atoms=None, cutoff=6., au=None, calc=None, kern=No
         pfactor = (ptime**2)*bulk_modulus
     ase_dyn = NPT(atoms, dt*units.fs, temperature*units.kB, ext_stress,
                   tsteps*dt*units.fs, pfactor, mask=mask, trajectory=traj)
-    dyn = Leapfrog(ase_dyn, kern, cutoff, model=model,
+    dyn = Leapfrog(ase_dyn, kern, model=model,
                    algorithm='ultrafast',
                    ediff=ediff, fdiff=fdiff,
                    correct_verlet=False,
