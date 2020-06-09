@@ -430,7 +430,8 @@ class TorchAtoms(Atoms):
         """ As the inverse of Local.as_atoms """
         # positions[0] should to be [0, 0, 0]
         r = torch.as_tensor(self.positions[1:])
-        a, b = np.broadcast_arrays(self.numbers[0], self.numbers[1:])
+        #a, b = np.broadcast_arrays(self.numbers[0], self.numbers[1:])
+        a, b = self.numbers[0], self.numbers[1:]
         _i = np.arange(self.natoms)
         i, j = np.broadcast_arrays(_i[0], _i[1:])
         loc = Local(i, j, a, b, r)
