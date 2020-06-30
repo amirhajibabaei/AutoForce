@@ -95,15 +95,19 @@ def configure_doping(prim, target, mul=(1, 2, 3, 4, 6)):
     return repeat, initial, solution, delta, errors
 
 
-def random_doping(atoms, delta):
+def random_doping(atoms, delta, mask=None):
     to = []
     subs = []
+    if mask is None:
+        mask = len(atoms)*[True]
     for a, b in delta.items():
         if b > 0:
             to += b*[a]
         elif b < 0:
-            subs += np.random.choice(
-                [at.index for at in atoms if at.number == a], abs(b)).tolist()
+            cand = [at.index for at in atoms if
+                    (at.number == a and mask[at.index]
+                     and at.index not in subs)]
+            subs += np.random.choice(cand, abs(b), replace=False).tolist()
     subs = np.random.permutation(subs).tolist()
     doped = atoms.copy()
     doped.numbers[subs] = to
