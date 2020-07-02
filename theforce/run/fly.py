@@ -65,6 +65,12 @@ def clear_all():
     os.system('rm -rf model_*/ md_*.traj leapfrog_*.log strategy.log')
 
 
+def numpy_same_random_seed():
+    seed = torch.tensor(np.random.randint(2**32))
+    torch.distributed.broadcast(seed, 0)
+    np.random.seed(seed.numpy())
+
+
 def init_velocities(atoms, t, overwrite=False):
     if atoms.get_velocities() is None or overwrite:
         vd.MaxwellBoltzmannDistribution(atoms, t*units.kB)
