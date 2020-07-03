@@ -108,6 +108,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--temperatures', default='100,300,1000')
     parser.add_argument('-p', '--pressure', type=float, default=None)
     parser.add_argument('-m', '--modulus', type=float, default=None)
+    parser.add_argument('-s', '--size', type=float, default=10.)
     parser.add_argument('-j', '--jumps', type=int, default=100)
     # socket calculator
     parser.add_argument('-ip', '--ip', default='localhost')
@@ -121,4 +122,4 @@ if __name__ == '__main__':
     calc_args = dict(ip=args.ip, port=args.port, script=args.calc)
 
     aneal(atoms, te=tempretures, stress=args.pressure, modulus=args.modulus,
-          jumps=args.jumps, calc_args=calc_args)
+          siz=args.size, jumps=args.jumps, calc_args=calc_args)
