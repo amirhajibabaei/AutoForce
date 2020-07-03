@@ -48,8 +48,8 @@ def skip(msg):
     sys.exit()
 
 
-def aneal(atoms, te=[300, 600, 900, 1200], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, dt=2.,
-          siz=10., maxat=256, stress=0., mosulus=50., jumps=100, std=True):
+def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, dt=2.,
+          siz=10., maxat=256, stress=None, modulus=None, jumps=100, std=True, calc_args={}):
     """
     te -> Kelvin
     rc, siz -> Ang
@@ -74,11 +74,11 @@ def aneal(atoms, te=[300, 600, 900, 1200], rc=7., lmax=3, nmax=3, eta=4, ediff=0
         kern = UniversalSoapKernel(lmax, nmax, eta, rc)
 
     # params
-    kw = dict(dt=dt, calc=SocketCalculator(), ediff=ediff,
+    kw = dict(dt=dt, calc=SocketCalculator(**calc_args), ediff=ediff,
               group=dist.group.WORLD, kern=kern)
-    if stress is not None:
+    if stress is not None and modulus is not None:
         kw['ext_stress'] = stress*GPa
-        kw['pfactor'] = (20, mosulus*GPa)
+        kw['pfactor'] = (20, modulus*GPa)
 
     # size
     repeat = get_repeat_reciprocal(atoms, 1./siz)
@@ -100,9 +100,25 @@ def aneal(atoms, te=[300, 600, 900, 1200], rc=7., lmax=3, nmax=3, eta=4, ediff=0
 
 
 if __name__ == '__main__':
-    atoms = read(sys.argv[1])
-    te = [float(t) for t in sys.argv[2:]]
-    if len(te) > 0:
-        aneal(atoms, te)
-    else:
-        aneal(atoms)
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Machine Learning of the PES by anealing')
+    parser.add_argument('atoms')
+    # temperatures and pressures
+    parser.add_argument('-t', '--temperatures', default='100,300,1000')
+    parser.add_argument('-p', '--pressure', type=float, default=None)
+    parser.add_argument('-m', '--modulus', type=float, default=None)
+    parser.add_argument('-j', '--jumps', type=int, default=100)
+    # socket calculator
+    parser.add_argument('-ip', '--ip', default='localhost')
+    parser.add_argument('-port', '--port', type=int, default=6666)
+    parser.add_argument('-calc', '--calc', default=None)
+
+    args = parser.parse_args()
+    atoms = (read(args.atoms, -1) if arg.atoms.endswith('.traj')
+             else read(args.atoms))
+    tempretures = [float(t) for t in args.te.split(',')]
+    calc_args = dict(ip=args.ip, port=args.port, script=args.calc)
+
+    aneal(atoms, te=tempretures, stress=args.stress, modulus=args.mod,
+          jumps=args.jumps, calc_args=calc_args)
