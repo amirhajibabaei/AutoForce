@@ -115,7 +115,7 @@ if __name__ == '__main__':
     parser.add_argument('-calc', '--calc', default=None)
 
     args = parser.parse_args()
-    atoms = (read(args.atoms, -1) if arg.atoms.endswith('.traj')
+    atoms = (read(args.atoms, -1) if args.atoms.endswith('.traj')
              else read(args.atoms))
     tempretures = [float(t) for t in args.te.split(',')]
     calc_args = dict(ip=args.ip, port=args.port, script=args.calc)
