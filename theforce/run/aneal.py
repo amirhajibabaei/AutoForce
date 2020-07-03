@@ -81,7 +81,7 @@ def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, 
         kw['pfactor'] = (20, modulus*GPa)
 
     # size
-    if size is not None:
+    if siz is not None:
         repeat = get_repeat_reciprocal(atoms, 1./siz)
         atoms = atoms.repeat(repeat)
     if atoms.get_number_of_atoms() > maxat:
