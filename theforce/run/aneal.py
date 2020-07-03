@@ -117,8 +117,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     atoms = (read(args.atoms, -1) if args.atoms.endswith('.traj')
              else read(args.atoms))
-    tempretures = [float(t) for t in args.te.split(',')]
+    tempretures = [float(t) for t in args.temperatures.split(',')]
     calc_args = dict(ip=args.ip, port=args.port, script=args.calc)
 
-    aneal(atoms, te=tempretures, stress=args.stress, modulus=args.mod,
+    aneal(atoms, te=tempretures, stress=args.pressure, modulus=args.modulus,
           jumps=args.jumps, calc_args=calc_args)
