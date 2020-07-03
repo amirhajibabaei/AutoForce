@@ -49,7 +49,7 @@ def skip(msg):
 
 
 def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, dt=2.,
-          siz=10., maxat=256, stress=None, modulus=None, jumps=100, std=True, calc_args={}):
+          siz=10., maxat=256, stress=None, modulus=None, jumps=100, std=False, calc_args={}):
     """
     te -> Kelvin
     rc, siz -> Ang
@@ -81,8 +81,9 @@ def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, 
         kw['pfactor'] = (20, modulus*GPa)
 
     # size
-    repeat = get_repeat_reciprocal(atoms, 1./siz)
-    atoms = atoms.repeat(repeat)
+    if size is not None:
+        repeat = get_repeat_reciprocal(atoms, 1./siz)
+        atoms = atoms.repeat(repeat)
     if atoms.get_number_of_atoms() > maxat:
         skip(f'too large: {len(atoms)} atoms')
 
@@ -104,22 +105,35 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Machine Learning of the PES by anealing')
     parser.add_argument('atoms')
+    parser.add_argument('-r', '--repeat', default='1,1,1')
     # temperatures and pressures
-    parser.add_argument('-t', '--temperatures', default='100,300,1000')
-    parser.add_argument('-p', '--pressure', type=float, default=None)
-    parser.add_argument('-m', '--modulus', type=float, default=None)
-    parser.add_argument('-s', '--size', type=float, default=10.)
-    parser.add_argument('-j', '--jumps', type=int, default=100)
+    parser.add_argument('-t', '--temperatures', default='100,300,1000',
+                        help="e.g. 100,300,1000")
+    parser.add_argument('-p', '--pressure', type=float, default=None,
+                        help="GPa")
+    parser.add_argument('-m', '--modulus', type=float, default=None,
+                        help="GPa")
+    parser.add_argument('-s', '--size', default='10.',
+                        help="Ang, could be None")
+    parser.add_argument('-j', '--jumps', type=int, default=100,
+                        help="training trials")
+    parser.add_argument('-std', '--standard', type=int, choices=(0, 1), default=0,
+                        help="standard cell transform (0, or 1)")
     # socket calculator
     parser.add_argument('-ip', '--ip', default='localhost')
     parser.add_argument('-port', '--port', type=int, default=6666)
     parser.add_argument('-calc', '--calc', default=None)
 
     args = parser.parse_args()
+    repeat = [int(i) for i in args.repeat.split(',')]
     atoms = (read(args.atoms, -1) if args.atoms.endswith('.traj')
-             else read(args.atoms))
+             else read(args.atoms)).repeat(repeat)
     tempretures = [float(t) for t in args.temperatures.split(',')]
     calc_args = dict(ip=args.ip, port=args.port, script=args.calc)
 
+    if ((args.pressure is None and args.modulus is not None) or
+            (args.pressure is not None and args.modulus is None)):
+        raise RuntimeError('both pressure and modulus should be given!')
+
     aneal(atoms, te=tempretures, stress=args.pressure, modulus=args.modulus,
-          siz=args.size, jumps=args.jumps, calc_args=calc_args)
+          siz=eval(args.size), jumps=args.jumps, calc_args=calc_args, std=args.standard)
