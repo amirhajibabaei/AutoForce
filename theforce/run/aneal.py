@@ -9,6 +9,7 @@ import torch.distributed as dist
 from ase.io import read
 import numpy as np
 from string import ascii_lowercase as letters
+from theforce.run.fly import suffixed_new
 import sys
 import os
 import atexit
@@ -88,10 +89,12 @@ def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, 
         skip(f'too large: {len(atoms)} atoms')
 
     # run
-    for s, t in zip(*[letters[:len(te)], te]):
+    _, suff = suffixed_new('model')
+    k = letters.index(suff)
+    for s, t in zip(*[letters[k:k+len(te)], te]):
         if not os.path.isdir(f'model_{s}'):
             try:
-                if s == 'a':
+                if s == suff:
                     fly(t, jumps, atoms=atoms, **kw)
                 else:
                     fly(t, jumps, **kw)
