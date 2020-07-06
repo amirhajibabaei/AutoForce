@@ -675,6 +675,11 @@ class PosteriorPotential(Module):
                         file.write('{}\n'.format(inf))
                 else:
                     file.write('{}\n'.format(info))
+        # stats
+        with open(os.path.join(folder, 'stats'), 'w') as file:
+            e1, e2, f1, f2 = (float(v) for v in self._stats)
+            file.write(f'ediff -> mean: {e1} std: {e2}  ')
+            file.write(f'fdiff -> mean: {f1} std: {f2}\n')
 
     @context_setting
     def forward(self, test, quant='energy', variance=False, all_reduce=False):
