@@ -578,6 +578,34 @@ class PosteriorPotential(Module):
                     break
         return added, change
 
+    def eat(self, _atoms, ediff, fdiff, group=None):
+        if type(_atoms) == TorchAtoms:
+            atoms = _atoms
+        else:
+            if group is None and torch.distributed.is_initialized():
+                group = torch.distributed.group.WORLD
+            atoms = TorchAtoms(ase_atoms=_atoms, cutoff=self.cutoff,
+                               descriptors=self.descriptors, group=group)
+        if len(self.data) == 0:
+            i = atoms.first_of_each_atom_type()
+            locs = atoms.gathered()
+            inducing = LocalsData([locs[j] for j in i])
+            data = AtomsData([atoms])
+            self.set_data(data, inducing)
+            remaining = [locs[j] for j in range(atoms.natoms) if j not in i]
+            self.add_ninducing(remaining, ediff)
+        else:
+            if atoms.is_distributed:
+                leaks = torch.zeros(atoms.natoms)
+                leaks[atoms.indices] = self.leakages(atoms.loc)
+                torch.distributed.all_reduce(leaks)
+            else:
+                leaks = None
+            locs = atoms.gathered()
+            added_refs, change = self.add_ninducing(locs, ediff, leaks=leaks)
+            if added_refs > 0:
+                self.add_1atoms(atoms, ediff, fdiff)
+
     def select_inducing(self, indices, deleted=None, remake=True):
         i = torch.as_tensor(indices)
         self.Ke = self.Ke.index_select(1, i)
