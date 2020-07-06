@@ -5,6 +5,7 @@ from theforce.regression.kernel import White
 from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_D
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
+from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
 from theforce.optimize.optimizers import ClampedSGD
 import copy
 import os
