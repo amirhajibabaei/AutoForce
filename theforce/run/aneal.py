@@ -50,7 +50,8 @@ def skip(msg):
 
 
 def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, dt=2.,
-          siz=10., maxat=256, stress=None, modulus=None, jumps=100, std=False, calc_args={}):
+          siz=10., maxat=256, stress=None, modulus=None, jumps=100, std=False, calc_args={},
+          volatile=None):
     """
     te -> Kelvin
     rc, siz -> Ang
@@ -95,7 +96,8 @@ def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, 
         if not os.path.isdir(f'model_{s}'):
             try:
                 if s == suff:
-                    fly(t, jumps, atoms=atoms, **kw)
+                    fly(t, jumps, atoms=atoms, lf_kwargs=dict(
+                        volatile=volatile), **kw)
                 else:
                     fly(t, jumps, **kw)
             except:
@@ -122,6 +124,8 @@ if __name__ == '__main__':
                         help="training trials")
     parser.add_argument('-std', '--standard', type=int, choices=(0, 1), default=0,
                         help="standard cell transform (0, or 1)")
+    parser.add_argument('-v', '--volatile', type=int, default=None,
+                        help="treat as volatile for v extremums")
     # socket calculator
     parser.add_argument('-ip', '--ip', default='localhost')
     parser.add_argument('-port', '--port', type=int, default=6666)
@@ -139,4 +143,5 @@ if __name__ == '__main__':
         raise RuntimeError('both pressure and modulus should be given!')
 
     aneal(atoms, te=tempretures, stress=args.pressure, modulus=args.modulus,
-          siz=eval(args.size), jumps=args.jumps, calc_args=calc_args, std=args.standard)
+          siz=eval(args.size), jumps=args.jumps, calc_args=calc_args, std=args.standard,
+          volatile=args.volatile)
