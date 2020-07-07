@@ -357,6 +357,10 @@ class PosteriorPotential(Module):
         return self.gp.cutoff
 
     @property
+    def _cutoff(self):
+        return self.cutoff
+
+    @property
     def inducing(self):
         return self.X
 
