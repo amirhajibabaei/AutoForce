@@ -560,11 +560,17 @@ class PosteriorPotential(Module):
         return de
 
     def add_ninducing(self, _locs, ediff, detach=True, descending=True, leaks=None):
-        locs = [loc for loc in _locs if loc.number in self.gp.species]
+        selected = [i for i, loc in enumerate(_locs)
+                    if loc.number in self.gp.species]
+        locs = [_locs[i] for i in selected]
+        if len(locs) == 0:
+            return 0, 0.
         if descending:
             if leaks is None:
-                leaks = self.leakages(locs)
-            q = torch.argsort(leaks, descending=True)
+                _leaks = self.leakages(locs)
+            else:
+                _leaks = leaks.index_select(0, selected)
+            q = torch.argsort(_leaks, descending=True)
         else:
             q = torch.arange(len(locs))
         added = 0
