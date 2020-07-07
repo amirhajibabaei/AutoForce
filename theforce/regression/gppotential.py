@@ -543,7 +543,7 @@ class PosteriorPotential(Module):
 
     def add_1inducing(self, _loc, ediff, detach=True):
         if _loc.number not in self.gp.species:
-            return 0
+            return 0, 0.
         kwargs = {'use_caching': True}
         if detach:
             loc = _loc.detach()
@@ -557,7 +557,10 @@ class PosteriorPotential(Module):
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         if de < ediff and not blind:
             self.pop_1inducing(clear_cached=True)
-        return de
+            added = 0
+        else:
+            added = 1
+        return added, de
 
     def add_ninducing(self, _locs, ediff, detach=True, descending=True, leaks=None):
         selected = [i for i, loc in enumerate(_locs)
@@ -577,8 +580,8 @@ class PosteriorPotential(Module):
         for k in q:
             loc = locs[k]
             _ediff = ediff if len(self.X) > 1 else torch.finfo().tiny
-            change = self.add_1inducing(loc, _ediff, detach=detach)
-            if change >= ediff:
+            added, change = self.add_1inducing(loc, _ediff, detach=detach)
+            if added:
                 added += 1
             else:
                 if descending:

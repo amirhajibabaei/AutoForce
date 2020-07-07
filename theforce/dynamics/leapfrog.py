@@ -74,6 +74,7 @@ class Leapfrog:
         self.logfile = logfile
         self.log('leapfrog says Hello!', mode='w')
         self.log('volatile: {}'.format(self._volatile))
+        self.log('species: {}'.format(self.gp.species))
         self.log('restrict: {}'.format(self.restrict))
 
         # model
