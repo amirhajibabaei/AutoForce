@@ -267,15 +267,16 @@ class Leapfrog:
         self.log(f'mem_i {psutil.virtual_memory().percent}')
         forces_before = self.atoms.get_forces()
         # undo if previous update is not necessary
-        if self.volatile() and self._fp[-1] > 0 and self.undo_volatile:
-            if self._fp[-1] != (self._ext[-1] if len(self._ext) > 0 else 0):
-                if self.step_plus != self._fp[-1]:
-                    warnings.warn('step_plus != fp[-1]')
-                else:
-                    if self.data_plus > 0 or self.ref_plus > 0:
-                        self.undo_update()
-                        self.log('undo: {}  data: {}  inducing: {}'.format(
-                            self._fp[-1], *self.sizes))
+        if len(self._fp) > 0:
+            if self.volatile() and self._fp[-1] > 0 and self.undo_volatile:
+                if self._fp[-1] != (self._ext[-1] if len(self._ext) > 0 else 0):
+                    if self.step_plus != self._fp[-1]:
+                        warnings.warn('step_plus != fp[-1]')
+                    else:
+                        if self.data_plus > 0 or self.ref_plus > 0:
+                            self.undo_update()
+                            self.log('undo: {}  data: {}  inducing: {}'.format(
+                                self._fp[-1], *self.sizes))
         # update
         size1 = self.sizes
         if self.volatile():
