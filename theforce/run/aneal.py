@@ -51,7 +51,7 @@ def skip(msg):
 
 def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, dt=2.,
           siz=10., maxat=256, stress=None, modulus=None, jumps=100, std=False, calc_args={},
-          volatile=None):
+          restrict=None, volatile=None):
     """
     te -> Kelvin
     rc, siz -> Ang
@@ -97,9 +97,9 @@ def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, 
             try:
                 if s == suff:
                     fly(t, jumps, atoms=atoms, lf_kwargs=dict(
-                        volatile=volatile), **kw)
+                        restrict=restrict, volatile=volatile), **kw)
                 else:
-                    fly(t, jumps, **kw)
+                    fly(t, jumps, lf_kwargs=dict(restrict=restrict), **kw)
             except:
                 goodbye()
                 raise
@@ -112,8 +112,8 @@ if __name__ == '__main__':
     parser.add_argument('atoms')
     parser.add_argument('-r', '--repeat', default='1,1,1')
     # temperatures and pressures
-    parser.add_argument('-t', '--temperatures', default='100,300,1000',
-                        help="e.g. 100,300,1000")
+    parser.add_argument('-t', '--temperatures', default='300,600,1000',
+                        help="e.g. 300,600,1000")
     parser.add_argument('-p', '--pressure', type=float, default=None,
                         help="GPa")
     parser.add_argument('-m', '--modulus', type=float, default=None,
@@ -124,6 +124,8 @@ if __name__ == '__main__':
                         help="training trials")
     parser.add_argument('-std', '--standard', type=int, choices=(0, 1), default=0,
                         help="standard cell transform (0, or 1)")
+    parser.add_argument('-res', '--restrict', default=None,
+                        help="atomic numbers e.g. 3,15,16")
     parser.add_argument('-v', '--volatile', type=int, default=None,
                         help="treat as volatile for v extremums")
     # socket calculator
@@ -142,6 +144,9 @@ if __name__ == '__main__':
             (args.pressure is not None and args.modulus is None)):
         raise RuntimeError('both pressure and modulus should be given!')
 
+    restrict = (None if args.restrict is None else
+                [int(z) for z in args.restrict.split(',')])
+
     aneal(atoms, te=tempretures, stress=args.pressure, modulus=args.modulus,
           siz=eval(args.size), jumps=args.jumps, calc_args=calc_args, std=args.standard,
-          volatile=args.volatile)
+          restrict=restrict, volatile=args.volatile)

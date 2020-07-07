@@ -2,7 +2,7 @@
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.calculator.posterior import AutoForceCalculator
 from theforce.descriptor.atoms import AtomsData, LocalsData, TorchAtoms
-from theforce.util.util import date, class_of_method
+from theforce.util.util import date, class_of_method, iterable
 import torch
 import ase
 from ase.calculators.singlepoint import SinglePointCalculator
@@ -26,13 +26,14 @@ def initial_model(gp, atoms, ediff):
 
 class Leapfrog:
 
-    def __init__(self, dyn, gp, ediff=0.1, fdiff=float('inf'), calculator=None, model=None,
+    def __init__(self, dyn, gp, ediff=0.1, fdiff=float('inf'), restrict=None, calculator=None, model=None,
                  algorithm='ultrafast', volatile=None, logfile='leapfrog.log', skip=10, skip_volatile=5,
                  undo_volatile=True, free_fall=100, correct_verlet=True, tune=(None, None), group=None):
         self.dyn = dyn
         self.gp = PosteriorPotential(gp).gp
         self._ediff = ediff
         self._fdiff = fdiff
+        self.restrict = restrict
         self.skip = skip
         self.skip_volatile = skip_volatile
         self.undo_volatile = undo_volatile
@@ -213,20 +214,26 @@ class Leapfrog:
         copy.set_targets()
         return copy
 
+    def lce_filter(self, locs):
+        if self.restrict is None:
+            return locs
+        else:
+            return [loc for loc in locs if loc.number in iterable(self.restrict)]
+
     def algorithm_robust(self, datafirst=True):
         new = self.snapshot()
         if datafirst is None:
             datafirst = np.random.choice([True, False])
         if datafirst:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
-        locs = new.gathered()
+        locs = self.lce_filter(new.gathered())
         added_refs, _ = self.model.add_ninducing(
             locs, self.ediff, descending=False)
         if not datafirst:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_fast(self):
-        locs = self.atoms.calc.atoms.gathered()
+        locs = self.lce_filter(self.atoms.calc.atoms.gathered())
         added_refs, _ = self.model.add_ninducing(
             locs, self.ediff, descending=False)
         if added_refs > 0:
@@ -234,7 +241,7 @@ class Leapfrog:
             self.model.add_1atoms(new, self.ediff, self.fdiff)
 
     def algorithm_fastfast(self):
-        locs = self.atoms.calc.atoms.gathered()
+        locs = self.lce_filter(self.atoms.calc.atoms.gathered())
         added_refs, change = self.model.add_ninducing(locs, self.ediff)
         self.log('added refs: {}  ediff at break: {}'.format(
             added_refs, float(change)))
@@ -252,7 +259,7 @@ class Leapfrog:
         self.model.make_munu()
 
     def algorithm_ultrafast(self):
-        locs = self.atoms.calc.atoms.gathered()
+        locs = self.lce_filter(self.atoms.calc.atoms.gathered())
         added_refs, change = self.model.add_ninducing(locs, self.ediff)
         self.log('added refs: {}  ediff at break: {}'.format(
             added_refs, float(change)))
