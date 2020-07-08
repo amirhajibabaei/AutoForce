@@ -160,10 +160,13 @@ if __name__ == '__main__':
         repeat = [int(i) for i in args.repeat.split(',')]
         atoms = (read(args.atoms, -1) if args.atoms.endswith('.traj')
                  else read(args.atoms)).repeat(repeat)
+
     #
     tempretures = [float(t) for t in args.temperatures.split(',')]
+
     #
-    calc_args = dict(ip=args.ip, port=args.port, script=args.calc)
+    calc_args = dict(ip=args.ip, port=args.port, script=args.calculator)
+
     #
     if ((args.pressure is None and args.modulus is not None) or
             (args.pressure is not None and args.modulus is None)):

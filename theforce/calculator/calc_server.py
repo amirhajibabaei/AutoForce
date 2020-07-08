@@ -49,10 +49,23 @@ def calculate(_file, _calc):
 
 
 if __name__ == '__main__':
-    calc = sys.argv[1] if len(sys.argv) > 1 else 'calculator.py'
-    if calc != 'None':
-        calc = get_calc(calc)
-    ip = sys.argv[2] if len(sys.argv) > 2 else 'localhost'
-    port = int(sys.argv[3]) if len(sys.argv) > 3 else 6666
-    s = Server(ip, port, callback=calculate, args=(calc,))
+    import argparse
+    from theforce.util.ssh import clear_port
+
+    parser = argparse.ArgumentParser(
+        description='Starts a calculation server.')
+    parser.add_argument('-ip', '--ip', default='localhost')
+    parser.add_argument('-port', '--port', type=int, default=6666)
+    parser.add_argument('-calc', '--calculator', default=None,
+                        help=('If given, it should be a python script in which ' +
+                              'a variable named calc is defined.'))
+    args = parser.parse_args()
+
+    if args.calculator is not None:
+        calc = get_calc(args.calculator)
+    else:
+        calc = None
+
+    clear_port(args.port)
+    s = Server(args.ip, args.port, callback=calculate, args=(calc,))
     s.listen()
