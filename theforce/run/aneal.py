@@ -10,6 +10,7 @@ from ase.io import read
 import numpy as np
 from string import ascii_lowercase as letters
 from theforce.run.fly import suffixed_new
+from theforce.util.ssh import forward_port, clear_port
 import sys
 import os
 import atexit
@@ -51,7 +52,7 @@ def skip(msg):
 
 def aneal(atoms=None, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, dt=2.,
           siz=10., maxat=256, stress=None, modulus=None, jumps=100, std=False, calc_args={},
-          restrict=None, volatile=None):
+          restrict=None, volatile=None, remote=None):
     """
     te -> Kelvin
     rc, siz -> Ang
@@ -86,8 +87,14 @@ def aneal(atoms=None, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0
         else:
             kern = UniversalSoapKernel(lmax, nmax, eta, rc)
 
+    # calc
+    calc = SocketCalculator(**calc_args)
+    if remote is not None and dist.get_rank() == 0:
+        clear_port(calc.port)
+        forward_port(calc.port, remote, ip=calc.ip)
+
     # params
-    kw = dict(dt=dt, calc=SocketCalculator(**calc_args), ediff=ediff,
+    kw = dict(dt=dt, calc=calc, ediff=ediff,
               group=dist.group.WORLD, kern=kern)
     if stress is not None and modulus is not None:
         kw['ext_stress'] = stress*GPa
@@ -140,7 +147,8 @@ if __name__ == '__main__':
     # socket calculator
     parser.add_argument('-ip', '--ip', default='localhost')
     parser.add_argument('-port', '--port', type=int, default=6666)
-    parser.add_argument('-calc', '--calc', default=None)
+    parser.add_argument('-calc', '--calculator', default=None)
+    parser.add_argument('-rem', '--remote', default=None)
 
     # parse
     args = parser.parse_args()
@@ -168,4 +176,4 @@ if __name__ == '__main__':
     # run
     aneal(atoms=atoms, te=tempretures, stress=args.pressure, modulus=args.modulus,
           siz=eval(args.size), jumps=args.jumps, calc_args=calc_args, std=args.standard,
-          restrict=restrict, volatile=args.volatile)
+          restrict=restrict, volatile=args.volatile, remote=args.remote)
