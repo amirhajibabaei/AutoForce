@@ -1,4 +1,5 @@
 import socket
+from theforce.util.util import date
 
 
 class Server:
@@ -9,6 +10,10 @@ class Server:
         self.socket.bind((ip, port))
         self.callback = callback if callback else lambda a: 0
         self.args = args
+        with open('server.log', 'w') as log:
+            log.write(f'server initiated at: {date()}\n')
+            log.write(f'host name: {socket.gethostname()}\n')
+            log.write(f'socket name: {s.socket.getsockname()}\n')
 
     def listen(self, end=b'end', ping=b'?'):
         self.socket.listen(5)
