@@ -49,7 +49,7 @@ def skip(msg):
     sys.exit()
 
 
-def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, dt=2.,
+def aneal(atoms=None, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, dt=2.,
           siz=10., maxat=256, stress=None, modulus=None, jumps=100, std=False, calc_args={},
           restrict=None, volatile=None):
     """
@@ -63,17 +63,28 @@ def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, 
     #
     init_process()
 
-    #
-    if std:
-        atoms = standard_cell(atoms, symprec=0.1, angle_tolerance=10)
-    numbers = np.unique(atoms.numbers)
+    if atoms is not None:
+        #
+        if std:
+            atoms = standard_cell(atoms, symprec=0.1, angle_tolerance=10)
+
+        # size
+        if siz is not None:
+            repeat = get_repeat_reciprocal(atoms, 1./siz)
+            atoms = atoms.repeat(repeat)
+        if atoms.get_number_of_atoms() > maxat:
+            skip(f'too large: {len(atoms)} atoms')
 
     # kernel
-    if len(numbers < 4):
-        kern = default_kernel(numbers, cutoff=rc, lmax=lmax,
-                              nmax=nmax, exponent=eta)
+    if atoms is None:
+        kern = None
     else:
-        kern = UniversalSoapKernel(lmax, nmax, eta, rc)
+        numbers = np.unique(atoms.numbers)
+        if len(numbers < 4):
+            kern = default_kernel(numbers, cutoff=rc, lmax=lmax,
+                                  nmax=nmax, exponent=eta)
+        else:
+            kern = UniversalSoapKernel(lmax, nmax, eta, rc)
 
     # params
     kw = dict(dt=dt, calc=SocketCalculator(**calc_args), ediff=ediff,
@@ -81,13 +92,6 @@ def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, 
     if stress is not None and modulus is not None:
         kw['ext_stress'] = stress*GPa
         kw['pfactor'] = (20, modulus*GPa)
-
-    # size
-    if siz is not None:
-        repeat = get_repeat_reciprocal(atoms, 1./siz)
-        atoms = atoms.repeat(repeat)
-    if atoms.get_number_of_atoms() > maxat:
-        skip(f'too large: {len(atoms)} atoms')
 
     # run
     _, suff = suffixed_new('model')
@@ -107,11 +111,15 @@ def aneal(atoms, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0.05, 
 
 if __name__ == '__main__':
     import argparse
+
     parser = argparse.ArgumentParser(
         description='Machine Learning of the PES by anealing')
-    parser.add_argument('atoms')
-    parser.add_argument('-r', '--repeat', default='1,1,1')
-    # temperatures and pressures
+
+    # arguments
+    parser.add_argument('-a', '--atoms', default=None,
+                        help='path to a file to read atoms')
+    parser.add_argument('-r', '--repeat', default='1,1,1',
+                        help='repeat to make a supercell')
     parser.add_argument('-t', '--temperatures', default='300,600,1000',
                         help="e.g. 300,600,1000")
     parser.add_argument('-p', '--pressure', type=float, default=None,
@@ -119,34 +127,45 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--modulus', type=float, default=None,
                         help="GPa")
     parser.add_argument('-s', '--size', default='10.',
-                        help="Ang, could be None")
+                        help="Angstrom, also could be None")
     parser.add_argument('-j', '--jumps', type=int, default=100,
                         help="training trials")
     parser.add_argument('-std', '--standard', type=int, choices=(0, 1), default=0,
-                        help="standard cell transform (0, or 1)")
+                        help="standard cell transform 0: no (default) 1: yes")
     parser.add_argument('-res', '--restrict', default=None,
                         help="atomic numbers e.g. 3,15,16")
     parser.add_argument('-v', '--volatile', type=int, default=None,
                         help="treat as volatile for v extremums")
+
     # socket calculator
     parser.add_argument('-ip', '--ip', default='localhost')
     parser.add_argument('-port', '--port', type=int, default=6666)
     parser.add_argument('-calc', '--calc', default=None)
 
+    # parse
     args = parser.parse_args()
-    repeat = [int(i) for i in args.repeat.split(',')]
-    atoms = (read(args.atoms, -1) if args.atoms.endswith('.traj')
-             else read(args.atoms)).repeat(repeat)
-    tempretures = [float(t) for t in args.temperatures.split(',')]
-    calc_args = dict(ip=args.ip, port=args.port, script=args.calc)
 
+    #
+    if args.atoms is None:
+        atoms = None
+    else:
+        repeat = [int(i) for i in args.repeat.split(',')]
+        atoms = (read(args.atoms, -1) if args.atoms.endswith('.traj')
+                 else read(args.atoms)).repeat(repeat)
+    #
+    tempretures = [float(t) for t in args.temperatures.split(',')]
+    #
+    calc_args = dict(ip=args.ip, port=args.port, script=args.calc)
+    #
     if ((args.pressure is None and args.modulus is not None) or
             (args.pressure is not None and args.modulus is None)):
         raise RuntimeError('both pressure and modulus should be given!')
 
+    #
     restrict = (None if args.restrict is None else
                 [int(z) for z in args.restrict.split(',')])
 
-    aneal(atoms, te=tempretures, stress=args.pressure, modulus=args.modulus,
+    # run
+    aneal(atoms=atoms, te=tempretures, stress=args.pressure, modulus=args.modulus,
           siz=eval(args.size), jumps=args.jumps, calc_args=calc_args, std=args.standard,
           restrict=restrict, volatile=args.volatile)
