@@ -1,8 +1,8 @@
 import os
 
 
-def forward_port(port, remote):
-    os.system(f"ssh -N -f -L localhost:{port}:localhost:{port} {remote}")
+def forward_port(port, remote, ip='localhost'):
+    os.system(f"ssh -N -f -L {ip}:{port}:{ip}:{port} {remote}")
 
 
 def clear_port(port):
