@@ -13,7 +13,7 @@ class Server:
         with open('server.log', 'w') as log:
             log.write(f'server initiated at: {date()}\n')
             log.write(f'host name: {socket.gethostname()}\n')
-            log.write(f'socket name: {socket.getsockname()}\n')
+            log.write(f'socket name: {self.socket.getsockname()}\n')
 
     def listen(self, end=b'end', ping=b'?'):
         self.socket.listen(5)
