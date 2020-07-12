@@ -580,17 +580,17 @@ class PosteriorPotential(Module):
             q = torch.argsort(_leaks, descending=True)
         else:
             q = torch.arange(len(locs))
-        added = 0
+        added_refs = 0
         for k in q:
             loc = locs[k]
             _ediff = ediff if len(self.X) > 1 else torch.finfo().tiny
             added, change = self.add_1inducing(loc, _ediff, detach=detach)
             if added:
-                added += 1
+                added_refs += 1
             else:
                 if descending:
                     break
-        return added, change
+        return added_refs, change
 
     def eat(self, _atoms, ediff, fdiff, group=None):
         if type(_atoms) == TorchAtoms:
