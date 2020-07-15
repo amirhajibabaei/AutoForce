@@ -66,7 +66,8 @@ def class_of_method(method):
     return None
 
 
-def rounded(p, s=2):
+def rounded(_p, s=2):
+    p = float(_p)
     c = 1
     while abs(c*p) < 1.:
         c *= 10
