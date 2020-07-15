@@ -383,6 +383,9 @@ class PosteriorPotential(Module):
             self.mu = R.inverse()@Q.t()@Y
             self.nu = None
             self.choli = L.inverse()
+        self.make_stats()
+
+    def make_stats(self):
         diff = self.K@self.mu-self.gp.Y(self.data)
         self._ediff = diff[:len(self.data)]/torch.tensor(self.data.natoms)
         self._fdiff = diff[len(self.data):]
