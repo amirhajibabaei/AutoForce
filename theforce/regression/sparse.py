@@ -1,3 +1,4 @@
+# +
 from torch.distributions import LowRankMultivariateNormal, MultivariateNormal
 import torch
 
@@ -29,7 +30,7 @@ class Titias2009:
         self._method = {"backward": 0, "forward": 1}[method]
         self._ub = None
         self.mask = torch.zeros(self.n).bool()
-        self.tr = self.K.trace()
+        self.diag = self.K.diag()
         self.hist = []
 
     @property
@@ -64,7 +65,7 @@ class Titias2009:
         a = self.active
         q = (self.K[a][:, a].cholesky().inverse()@self.K[a]).T
         f = (LowRankMultivariateNormal(self.loc, q, self.sigma**2*self.ones).log_prob(self.y)
-             - 0.5*(self.tr - (q*q).sum())/self.sigma**2)
+             - 0.5*(self.diag[~a].sum() - (q[~a]**2).sum())/self.sigma**2)
         return f
 
     @property
