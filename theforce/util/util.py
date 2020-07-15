@@ -64,3 +64,10 @@ def class_of_method(method):
         else:
             classes = list(c.__bases__) + classes
     return None
+
+
+def rounded(p, s=2):
+    c = 1
+    while abs(c*p) < 1.:
+        c *= 10
+    return round(c*p, s)/c
