@@ -570,8 +570,8 @@ class PosteriorPotential(Module):
         return added, de
 
     def add_ninducing(self, _locs, ediff, detach=True, descending=True, leaks=None):
-        selected = [i for i, loc in enumerate(_locs)
-                    if loc.number in self.gp.species]
+        selected = torch.as_tensor([i for i, loc in enumerate(_locs)
+                                    if loc.number in self.gp.species])
         locs = [_locs[i] for i in selected]
         if len(locs) == 0:
             return 0, 0.
