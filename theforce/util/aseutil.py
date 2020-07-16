@@ -3,6 +3,17 @@ from theforce.util.statsutil import moving_average
 from ase.io import read
 import numpy as np
 from ase.io import Trajectory
+from ase.calculators.singlepoint import SinglePointCalculator
+
+
+def single_point(self):
+    results = {}
+    for q in ['energy', 'forces', 'stress']:
+        try:
+            results[q] = self.calc.results[q]
+        except KeyError:
+            pass
+    self.set_calculator(SinglePointCalculator(self, **results))
 
 
 def downsize_traj(file, l, outfile):
