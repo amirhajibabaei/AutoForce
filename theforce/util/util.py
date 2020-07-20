@@ -12,6 +12,23 @@ def iterable(a, ignore=None):
         return (a, )
 
 
+def iter_balanced(it1, it2):
+    less = min(len(it1), len(it2))
+    more = max(len(it1), len(it2))
+    left = len(it1) == less
+    a = more//less
+    b = more % less
+    chunks = [a+1 if j < b else a for j in range(less)]
+    # iterate
+    start = 0
+    for i, chunk in enumerate(chunks):
+        if left:
+            yield [it1[i]], [it2[j] for j in range(start, start+chunk)]
+        else:
+            yield [it1[j] for j in range(start, start+chunk)], [it2[i]]
+        start = start+chunk
+
+
 def one_liner(x):
     return re.sub(' +', ' ', str(x).replace('\n', ''))
 
