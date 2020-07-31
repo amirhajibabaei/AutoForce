@@ -109,7 +109,6 @@ class ActiveCalculator(Calculator):
         self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
         self.log('{} {}'.format(float(energy), self.atoms.get_temperature()))
         #
-        self.get_covloss()
         if not skip:
             self.update()
         #
@@ -205,10 +204,10 @@ class ActiveCalculator(Calculator):
         beta = (1 - c).clamp(min=0.).sqrt()
         if self.atoms.is_distributed:
             beta = self.gather(beta)
-        self.covloss = beta
+        return beta
 
     def update_inducing(self):
-        beta = self.covloss
+        beta = self.get_covloss()
         q = torch.argsort(beta, descending=True)
         added_beta = 0
         added_diff = 0
