@@ -206,7 +206,7 @@ class ActiveCalculator(Calculator):
             beta = self.gather(beta)
         return beta
 
-    def update_inducing(self):
+    def update_inducing_fast(self):
         beta = self.get_covloss()
         q = torch.argsort(beta, descending=True)
         added_beta = 0
@@ -224,6 +224,37 @@ class ActiveCalculator(Calculator):
                         loc, _ediff, detach=False)
                     if added:
                         added_diff += 1
+                    else:
+                        break
+        added = added_beta + added_diff
+        if added > 0:
+            self.log('added indu: {} ({},{})-> size: {} {}'.format(
+                added, added_beta, added_diff, *self.size))
+        return added
+
+    def update_inducing(self):
+        added_beta = 0
+        added_diff = 0
+        while True:
+            beta = self.get_covloss()
+            q = torch.argsort(beta, descending=True)
+            k = q[0]
+            loc = self.atoms.local(k)
+            if loc.number in self.model.gp.species:
+                if beta[k] > self.covdiff:
+                    self.model.add_inducing(loc)
+                    added_beta += 1
+                    x = self.model.gp.kern(self.atoms, loc)
+                    self.cov = torch.cat([self.cov, x], dim=1)
+                else:
+                    _ediff = (self.ediff if len(self.model.X) > 1
+                              else torch.finfo().tiny)
+                    added, delta = self.model.add_1inducing(
+                        loc, _ediff, detach=False)
+                    if added:
+                        added_diff += 1
+                        x = self.model.gp.kern(self.atoms, loc)
+                        self.cov = torch.cat([self.cov, x], dim=1)
                     else:
                         break
         added = added_beta + added_diff
