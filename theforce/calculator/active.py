@@ -187,8 +187,9 @@ class ActiveCalculator(Calculator):
 
     def gather(self, x):
         _x = torch.zeros(self.atoms.natoms)
-        _x[self.atoms.indices] = beta
-        return torch.distributed.all_reduce(_x)
+        _x[self.atoms.indices] = x
+        torch.distributed.all_reduce(_x)
+        return _x
 
     def get_covloss(self):
         b = self.model.choli@self.cov.T
