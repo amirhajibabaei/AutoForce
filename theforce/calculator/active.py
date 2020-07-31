@@ -1,53 +1,71 @@
 # +
-import numpy as np
-import torch
-from torch.autograd import grad
-from theforce.util.util import date
-from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
+from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
+from theforce.util.util import date
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
 import ase
+from torch.autograd import grad
+import torch
+import numpy as np
 import warnings
-
-
-class Tweak:
-
-    def __init__(self, ediff=0.1, fdiff=0.1, beta=0.1):
-        self.ediff = ediff
-        self.fdiff = fdiff
-        self.beta = beta
-        self.beta_lbound = 0
-        self.volatile = 3
-        self.max_volatile = 10
-        self.skip_after_fp = 3
-        self.tune_noise = 3
 
 
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
-    def __init__(self, calculator, model, tweak=Tweak(), process_group=None,
-                 logfile='accalc.log', verbose=0, **kwargs):
+    def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
+                 logfile='accalc.log', verbose=False, **kwargs):
+        """
+
+        calculator:      any ASE calculator
+        covariance:      similarity kernel(s) | path to a saved model | model
+        process_group:   None | group
+        ediff:           energy sensitivity
+        fdiff:           forces sensitivity
+        covdiff:         covariance-loss sensitivity heuristic
+
+        --------------------------------------------------------------------------------------
+
+        At the beginning, covariance is often a list of similarity kernels:
+            e.g. theforce.similarity.universal.UniversalSoapKernel(...)
+        Later we can use an existing model.
+        A trained model can be saved with:  
+            e.g. calc.model.to_folder('model/')
+        An existing model is loaded with: 
+            e.g. ActiveCalculator(calculator, 'model/', ...)
+
+        For parallelism, first call:
+            torch.init_process_group('mpi')
+        then, set process_group=torch.distributed.group.WORLD in kwargs.
+
+        Sensitivity params can be changed on-the-fly:
+            e.g. calc.ediff = 0.05
+
+        If covariance-loss (range [0,1]) for a LCE is greater than covdiff, 
+        it will be automaticaly added to the inducing set. 
+        Do not make covdiff too small! 
+        covdiff = 1 eliminates this heuristic, if one wishes to keep the
+        algorithm non-parametric.
+
+        """
         Calculator.__init__(self, **kwargs)
         self._calc = calculator
-        self.get_model(model)
-        self.tweak = tweak
         self.process_group = process_group
+        self.get_model(covariance)
+        self.ediff = ediff
+        self.fdiff = fdiff
+        self.covdiff = covdiff
         self.verbose = verbose
         self.logfile = logfile
-
         self.step = 0
         self.log('active calculator says Hello!', mode='w')
-        self.model._cutoff = max([d.descriptor._radial.rc
-                                  for d in self.model.descriptors])
-        self.exact_calc = 0
-        self.skip_calc = 0
-        self._tune_noise = 0
+        self.normalized = None
 
     def get_model(self, model):
         if type(model) == str:
-            self.model = PosteriorPotentialFromFolder(model)
+            self.model = PosteriorPotentialFromFolder(
+                model, group=self.process_group)
         elif type(model) == PosteriorPotential:
             self.model = model
         else:
@@ -60,7 +78,7 @@ class ActiveCalculator(Calculator):
     def calculate(self, _atoms=None, properties=['energy'], system_changes=all_changes):
         if type(_atoms) == ase.atoms.Atoms:
             atoms = TorchAtoms(ase_atoms=_atoms)
-            uargs = {'cutoff': self.model._cutoff,
+            uargs = {'cutoff': self.model.cutoff,
                      'descriptors': self.model.gp.kern.kernels}
             self.to_ase = True
         else:
@@ -73,16 +91,31 @@ class ActiveCalculator(Calculator):
         self.atoms.update(posgrad=True, cellgrad=True,
                           forced=True, dont_save_grads=True, **uargs)
         # build a model
+        skip = False
         if self.step == 0:
             if self.model.ndata == 0:
                 self.initiate_model()
+                skip = True
             self.log('size: {} {}'.format(*self.size))
-        # kernel
-        self._K = self.model.gp.kern(self.atoms, self.model.X)
-        # energy
-        energy = (self._K@self.model.mu).sum()
+        # kernel/energy
+        self.cov = self.model.gp.kern(self.atoms, self.model.X)
+        energy = (self.cov@self.model.mu).sum()
         if self.atoms.is_distributed:
-            torch.distributed.all_reduce(enegy)
+            torch.distributed.all_reduce(energy)
+        forces, stress = self.grads(energy)
+        # results
+        self.results['energy'] = energy.detach().numpy()
+        self.results['forces'] = forces.detach().numpy()
+        self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
+        self.log('{} {}'.format(float(energy), self.atoms.get_temperature()))
+        #
+        self.get_covloss()
+        if not skip:
+            self.update()
+        #
+        self.step += 1
+
+    def grads(self, energy):
         # forces
         rgrad = grad(energy, self.atoms.xyz, retain_graph=True,
                      allow_unused=True)[0]
@@ -102,15 +135,7 @@ class ActiveCalculator(Calculator):
         except ValueError:
             volume = -2  # here stress2=0, thus trace(stress) = virial (?)
         stress = (stress1 + stress2).detach().numpy() / volume
-        # results
-        self.results['energy'] = energy.detach().numpy()
-        self.results['forces'] = forces.detach().numpy()
-        self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
-        self.log('{} {}'.format(float(energy), self.atoms.get_temperature()))
-        #
-        self.update()
-        #
-        self.step += 1
+        return forces, stress
 
     def initiate_model(self):
         atoms = self.snapshot()
@@ -121,8 +146,7 @@ class ActiveCalculator(Calculator):
         self.model.set_data(data, inducing)
         for j in range(atoms.natoms):
             if j not in i:
-                self.model.add_1inducing(locs[j], self.tweak.ediff)
-        self.skip_calc += 1
+                self.model.add_1inducing(locs[j], self.ediff)
 
     def _exact(self, copy):
         tmp = copy.as_ase() if self.to_ase else copy
@@ -137,10 +161,7 @@ class ActiveCalculator(Calculator):
             dE = self.results['energy'] - energy
             df = abs(self.results['forces'] - forces)
             self.log(
-                f'errors:  dE: {dE}  df_max: {df.max()}  df_mean: {df.mean()}')
-        #
-        self.skip_calc += self.tweak.skip_after_fp
-        self.exact_calc += 1
+                f'errors:  E_ae: {dE}  F_maxe: {df.max()}  F_mae: {df.mean()}')
         return energy, forces
 
     def snapshot(self, fake=False, copy=None):
@@ -170,31 +191,39 @@ class ActiveCalculator(Calculator):
         _x[self.atoms.indices] = beta
         return torch.distributed.all_reduce(_x)
 
-    def update_inducing(self):
-        b = self.model.choli@self._K.T
-        alpha = torch.cat([self.model.gp.kern(x, x)
-                           for x in self.atoms]).view(-1)
-        beta = (1 - (b.T@b).diag()/alpha).clamp(min=0.).sqrt()
+    def get_covloss(self):
+        b = self.model.choli@self.cov.T
+        c = (b*b).sum(dim=0)
+        if not self.normalized:
+            alpha = torch.cat([self.model.gp.kern(x, x)
+                               for x in self.atoms]).view(-1)
+            c = c/alpha
+            if self.normalized is None:
+                self.normalized = (self.gather(alpha) if self.atoms.is_distributed
+                                   else alpha).allclose(torch.ones([]))
+                self.log(f'kernel normalization status {self.normalized}')
+        beta = (1 - c).clamp(min=0.).sqrt()
         if self.atoms.is_distributed:
-            alpha = self.gather(alpha)
             beta = self.gather(beta)
+        self.covloss = beta
+
+    def update_inducing(self):
+        beta = self.covloss
         q = torch.argsort(beta, descending=True)
         added_beta = 0
         added_diff = 0
         for k in q:
             loc = self.atoms.local(k)
-            if beta[k] < self.tweak.beta_lbound:
-                break
             if loc.number in self.model.gp.species:
-                if beta[k] > self.tweak.beta:
+                if beta[k] > self.covdiff:
                     self.model.add_inducing(loc)
                     added_beta += 1
                 else:
-                    _ediff = (self.tweak.ediff if len(self.model.X) > 1
+                    _ediff = (self.ediff if len(self.model.X) > 1
                               else torch.finfo().tiny)
-                    delta = self.model.add_1inducing(
+                    added, delta = self.model.add_1inducing(
                         loc, _ediff, detach=False)
-                    if delta >= self.tweak.ediff:
+                    if added:
                         added_diff += 1
                     else:
                         break
@@ -205,35 +234,23 @@ class ActiveCalculator(Calculator):
         return added
 
     def update_data(self, try_fake=True):
-        if self.skip_calc > 0:
-            self.skip_calc -= 1
-            return 0
         n = self.model.ndata
         new = self.snapshot(fake=try_fake)
-        self.model.add_1atoms(new, self.tweak.ediff, self.tweak.fdiff)
-        if try_fake:
-            self.head()
+        self.model.add_1atoms(new, self.ediff, self.fdiff)
         added = self.model.ndata - n
         if added > 0:
+            if try_fake:
+                self.head()
             self.log('added data: {} -> size: {} {}'.format(
                 added, *self.size))
         return added
 
     def update(self):
-        if self.model.ndata < self.tweak.volatile and self.exact_calc < self.tweak.max_volatile:
-            n = self.update_data(False)
-            m = self.update_inducing()
-        else:
-            m = self.update_inducing()
-            n = self.update_data(True) if m > 0 else 0
-        if n > 0:
-            self._tune_noise += 1
-            doit = (self.model.ndata > self.tweak.volatile and
-                    (not self.model.is_well()))
-            if self._tune_noise >= self.tweak.tune_noise and doit:
-                self.model.tune_noise()
-                self.log(f'noise: {self.model.gp.noise.signal}')
-                self._tune_noise = 0
+        m = self.update_inducing()
+        n = self.update_data(try_fake=True) if m > 0 else 0
+        if n > 0 and not self.model.is_well():
+            self.model.tune_noise()
+            self.log(f'noise: {self.model.gp.noise.signal}')
 
     @property
     def rank(self):
