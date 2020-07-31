@@ -235,10 +235,15 @@ class ActiveCalculator(Calculator):
     def update_inducing(self):
         added_beta = 0
         added_diff = 0
+        added_indices = []
         while True:
+            if len(added_indices) == self.atoms.natoms:
+                break
             beta = self.get_covloss()
             q = torch.argsort(beta, descending=True)
-            k = q[0]
+            for k in q:
+                if k not in added_indices:
+                    break
             loc = self.atoms.local(k)
             if loc.number in self.model.gp.species:
                 if beta[k] > self.covdiff:
@@ -246,6 +251,7 @@ class ActiveCalculator(Calculator):
                     added_beta += 1
                     x = self.model.gp.kern(self.atoms, loc)
                     self.cov = torch.cat([self.cov, x], dim=1)
+                    added_indices.append(k)
                 else:
                     _ediff = (self.ediff if len(self.model.X) > 1
                               else torch.finfo().tiny)
@@ -255,6 +261,7 @@ class ActiveCalculator(Calculator):
                         added_diff += 1
                         x = self.model.gp.kern(self.atoms, loc)
                         self.cov = torch.cat([self.cov, x], dim=1)
+                        added_indices.append(k)
                     else:
                         break
         added = added_beta + added_diff
@@ -278,9 +285,11 @@ class ActiveCalculator(Calculator):
     def update(self):
         m = self.update_inducing()
         n = self.update_data(try_fake=True) if m > 0 else 0
-        if n > 0 and not self.model.is_well():
-            self.model.tune_noise()
-            self.log(f'noise: {self.model.gp.noise.signal}')
+        # tunning noise is unstable!
+        # if n > 0 and not self.model.is_well():
+        #    self.log(f'tuning noise: {self.model.gp.noise.signal} ->')
+        #    self.model.tune_noise(min_steps=10, verbose=self.verbose)
+        #    self.log(f'noise: {self.model.gp.noise.signal}')
 
     @property
     def rank(self):
