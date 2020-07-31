@@ -11,11 +11,17 @@ import numpy as np
 import warnings
 
 
+def pad(a, b):
+    c = torch.cat([a, torch.zeros(b.size(0)-a.size(0), a.size(1))], dim=0)
+    d = torch.cat([c, torch.zeros(c.size(0), b.size(1)-c.size(1))], dim=1)
+    return d
+
+
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
-                 logfile='accalc.log', verbose=False, **kwargs):
+                 bias=None, logfile='accalc.log', verbose=False, **kwargs):
         """
 
         calculator:      any ASE calculator
@@ -24,6 +30,7 @@ class ActiveCalculator(Calculator):
         ediff:           energy sensitivity
         fdiff:           forces sensitivity
         covdiff:         covariance-loss sensitivity heuristic
+        bias:            scale of the bias potential
 
         --------------------------------------------------------------------------------------
 
@@ -48,6 +55,8 @@ class ActiveCalculator(Calculator):
         covdiff = 1 eliminates this heuristic, if one wishes to keep the
         algorithm non-parametric.
 
+        Bias potential derives system away from previous positions.
+
         """
         Calculator.__init__(self, **kwargs)
         self._calc = calculator
@@ -56,6 +65,8 @@ class ActiveCalculator(Calculator):
         self.ediff = ediff
         self.fdiff = fdiff
         self.covdiff = covdiff
+        self.bias = bias
+        self.bias_pot = torch.zeros(0, 0)
         self.verbose = verbose
         self.logfile = logfile
         self.step = 0
@@ -102,7 +113,14 @@ class ActiveCalculator(Calculator):
         energy = (self.cov@self.model.mu).sum()
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(energy)
-        forces, stress = self.grads(energy)
+        forces, stress = self.grads(energy, retain_graph=self.bias is not None)
+        if self.bias is not None:
+            self.bias_pot = (pad(self.bias_pot, self.cov) +
+                             self.cov.detach()*self.bias)
+            bias_energy = (self.bias_pot*self.cov).sum()
+            if self.atoms.is_distributed:
+                torch.distributed.all_reduce(bias_energy)
+            bias_forces, bias_stress = self.grads(bias_energy)
         # results
         self.results['energy'] = energy.detach().numpy()
         self.results['forces'] = forces.detach().numpy()
@@ -112,9 +130,15 @@ class ActiveCalculator(Calculator):
         if not skip:
             self.update()
         #
+        if self.bias is not None:
+            self.log('bias: {}'.format(float(bias_energy)))
+            self.results['energy'] += bias_energy.detach().numpy()
+            self.results['forces'] += bias_forces.detach().numpy()
+            self.results['stress'] += bias_stress.flat[[0, 4, 8, 5, 2, 1]]
+        #
         self.step += 1
 
-    def grads(self, energy):
+    def grads(self, energy, retain_graph=False):
         # forces
         rgrad = grad(energy, self.atoms.xyz, retain_graph=True,
                      allow_unused=True)[0]
@@ -123,7 +147,8 @@ class ActiveCalculator(Calculator):
             torch.distributed.all_reduce(forces)
         # stress
         stress1 = -(forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
-        cellgrad, = grad(energy, self.atoms.lll, allow_unused=True)
+        cellgrad, = grad(energy, self.atoms.lll, retain_graph=retain_graph,
+                         allow_unused=True)
         if cellgrad is None:
             cellgrad = torch.zeros_like(self.atoms.lll)
         if self.atoms.is_distributed:
