@@ -267,7 +267,7 @@ class ActiveCalculator(Calculator):
                 break
             beta = self.get_covloss()
             q = torch.argsort(beta, descending=True)
-            for k in q:
+            for k in q.tolist():
                 if k not in added_indices:
                     break
             loc = self.atoms.local(k)
@@ -292,8 +292,9 @@ class ActiveCalculator(Calculator):
                         break
         added = added_beta + added_diff
         if added > 0:
-            self.log('added indu: {} ({},{})-> size: {} {}'.format(
-                added, added_beta, added_diff, *self.size))
+            details = [(k, self.atoms.numbers[k]) for k in added_indices]
+            self.log('added indu: {} ({},{})-> size: {} {} details: {}'.format(
+                added, added_beta, added_diff, *self.size, details))
         return added
 
     def update_data(self, try_fake=True):
