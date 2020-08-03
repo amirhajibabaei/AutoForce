@@ -383,6 +383,7 @@ class PosteriorPotential(Module):
             self.mu = R.inverse()@Q.t()@Y
             self.nu = None
             self.choli = L.inverse()
+        self.Mi = self.choli.t()@self.choli
         self.make_stats()
 
     def make_stats(self):
