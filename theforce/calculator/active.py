@@ -262,6 +262,7 @@ class ActiveCalculator(Calculator):
         added_beta = 0
         added_diff = 0
         added_indices = []
+        self.blind = False
         while True:
             if len(added_indices) == self.atoms.natoms:
                 break
@@ -270,6 +271,8 @@ class ActiveCalculator(Calculator):
             for k in q.tolist():
                 if k not in added_indices:
                     break
+            if beta[k].isclose(torch.ones([])):
+                self.blind = True
             loc = self.atoms.local(k)
             if loc.number in self.model.gp.species:
                 if beta[k] > self.covdiff:
@@ -295,6 +298,8 @@ class ActiveCalculator(Calculator):
             details = [(k, self.atoms.numbers[k]) for k in added_indices]
             self.log('added indu: {} ({},{})-> size: {} {} details: {}'.format(
                 added, added_beta, added_diff, *self.size, details))
+            if self.blind:
+                self.log('model may be blind! trying robust algorithm.')
         return added
 
     def update_data(self, try_fake=True):
@@ -311,7 +316,7 @@ class ActiveCalculator(Calculator):
 
     def update(self):
         m = self.update_inducing()
-        n = self.update_data(try_fake=True) if m > 0 else 0
+        n = self.update_data(try_fake=not self.blind) if m > 0 else 0
         # tunning noise is unstable!
         # if n > 0 and not self.model.is_well():
         #    self.log(f'tuning noise: {self.model.gp.noise.signal} ->')
