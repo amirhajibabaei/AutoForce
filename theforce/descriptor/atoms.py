@@ -287,11 +287,13 @@ class TorchAtoms(Atoms):
         else:
             self.indices = range(self.natoms)
 
-    def local(self, a, stage=True, dont_save_grads=True):
+    def local(self, a, stage=True, dont_save_grads=True, detach=False):
         n, off = self.nl.get_neighbors(a)
         cells = (from_numpy(off[..., None].astype(np.float)) *
                  self.lll).sum(dim=1)
         r = self.xyz[n] - self.xyz[a] + cells
+        if detach:
+            r = r.detach()
         loc = Local(a, n, self.numbers[a], self.numbers[n],
                     r, off, self.descriptors if stage else [],
                     dont_save_grads=dont_save_grads)
