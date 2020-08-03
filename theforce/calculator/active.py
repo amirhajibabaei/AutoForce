@@ -11,7 +11,12 @@ import numpy as np
 import warnings
 
 
-def pad(a, b):
+def pad_1d(a, b):
+    c = torch.cat([a, torch.zeros(b.size(0)-a.size(0))])
+    return c
+
+
+def pad_2d(a, b):
     c = torch.cat([a, torch.zeros(b.size(0)-a.size(0), a.size(1))], dim=0)
     d = torch.cat([c, torch.zeros(c.size(0), b.size(1)-c.size(1))], dim=1)
     return d
@@ -20,7 +25,7 @@ def pad(a, b):
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
-    def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
+    def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=1.,
                  bias=None, logfile='accalc.log', verbose=False, **kwargs):
         """
 
@@ -66,7 +71,7 @@ class ActiveCalculator(Calculator):
         self.fdiff = fdiff
         self.covdiff = covdiff
         self.bias = bias
-        self.bias_pot = torch.zeros(0, 0)
+        self.bias_pot = None
         self.verbose = verbose
         self.logfile = logfile
         self.step = 0
@@ -87,6 +92,7 @@ class ActiveCalculator(Calculator):
         return self.model.ndata, len(self.model.X)
 
     def calculate(self, _atoms=None, properties=['energy'], system_changes=all_changes):
+
         if type(_atoms) == ase.atoms.Atoms:
             atoms = TorchAtoms(ase_atoms=_atoms)
             uargs = {'cutoff': self.model.cutoff,
@@ -101,6 +107,7 @@ class ActiveCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
         self.atoms.update(posgrad=True, cellgrad=True,
                           forced=True, dont_save_grads=True, **uargs)
+
         # build a model
         skip = False
         if self.step == 0:
@@ -108,35 +115,55 @@ class ActiveCalculator(Calculator):
                 self.initiate_model()
                 skip = True
             self.log('size: {} {}'.format(*self.size))
-        # kernel/energy
+
+        # kernel
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
+
+        # energy/forces
+        energy = self.calculate_results(True)
+
+        # active learning
+        if not skip:
+            m, n = self.update()
+            if n > 0 or m > 0:  # update results
+                energy = self.calculate_results(self.bias is not None)
+
+        # bias potential
+        if self.bias is not None:
+            bias_energy = self.add_bias()
+            log_bias = f'bias: {float(bias_energy)}'
+        else:
+            log_bias = ''
+
+        # step
+        self.log('{} {} {}'.format(float(energy), self.atoms.get_temperature(),
+                                   log_bias))
+        self.step += 1
+
+    def calculate_results(self, retain_graph=False):
         energy = (self.cov@self.model.mu).sum()
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(energy)
-        forces, stress = self.grads(energy, retain_graph=self.bias is not None)
-        if self.bias is not None:
-            self.bias_pot = (pad(self.bias_pot, self.cov) +
-                             self.cov.detach()*self.bias)
-            bias_energy = (self.bias_pot*self.cov).sum()
-            if self.atoms.is_distributed:
-                torch.distributed.all_reduce(bias_energy)
-            bias_forces, bias_stress = self.grads(bias_energy)
-        # results
+        forces, stress = self.grads(energy, retain_graph=retain_graph)
         self.results['energy'] = energy.detach().numpy()
         self.results['forces'] = forces.detach().numpy()
         self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
-        self.log('{} {}'.format(float(energy), self.atoms.get_temperature()))
-        #
-        if not skip:
-            self.update()
-        #
-        if self.bias is not None:
-            self.log('bias: {}'.format(float(bias_energy)))
-            self.results['energy'] += bias_energy.detach().numpy()
-            self.results['forces'] += bias_forces.detach().numpy()
-            self.results['stress'] += bias_stress.flat[[0, 4, 8, 5, 2, 1]]
-        #
-        self.step += 1
+        return float(energy)
+
+    def add_bias(self):
+        if self.bias_pot is None:
+            self.bias_pot = torch.zeros(self.cov.size(1))
+        mu = (self.model.Mi@self.cov.detach().t()).sum(dim=1)
+        if self.atoms.is_distributed:
+            torch.distributed.all_reduce(mu)
+        self.bias_pot = pad_1d(self.bias_pot, mu) + self.bias*mu
+        bias_energy = (self.cov@self.bias_pot).sum()
+        torch.distributed.all_reduce(bias_energy)
+        bias_forces, bias_stress = self.grads(bias_energy)
+        self.results['energy'] += bias_energy.detach().numpy()
+        self.results['forces'] += bias_forces.detach().numpy()
+        self.results['stress'] += bias_stress.flat[[0, 4, 8, 5, 2, 1]]
+        return float(bias_energy)
 
     def grads(self, energy, retain_graph=False):
         # forces
@@ -232,32 +259,6 @@ class ActiveCalculator(Calculator):
             beta = self.gather(beta)
         return beta
 
-    def update_inducing_fast(self):
-        beta = self.get_covloss()
-        q = torch.argsort(beta, descending=True)
-        added_beta = 0
-        added_diff = 0
-        for k in q:
-            loc = self.atoms.local(k)
-            if loc.number in self.model.gp.species:
-                if beta[k] > self.covdiff:
-                    self.model.add_inducing(loc)
-                    added_beta += 1
-                else:
-                    _ediff = (self.ediff if len(self.model.X) > 1
-                              else torch.finfo().tiny)
-                    added, delta = self.model.add_1inducing(
-                        loc, _ediff, detach=False)
-                    if added:
-                        added_diff += 1
-                    else:
-                        break
-        added = added_beta + added_diff
-        if added > 0:
-            self.log('added indu: {} ({},{})-> size: {} {}'.format(
-                added, added_beta, added_diff, *self.size))
-        return added
-
     def update_inducing(self):
         added_beta = 0
         added_diff = 0
@@ -273,7 +274,7 @@ class ActiveCalculator(Calculator):
                     break
             if beta[k].isclose(torch.ones([])):
                 self.blind = True
-            loc = self.atoms.local(k)
+            loc = self.atoms.local(k, detach=True)
             if loc.number in self.model.gp.species:
                 if beta[k] > self.covdiff:
                     self.model.add_inducing(loc)
@@ -322,6 +323,7 @@ class ActiveCalculator(Calculator):
         #    self.log(f'tuning noise: {self.model.gp.noise.signal} ->')
         #    self.model.tune_noise(min_steps=10, verbose=self.verbose)
         #    self.log(f'noise: {self.model.gp.noise.signal}')
+        return m, n
 
     @property
     def rank(self):
