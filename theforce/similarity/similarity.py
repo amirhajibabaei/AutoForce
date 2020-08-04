@@ -1,3 +1,4 @@
+# +
 from torch.nn import Module
 from torch import cat
 from theforce.util.util import iterable
@@ -28,7 +29,7 @@ class SimilarityKernel(Module):
 
     @method_caching
     def func(self, p, q):
-        return self.get_func(p, q)
+        return self.get_func(p, q) + lone_atoms(p, q)
 
     @method_caching
     def leftgrad(self, p, q):
@@ -65,3 +66,14 @@ class SimilarityKernel(Module):
     def state(self):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
+
+def lone_atoms(_p, _q):
+    k = 0.
+    for p in iterable(_p):
+        if p._b.size(0) > 0:
+            continue
+        for q in iterable(_q):
+            if q._b.size(0) > 0:
+                continue
+            k += 1.
+    return torch.tensor([[k]])
