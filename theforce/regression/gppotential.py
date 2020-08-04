@@ -377,8 +377,10 @@ class PosteriorPotential(Module):
             L, self.ridge = jitcholesky(self.M)
             #sigma = self.gp.diagonal_ridge(self.data).sqrt()
             sigma = self.gp.noise.signal
-            A = torch.cat((self.K/sigma.view(-1, 1), L.t()))
-            Y = torch.cat((self.gp.Y(self.data)/sigma, torch.zeros(L.size(0))))
+            #A = torch.cat((self.K/sigma.view(-1, 1), L.t()))
+            A = torch.cat((self.K, sigma.view(1)*L.t()))
+            #Y = torch.cat((self.gp.Y(self.data)/sigma, torch.zeros(L.size(0))))
+            Y = torch.cat((self.gp.Y(self.data), torch.zeros(L.size(0))))
             Q, R = torch.qr(A)
             self.mu = R.inverse()@Q.t()@Y
             self.nu = None
