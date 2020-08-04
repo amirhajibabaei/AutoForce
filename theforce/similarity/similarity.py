@@ -68,12 +68,12 @@ class SimilarityKernel(Module):
 
 
 def lone_atoms(_p, _q):
-    k = 0.
+    k = 0
     for p in iterable(_p):
         if p._b.size(0) > 0:
             continue
         for q in iterable(_q):
-            if q._b.size(0) > 0:
+            if p.number != q.number or q._b.size(0) > 0:
                 continue
-            k += 1.
-    return torch.tensor([[k]])
+            k += 1
+    return torch.tensor([[float(k)]])
