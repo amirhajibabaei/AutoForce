@@ -563,7 +563,7 @@ class PosteriorPotential(Module):
         e2 = self(loc, **kwargs)
         de = abs(e1-e2)
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
-        if de < ediff and not blind:
+        if (de < ediff and not blind) or self.ridge > 0.:
             self.pop_1inducing(clear_cached=True)
             added = 0
         else:
