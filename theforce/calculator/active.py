@@ -313,8 +313,8 @@ class ActiveCalculator(Calculator):
         if added > 0:
             if try_fake:
                 self.head()
-            self.log('added data: {} -> size: {} {}'.format(
-                added, *self.size))
+            self.log('added data: {} -> size: {} {} (stats: {})'.format(
+                added, *self.size, self.model._stats))
         return added
 
     def update(self):
