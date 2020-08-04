@@ -166,6 +166,8 @@ class ActiveCalculator(Calculator):
         return float(bias_energy)
 
     def grads(self, energy, retain_graph=False):
+        if not energy.grad_fn:
+            return torch.zeros_like(self.atoms.xyz), np.zeros_like(self.atoms.cell)
         # forces
         rgrad = grad(energy, self.atoms.xyz, retain_graph=True,
                      allow_unused=True)[0]
