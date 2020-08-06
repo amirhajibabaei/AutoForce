@@ -76,10 +76,12 @@ class BruteDoping:
             assert self.atoms[index].number == f
             self.atoms[index].number = i
 
-    def search(self, deltas, depth=1):
+    def search(self, deltas, depth=1, forbidden={}):
         """
         deltas: e.g. {3: -1, 11: 1} replaces 1 Li with Na
         depth: keeps only "depth" lowest energy children of each parent.
+        forbidden: {species: [indices]}, forbids certain species from 
+        placement at certain sites.
 
         if depth is None, all children will be kept.
 
@@ -89,6 +91,7 @@ class BruteDoping:
         self.log(f'searching depth: {depth}')
         if depth is None:
             self.log('None -> all dopings will be generated (one path is enough)')
+        self.log(f'forbidden: {forbidden}')
         global_ = []
         global_e = []
         for path in doping_paths(deltas):
@@ -103,6 +106,8 @@ class BruteDoping:
                     ch_energies = []
                     for at in self.atoms:
                         if at.number == r:
+                            if a in forbidden and at.index in forbidden[a]:
+                                continue
                             head = (at.index, r, a)
                             self.dope((head,))  # 2
                             new = (*dopings, head)
