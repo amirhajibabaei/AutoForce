@@ -78,7 +78,7 @@ class BruteDoping:
             assert self.atoms[index].number == f
             self.atoms[index].number = i
 
-    def search(self, deltas, depth=1, similar=0.95, forbidden={}):
+    def search(self, deltas, depth=1, similar=0.999, forbidden={}):
         """
         deltas: e.g. {3: -1, 11: 1} replaces 1 Li with Na
         depth: keeps only "depth" lowest energy children of each parent.
@@ -104,6 +104,7 @@ class BruteDoping:
             for r, a in path:
                 generation = []
                 energies = []
+                skipped = 0
                 for dopings in parents:
                     self.dope(dopings)  # 1
                     childs = []
@@ -119,6 +120,7 @@ class BruteDoping:
                                     is_unique = False
                                     break
                             if not is_unique:
+                                skipped += 1
                                 continue
                             unique += [at.index]
                             head = (at.index, r, a)
@@ -132,7 +134,7 @@ class BruteDoping:
                     childs, ch_energies = top(childs, ch_energies, depth)
                     generation += childs
                     energies += ch_energies
-                self.log(f'generation size: {len(generation)}')
+                self.log(f'generation size: {len(generation)} skipped :{skipped}')
                 parents = generation
                 if self.callback:
                     self.callback[0](self.callback[1])
@@ -152,7 +154,7 @@ class BruteDoping:
         self.dope(x)
         e = self.get_potential_energy(x)
         if self.rank == 0:
-            self.atoms.write(f'{self.prefix}.xyz')
+            self.atoms.write(f'{self.prefix}.cif')
         minimum = self.atoms.copy()
         self.undope(x)
         return minimum
