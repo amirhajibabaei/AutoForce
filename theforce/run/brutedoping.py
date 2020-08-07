@@ -1,4 +1,5 @@
 # +
+from theforce.util.simplesim import SimpleSim
 import datetime
 import itertools
 import numpy as np
@@ -35,6 +36,7 @@ class BruteDoping:
         self.cached = {}
         self.cachfile = f'{self.prefix}.cached'
         self.read_cached()
+        self.sim = SimpleSim(atoms)
         self.dry_run = False
 
     def log(self, msg, mode='a'):
@@ -76,10 +78,12 @@ class BruteDoping:
             assert self.atoms[index].number == f
             self.atoms[index].number = i
 
-    def search(self, deltas, depth=1, forbidden={}):
+    def search(self, deltas, depth=1, similar=0.95, forbidden={}):
         """
         deltas: e.g. {3: -1, 11: 1} replaces 1 Li with Na
         depth: keeps only "depth" lowest energy children of each parent.
+        similar: 0-to-1, used for skipping similar sites. 
+        If similar=1 -> all atoms are unique
         forbidden: {species: [indices]}, forbids certain species from 
         placement at certain sites.
 
@@ -104,10 +108,19 @@ class BruteDoping:
                     self.dope(dopings)  # 1
                     childs = []
                     ch_energies = []
+                    unique = []
                     for at in self.atoms:
                         if at.number == r:
                             if a in forbidden and at.index in forbidden[a]:
                                 continue
+                            is_unique = True
+                            for u in unique:
+                                if self.sim(u, at.index, threshold=similar):
+                                    is_unique = False
+                                    break
+                            if not is_unique:
+                                continue
+                            unique += [at.index]
                             head = (at.index, r, a)
                             self.dope((head,))  # 2
                             new = (*dopings, head)
