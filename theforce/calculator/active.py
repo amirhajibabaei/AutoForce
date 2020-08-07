@@ -109,12 +109,11 @@ class ActiveCalculator(Calculator):
                           forced=True, dont_save_grads=True, **uargs)
 
         # build a model
-        skip = False
+        data = True
         if self.step == 0:
             if self.model.ndata == 0:
                 self.initiate_model()
-                skip = True
-            self.log('size: {} {}'.format(*self.size))
+                data = False
 
         # kernel
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
@@ -123,10 +122,9 @@ class ActiveCalculator(Calculator):
         energy = self.calculate_results(True)
 
         # active learning
-        if not skip:
-            m, n = self.update()
-            if n > 0 or m > 0:  # update results
-                energy = self.calculate_results(self.bias is not None)
+        m, n = self.update(data=data)
+        if n > 0 or m > 0:  # update results
+            energy = self.calculate_results(self.bias is not None)
 
         # bias potential
         if self.bias is not None:
@@ -191,15 +189,13 @@ class ActiveCalculator(Calculator):
         return forces, stress
 
     def initiate_model(self):
-        atoms = self.snapshot()
-        i = atoms.first_of_each_atom_type()
-        locs = atoms.gathered()
-        inducing = LocalsData([locs[j] for j in i])
-        data = AtomsData([atoms])
+        data = AtomsData([self.snapshot()])
+        i = self.atoms.first_of_each_atom_type()
+        inducing = LocalsData([self.atoms.local(j, detach=True) for j in i])
         self.model.set_data(data, inducing)
-        for j in range(atoms.natoms):
-            if j not in i:
-                self.model.add_1inducing(locs[j], self.ediff)
+        details = [(j, self.atoms.numbers[j]) for j in i]
+        self.log('seed size: {} {} details: {}'.format(
+            *self.size, details))
 
     def _exact(self, copy):
         tmp = copy.as_ase() if self.to_ase else copy
@@ -313,13 +309,16 @@ class ActiveCalculator(Calculator):
         if added > 0:
             if try_fake:
                 self.head()
-            self.log('added data: {} -> size: {} {} (stats: {})'.format(
-                added, *self.size, self.model._stats))
+            self.log('added data: {} -> size: {} {}'.format(
+                added, *self.size))
         return added
 
-    def update(self):
-        m = self.update_inducing()
-        n = self.update_data(try_fake=not self.blind) if m > 0 else 0
+    def update(self, inducing=True, data=True):
+        m = self.update_inducing() if inducing else 0
+        n = self.update_data(try_fake=not self.blind) if m > 0 and data else 0
+        if m > 0 or n > 0:
+            self.log('stats: {} {} {} {}'.format(
+                *(float(v) for v in self.model._stats)))
         # tunning noise is unstable!
         # if n > 0 and not self.model.is_well():
         #    self.log(f'tuning noise: {self.model.gp.noise.signal} ->')
