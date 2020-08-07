@@ -25,7 +25,7 @@ def pad_2d(a, b):
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
-    def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=1.,
+    def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
                  bias=None, logfile='accalc.log', verbose=False, **kwargs):
         """
 
@@ -56,9 +56,12 @@ class ActiveCalculator(Calculator):
 
         If covariance-loss (range [0,1]) for a LCE is greater than covdiff, 
         it will be automaticaly added to the inducing set. 
+        Moreover, exact calculations will be triggered.
         Do not make covdiff too small! 
         covdiff = 1 eliminates this heuristic, if one wishes to keep the
         algorithm non-parametric.
+        Setting a finite covdiff (~0.1) may be necessary if the training 
+        starts from a state with zero forces (with an empty model).
 
         Bias potential derives system away from previous positions.
 
@@ -280,6 +283,7 @@ class ActiveCalculator(Calculator):
                     x = self.model.gp.kern(self.atoms, loc)
                     self.cov = torch.cat([self.cov, x], dim=1)
                     added_indices.append(k)
+                    self.blind = True
                 else:
                     _ediff = (self.ediff if len(self.model.X) > 1
                               else torch.finfo().tiny)
