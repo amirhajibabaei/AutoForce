@@ -8,8 +8,8 @@ import os
 
 class BruteDoping:
     """
-    A deterministic algorithm for finding minimum energy doping.
-    A doping sequence is defined by: 
+    a deterministic algorithm for finding minimum energy doping.
+    a doping sequence is defined by: 
        ((i1, x1, y1), (i2, x2, y2), ...)
     where i1 is the index of the atom whose atomic number has 
     changed from x1 to y1, etc.
@@ -78,74 +78,89 @@ class BruteDoping:
             assert self.atoms[index].number == f
             self.atoms[index].number = i
 
-    def search(self, deltas, depth=1, similar=0.999, forbidden={}):
+    def search(self, path, parents=None, depth=1, similar=0.999, forbidden={}):
         """
-        deltas: e.g. {3: -1, 11: 1} replaces 1 Li with Na
+        path: e.g. ((3, 11), (3, 8), etc) replaces Li with Na, Li with O, etc.
         depth: keeps only "depth" lowest energy children of each parent.
         similar: 0-to-1, used for skipping similar sites. 
-        If similar=1 -> all atoms are unique
+        if similar > 1 -> all atoms are unique
         forbidden: {species: [indices]}, forbids certain species from 
         placement at certain sites.
 
         if depth is None, all children will be kept.
 
-        TODO: find unique sites for speedup
+        TODO: better algo for finding unique sites for speedup
 
         """
+        self.log(f'path: {path}')
         self.log(f'searching depth: {depth}')
         if depth is None:
-            self.log('None -> all dopings will be generated (one path is enough)')
+            self.log('None -> all dopings will be generated')
         self.log(f'forbidden: {forbidden}')
+        if parents is None:
+            parents = [tuple()]
+        for r, a in path:
+            generation = []
+            energies = []
+            skipped = 0
+            for dopings in parents:
+                self.dope(dopings)  # 1
+                childs = []
+                ch_energies = []
+                unique = []
+                for at in self.atoms:
+                    if at.number == r:
+                        if a in forbidden and at.index in forbidden[a]:
+                            continue
+                        is_unique = True
+                        for u in unique:
+                            if self.sim(u, at.index, threshold=similar):
+                                is_unique = False
+                                break
+                        if not is_unique:
+                            skipped += 1
+                            continue
+                        unique += [at.index]
+                        head = (at.index, r, a)
+                        self.dope((head,))  # 2
+                        new = (*dopings, head)
+                        e = self.get_potential_energy(new)
+                        ch_energies += [e]
+                        childs += [new]
+                        self.undope((head,))  # 2
+                self.undope(dopings)  # 1
+                childs, ch_energies = top(childs, ch_energies, depth)
+                generation += childs
+                energies += ch_energies
+            self.log(f'generation size: {len(generation)} skipped :{skipped}')
+            parents = generation
+            if self.callback:
+                self.callback[0](self.callback[1])
+        generation, energies = top(generation, energies, depth)
+        self.log('top contenders:')
+        for x, y in zip(*[generation, energies]):
+            self.log(f'{x} {y}')
+        return generation, energies
+
+    def search_paths(self, paths, descent=True, **path_kwargs):
+        """
+        paths: a sequence of paths
+        descent: if True, survivors of one path will be passed as parents 
+        of the next path.
+
+        see search for kwargs.
+
+        """
         global_ = []
         global_e = []
-        for path in doping_paths(deltas):
-            self.log(f'path: {path}')
-            parents = [tuple()]
-            for r, a in path:
-                generation = []
-                energies = []
-                skipped = 0
-                for dopings in parents:
-                    self.dope(dopings)  # 1
-                    childs = []
-                    ch_energies = []
-                    unique = []
-                    for at in self.atoms:
-                        if at.number == r:
-                            if a in forbidden and at.index in forbidden[a]:
-                                continue
-                            is_unique = True
-                            for u in unique:
-                                if self.sim(u, at.index, threshold=similar):
-                                    is_unique = False
-                                    break
-                            if not is_unique:
-                                skipped += 1
-                                continue
-                            unique += [at.index]
-                            head = (at.index, r, a)
-                            self.dope((head,))  # 2
-                            new = (*dopings, head)
-                            e = self.get_potential_energy(new)
-                            ch_energies += [e]
-                            childs += [new]
-                            self.undope((head,))  # 2
-                    self.undope(dopings)  # 1
-                    childs, ch_energies = top(childs, ch_energies, depth)
-                    generation += childs
-                    energies += ch_energies
-                self.log(f'generation size: {len(generation)} skipped :{skipped}')
+        parents = None
+        for path in paths:
+            generation, energies = self.search(
+                path, parents=parents, **path_kwargs)
+            if descent:
                 parents = generation
-                if self.callback:
-                    self.callback[0](self.callback[1])
-            generation, energies = top(generation, energies, 5)
-            self.log('top contenders:')
-            for x, y in zip(*[generation, energies]):
-                self.log(f'{x} {y}')
             global_ += generation
             global_e += energies
-            if depth is None:
-                break
         self.log('search ended with global minimum:')
         global_, global_e = top(global_, global_e, 1)
         x = global_[0]
@@ -164,7 +179,15 @@ def date(fmt="%m/%d/%Y %H:%M:%S"):
     return datetime.datetime.now().strftime(fmt)
 
 
-def doping_paths(delta):
+def top(x, y, depth):
+    arg = np.argsort(y)
+    s = min(depth, len(y))
+    xx = [x[k] for k in arg[:s]]
+    yy = [y[k] for k in arg[:s]]
+    return xx, yy
+
+
+def paths_from_deltas(delta):
     add = []
     remove = []
     for x, y in delta.items():
@@ -184,9 +207,6 @@ def doping_paths(delta):
     return paths
 
 
-def top(x, y, depth):
-    arg = np.argsort(y)
-    s = min(depth, len(y))
-    xx = [x[k] for k in arg[:s]]
-    yy = [y[k] for k in arg[:s]]
-    return xx, yy
+def paths_from_switches(numbers):
+    return tuple(((a, b), (b, a)) for a, b in
+                 itertools.combinations(numbers, 2))
