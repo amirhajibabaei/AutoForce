@@ -74,7 +74,7 @@ class BruteDoping:
             self.atoms[index].number = f
 
     def undope(self, dopings):
-        for index, i, f in dopings:
+        for index, i, f in dopings[::-1]:
             assert self.atoms[index].number == f
             self.atoms[index].number = i
 
