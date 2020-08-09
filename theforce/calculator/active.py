@@ -26,7 +26,7 @@ class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
-                 bias=None, logfile='accalc.log', verbose=False, **kwargs):
+                 active=True, bias=None, logfile='accalc.log', verbose=False, **kwargs):
         """
 
         calculator:      any ASE calculator
@@ -35,6 +35,7 @@ class ActiveCalculator(Calculator):
         ediff:           energy sensitivity
         fdiff:           forces sensitivity
         covdiff:         covariance-loss sensitivity heuristic
+        active:          if False, it will not attempt updating the model
         bias:            scale of the bias potential
 
         --------------------------------------------------------------------------------------
@@ -73,6 +74,7 @@ class ActiveCalculator(Calculator):
         self.ediff = ediff
         self.fdiff = fdiff
         self.covdiff = covdiff
+        self.active = active
         self.bias = bias
         self.bias_pot = None
         self.verbose = verbose
@@ -122,12 +124,13 @@ class ActiveCalculator(Calculator):
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
 
         # energy/forces
-        energy = self.calculate_results(True)
+        energy = self.calculate_results(self.active or (self.bias is not None))
 
         # active learning
-        m, n = self.update(data=data)
-        if n > 0 or m > 0:  # update results
-            energy = self.calculate_results(self.bias is not None)
+        if self.active:
+            m, n = self.update(data=data)
+            if n > 0 or m > 0:  # update results
+                energy = self.calculate_results(self.bias is not None)
 
         # bias potential
         if self.bias is not None:
