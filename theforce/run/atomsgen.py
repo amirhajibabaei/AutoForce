@@ -44,7 +44,7 @@ def abstract(generator):
     return tuple(_abs) == generator
 
 
-def canonical(parent, switch):
+def heuristic(parent, switch):
     """
     rules: ?
     """
@@ -163,7 +163,7 @@ class AtomsGenerator:
                         continue
                     unique += [at.index]
                     switch = (at.index, i, f)
-                    if canonical(parent, switch):
+                    if heuristic(parent, switch):
                         children += [(*parent, switch)]
             self.undo(parent)
             generation += children
