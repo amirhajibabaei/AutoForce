@@ -57,6 +57,20 @@ def heuristic(parent, switch):
     return True
 
 
+def canonical(generator):
+    """
+    path independent, unique, and abstract representation of a generator.
+    """
+    status = {}
+    for k, i, f in generator:
+        if k in status:
+            assert status[k][1] == i
+            status[k] = (status[k][0], f)
+        else:
+            status[k] = (i, f)
+    return tuple((k, *status[k]) for k in sorted(status.keys()))
+
+
 class AtomsGenerator:
     """
     terms:
@@ -142,10 +156,8 @@ class AtomsGenerator:
             self.atoms[index].number = i
 
     def generate(self, parents, switch_type):
-        generation = []
-        skipped = 0
+        generation = set()
         for parent in parents:
-            children = []
             self.do(parent)
             i, f = switch_type
             unique = []
@@ -159,14 +171,12 @@ class AtomsGenerator:
                             is_unique = False
                             break
                     if not is_unique:
-                        skipped += 1
                         continue
                     unique += [at.index]
                     switch = (at.index, i, f)
                     if heuristic(parent, switch):
-                        children += [(*parent, switch)]
+                        generation.add(canonical((*parent, switch)))
             self.undo(parent)
-            generation += children
         return generation
 
     def swaps(self, parents, switch_type):
@@ -174,18 +184,19 @@ class AtomsGenerator:
                           switch_type[::-1])
         b = self.generate(self.generate(parents, switch_type[::-1]),
                           switch_type)
-        return a + b
+        return a.union(b)
 
     def search_swaps(self, parents, swap_types, epochs=1, max_child=10, max_parents=10):
         for _ in range(epochs):
-            generation = []
-            labels = []
+            generation = set()
             for parent in parents:
-                children = []
+                children = set()
                 for st in swap_types:
-                    children += self.swaps([parent], st)
-                generation += rand(children, max_child)
-            generation += parents
+                    children = children.union(self.swaps([parent], st))
+                generation = generation.union(
+                    set(rand(list(children), max_child)))
+                generation.add(parent)
+            generation = list(generation)
             energies = self.get_potential_energies(generation)
             parents, energies = top(generation, energies, max_parents)
             self.log('')
