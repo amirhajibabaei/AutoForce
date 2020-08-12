@@ -26,7 +26,7 @@ class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
-                 active=True, bias=None, logfile='accalc.log', verbose=False, **kwargs):
+                 active=True, bias=None, logfile='active.log', storage='storage.traj', **kwargs):
         """
 
         calculator:      any ASE calculator
@@ -37,6 +37,9 @@ class ActiveCalculator(Calculator):
         covdiff:         covariance-loss sensitivity heuristic
         active:          if False, it will not attempt updating the model
         bias:            scale of the bias potential
+        logfile:         string | None
+        storage:         string | None
+        kwargs:          ASE's calculator kwargs
 
         --------------------------------------------------------------------------------------
 
@@ -64,7 +67,10 @@ class ActiveCalculator(Calculator):
         Setting a finite covdiff (~0.1) may be necessary if the training 
         starts from a state with zero forces (with an empty model).
 
-        Bias potential derives system away from previous positions.
+        Bias potential derives the system out of local minimas.
+
+        The "storage" arg is the name of the file used for saving the exact 
+        calculations (with the main calculator). Turn it of by "storage=None".
 
         """
         Calculator.__init__(self, **kwargs)
@@ -77,11 +83,11 @@ class ActiveCalculator(Calculator):
         self.active = active
         self.bias = bias
         self.bias_pot = None
-        self.verbose = verbose
         self.logfile = logfile
-        self.step = 0
-        self.log('active calculator says Hello!', mode='w')
+        self.stdout = True
+        self.storage = storage
         self.normalized = None
+        self.step = 0
 
     def get_model(self, model):
         if type(model) == str:
@@ -116,6 +122,7 @@ class ActiveCalculator(Calculator):
         # build a model
         data = True
         if self.step == 0:
+            self.log('active calculator says Hello!', mode='w')
             if self.model.ndata == 0:
                 self.initiate_model()
                 data = False
@@ -208,15 +215,15 @@ class ActiveCalculator(Calculator):
         tmp.set_calculator(self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
-        if self.rank == 0:
-            ase.io.Trajectory('_calc.traj', 'a').write(tmp)
+        if self.storage and self.rank == 0:
+            ase.io.Trajectory(self.storage, 'a').write(tmp)
         self.log('exact energy: {}'.format(energy))
         #
         if self.model.ndata > 0:
             dE = self.results['energy'] - energy
             df = abs(self.results['forces'] - forces)
-            self.log(
-                f'errors:  E_ae: {dE}  F_maxe: {df.max()}  F_mae: {df.mean()}')
+            self.log('errors (pre):  del E: {:.2g}  max |del F|: {:.2g}  mean |del F|: {:.2g}'.format(
+                dE, df.max(), df.mean()))
         return energy, forces
 
     def snapshot(self, fake=False, copy=None):
@@ -302,10 +309,10 @@ class ActiveCalculator(Calculator):
         added = added_beta + added_diff
         if added > 0:
             details = [(k, self.atoms.numbers[k]) for k in added_indices]
-            self.log('added indu: {} ({},{})-> size: {} {} details: {}'.format(
+            self.log('added indu: {} ({},{}) -> size: {} {} details: {}'.format(
                 added, added_beta, added_diff, *self.size, details))
             if self.blind:
-                self.log('model may be blind! trying robust algorithm.')
+                self.log('model may be blind -> go robust')
         return added
 
     def update_data(self, try_fake=True):
@@ -324,12 +331,12 @@ class ActiveCalculator(Calculator):
         m = self.update_inducing() if inducing else 0
         n = self.update_data(try_fake=not self.blind) if m > 0 and data else 0
         if m > 0 or n > 0:
-            self.log('stats: {} {} {} {}'.format(
+            self.log('fit error (mean, std): E: {:.2g} {:.2g}\tF: {:.2g} {:.2g}'.format(
                 *(float(v) for v in self.model._stats)))
         # tunning noise is unstable!
         # if n > 0 and not self.model.is_well():
         #    self.log(f'tuning noise: {self.model.gp.noise.signal} ->')
-        #    self.model.tune_noise(min_steps=10, verbose=self.verbose)
+        #    self.model.tune_noise(min_steps=10, verbose=self.logfile)
         #    self.log(f'noise: {self.model.gp.noise.signal}')
         return m, n
 
@@ -341,14 +348,14 @@ class ActiveCalculator(Calculator):
             return 0
 
     def log(self, mssge, mode='a'):
-        if self.rank == 0:
+        if self.logfile and self.rank == 0:
             with open(self.logfile, mode) as f:
                 f.write('{} {} {}\n'.format(date(), self.step, mssge))
-                if self.verbose:
+                if self.stdout:
                     print('{} {} {}'.format(date(), self.step, mssge))
 
 
-def parse_logfile(file='accalc.log'):
+def parse_logfile(file='active.log'):
     energies = []
     temperatures = []
     exact_energies = []
