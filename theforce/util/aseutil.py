@@ -4,6 +4,15 @@ from ase.io import read
 import numpy as np
 from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
+import ase.md.velocitydistribution as vd
+
+
+def init_velocities(atoms, temperature, overwrite=False):
+    """temperature in Kelvin"""
+    if atoms.get_velocities() is None or overwrite:
+        vd.MaxwellBoltzmannDistribution(atoms, temperature*units.kB)
+        vd.Stationary(atoms)
+        vd.ZeroRotation(atoms)
 
 
 def single_point(self):
