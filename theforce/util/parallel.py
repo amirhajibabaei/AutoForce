@@ -1,7 +1,19 @@
+# +
 import torch
 import functools
 from theforce.util.util import iterable
 import warnings
+import numpy as np
+
+
+def mpi_init(unify_randomness=True):
+    """returns mpi WORLD"""
+    torch.distributed.init_process_group('mpi')
+    if unify_randomness:
+        seed = torch.tensor(np.random.randint(2**32))
+        torch.distributed.broadcast(seed, 0)
+        np.random.seed(seed.numpy())
+    return torch.distributed.group.WORLD
 
 
 def balance_work(size, workers):
@@ -92,4 +104,3 @@ def example():
 
 if __name__ == '__main__':
     example()
-
