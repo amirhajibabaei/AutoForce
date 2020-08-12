@@ -1,10 +1,10 @@
 # +
 from theforce.util.statsutil import moving_average
-from ase.io import read
-import numpy as np
-from ase.io import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
-import ase.md.velocitydistribution as vd
+from ase.md import velocitydistribution as vd
+from ase.io import read, Trajectory
+from ase import units
+import numpy as np
 
 
 def init_velocities(atoms, temperature, overwrite=False):
