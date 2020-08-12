@@ -222,7 +222,7 @@ class ActiveCalculator(Calculator):
         if self.model.ndata > 0:
             dE = self.results['energy'] - energy
             df = abs(self.results['forces'] - forces)
-            self.log('errors (pre):  del E: {:.2g}  max |del F|: {:.2g}  mean |del F|: {:.2g}'.format(
+            self.log('errors (pre):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}'.format(
                 dE, df.max(), df.mean()))
         return energy, forces
 
@@ -331,7 +331,7 @@ class ActiveCalculator(Calculator):
         m = self.update_inducing() if inducing else 0
         n = self.update_data(try_fake=not self.blind) if m > 0 and data else 0
         if m > 0 or n > 0:
-            self.log('fit error (mean, std): E: {:.2g} {:.2g}\tF: {:.2g} {:.2g}'.format(
+            self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}'.format(
                 *(float(v) for v in self.model._stats)))
         # tunning noise is unstable!
         # if n > 0 and not self.model.is_well():
@@ -378,5 +378,5 @@ def parse_logfile(file='active.log'):
             exact_energies += [(step, float(split[3]))]
 
         if 'errors' in line:
-            errors += [(step, [float(v) for v in split[3:8:2]])]
+            errors += [(step, [float(v) for v in split[4:8:2]])]
     return energies, exact_energies, errors
