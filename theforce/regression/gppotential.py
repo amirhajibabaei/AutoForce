@@ -368,7 +368,7 @@ class PosteriorPotential(Module):
     def K(self):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
-    def make_munu(self, algo=1):
+    def make_munu(self, algo=1, noisegrad=False):
         if algo == 0:
             # allocates too much memory
             self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
@@ -377,6 +377,8 @@ class PosteriorPotential(Module):
             L, self.ridge = jitcholesky(self.M)
             #sigma = self.gp.diagonal_ridge(self.data).sqrt()
             sigma = self.gp.noise.signal
+            if not noisegrad:
+                sigma = sigma.detach()
             #A = torch.cat((self.K/sigma.view(-1, 1), L.t()))
             A = torch.cat((self.K, sigma.view(1)*L.t()))
             #Y = torch.cat((self.gp.Y(self.data)/sigma, torch.zeros(L.size(0))))
@@ -385,6 +387,8 @@ class PosteriorPotential(Module):
             self.mu = R.inverse()@Q.t()@Y
             self.nu = None
             self.choli = L.inverse()
+        if not noisegrad and (self.mu.requires_grad or self.choli.requires_grad):
+            warnings.warn('mu or choli requires grad!')
         self.Mi = self.choli.t()@self.choli
         self.make_stats()
 
@@ -419,7 +423,7 @@ class PosteriorPotential(Module):
 
         def step():
             opt.zero_grad()
-            self.make_munu()
+            self.make_munu(noisegrad=True)
             losses = -torch.distributions.normal.Normal(
                 0., self._stats[1]).log_prob(self._ediff)
             loss = weighted(losses).sum()
@@ -442,6 +446,7 @@ class PosteriorPotential(Module):
             if verbose:
                 print(
                     f'{steps}  loss: {loss}  noise: {self.gp.noise.signal}  global: ({_min_step})')
+        self.make_munu(noisegrad=False)
         return steps, _min, _min_arg
 
     @property
