@@ -169,7 +169,8 @@ class ActiveCalculator(Calculator):
             torch.distributed.all_reduce(mu)
         self.bias_pot = pad_1d(self.bias_pot, mu) + self.bias*mu
         bias_energy = (self.cov@self.bias_pot).sum()
-        torch.distributed.all_reduce(bias_energy)
+        if self.atoms.is_distributed:
+            torch.distributed.all_reduce(bias_energy)
         bias_forces, bias_stress = self.grads(bias_energy)
         self.results['energy'] += bias_energy.detach().numpy()
         self.results['forces'] += bias_forces.detach().numpy()
