@@ -349,6 +349,14 @@ class PosteriorPotential(Module):
             self.has_target_forces = False
 
     @property
+    def noise(self):
+        return self.gp.noise.signal
+
+    @noise.setter
+    def noise(self, value):
+        self.gp.noise.signal = value
+
+    @property
     def descriptors(self):
         return self.gp.descriptors
 
