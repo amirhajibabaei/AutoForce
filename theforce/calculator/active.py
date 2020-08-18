@@ -250,7 +250,9 @@ class ActiveCalculator(Calculator):
         self.model.make_munu()
 
     def gather(self, x):
-        _x = torch.zeros(self.atoms.natoms)
+        size = [s for s in x.size()]
+        size[0] = self.atoms.natoms
+        _x = torch.zeros(*size)
         _x[self.atoms.indices] = x
         torch.distributed.all_reduce(_x)
         return _x
