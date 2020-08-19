@@ -1,19 +1,34 @@
 # +
-import torch
-import functools
 from theforce.util.util import iterable
-import warnings
+import torch.distributed as dist
+import torch
 import numpy as np
+import functools
+import warnings
 
 
 def mpi_init(unify_randomness=True):
     """returns mpi WORLD"""
-    torch.distributed.init_process_group('mpi')
+    dist.init_process_group('mpi')
     if unify_randomness:
         seed = torch.tensor(np.random.randint(2**32))
-        torch.distributed.broadcast(seed, 0)
+        dist.broadcast(seed, 0)
         np.random.seed(seed.numpy())
-    return torch.distributed.group.WORLD
+    return dist.group.WORLD
+
+
+def index_gather(x, index, size=None):
+    """currently only along dim 0 -> TODO: general dim"""
+    if size is None:
+        size = torch.tensor(max(index))
+        dist.all_reduce(size, dist.ReduceOp.MAX)
+        size = int(size) + 1
+    _size = [s for s in x.size()]
+    _size[0] = size
+    _x = torch.zeros(*_size)
+    _x[index] = x
+    dist.all_reduce(_x)
+    return _x
 
 
 def balance_work(size, workers):
@@ -44,25 +59,23 @@ def method_forker(method):
             shape = [len(iterable(arg)) for arg in args]
             size = max(shape)
             dim = shape.index(size)
-            workers = torch.distributed.get_world_size(
-                group=self.process_group)
+            workers = dist.get_world_size(group=self.process_group)
             if size < workers:  # TODO: warn or error?
                 warnings.warn('size ({}) < workers ({})'.format(size, workers))
             indices = balance_work(size, workers)
-            rank = torch.distributed.get_rank(group=self.process_group)
+            rank = dist.get_rank(group=self.process_group)
             start, end = indices[rank]
             t = method(self, *(arg[start:end] if d == dim else arg
                                for d, arg in enumerate(args)), **kwargs)
 
             # allocate and gather
             shapes = [torch.zeros(len(shape)).long() for _ in range(workers)]
-            torch.distributed.all_gather(shapes, torch.tensor([s for s in t.size()]),
-                                         group=self.process_group)
+            dist.all_gather(shapes, torch.tensor([s for s in t.size()]),
+                            group=self.process_group)
             pieces = [torch.zeros(*sh).type(t.type()) for sh in shapes]
             pieces[rank] = t
             for k in range(workers):
-                torch.distributed.broadcast(
-                    pieces[k], k, group=self.process_group)
+                dist.broadcast(pieces[k], k, group=self.process_group)
 
             # concat
             out = torch.cat(pieces, dim=dim)
@@ -93,8 +106,8 @@ def example():
     fo1 = model.f(x)
     ffo1 = model.ff(x, x)
 
-    torch.distributed.init_process_group('mpi')
-    model.process_group = torch.distributed.group.WORLD
+    dist.init_process_group('mpi')
+    model.process_group = dist.group.WORLD
     fo2 = model.f(x)
     ffo2 = model.ff(x, x)
 
