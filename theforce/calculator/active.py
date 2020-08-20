@@ -26,7 +26,7 @@ class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
-                 active=True, bias=None, logfile='active.log', storage='storage.traj', **kwargs):
+                 active=True, meta=None, logfile='active.log', storage='storage.traj', **kwargs):
         """
 
         calculator:      any ASE calculator
@@ -36,7 +36,7 @@ class ActiveCalculator(Calculator):
         fdiff:           forces sensitivity
         covdiff:         covariance-loss sensitivity heuristic
         active:          if False, it will not attempt updating the model
-        bias:            scale of the bias potential
+        meta:            meta energy calculator
         logfile:         string | None
         storage:         string | None
         kwargs:          ASE's calculator kwargs
@@ -46,9 +46,9 @@ class ActiveCalculator(Calculator):
         At the beginning, covariance is often a list of similarity kernels:
             e.g. theforce.similarity.universal.UniversalSoapKernel(...)
         Later we can use an existing model.
-        A trained model can be saved with:  
+        A trained model can be saved with:
             e.g. calc.model.to_folder('model/')
-        An existing model is loaded with: 
+        An existing model is loaded with:
             e.g. ActiveCalculator(calculator, 'model/', ...)
 
         For parallelism, first call:
@@ -58,18 +58,16 @@ class ActiveCalculator(Calculator):
         Sensitivity params can be changed on-the-fly:
             e.g. calc.ediff = 0.05
 
-        If covariance-loss (range [0,1]) for a LCE is greater than covdiff, 
-        it will be automaticaly added to the inducing set. 
+        If covariance-loss (range [0,1]) for a LCE is greater than covdiff,
+        it will be automaticaly added to the inducing set.
         Moreover, exact calculations will be triggered.
-        Do not make covdiff too small! 
+        Do not make covdiff too small!
         covdiff = 1 eliminates this heuristic, if one wishes to keep the
         algorithm non-parametric.
-        Setting a finite covdiff (~0.1) may be necessary if the training 
+        Setting a finite covdiff (~0.1) may be necessary if the training
         starts from a state with zero forces (with an empty model).
 
-        Bias potential derives the system out of local minimas.
-
-        The "storage" arg is the name of the file used for saving the exact 
+        The "storage" arg is the name of the file used for saving the exact
         calculations (with the main calculator). Turn it of by "storage=None".
 
         """
@@ -81,8 +79,7 @@ class ActiveCalculator(Calculator):
         self.fdiff = fdiff
         self.covdiff = covdiff
         self.active = active
-        self.bias = bias
-        self.bias_pot = None
+        self.meta = meta
         self.logfile = logfile
         self.stdout = True
         self.storage = storage
@@ -131,51 +128,45 @@ class ActiveCalculator(Calculator):
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
 
         # energy/forces
-        energy = self.calculate_results(self.active or (self.bias is not None))
+        energies = self.cov@self.model.mu
+        retain_graph = self.active or (self.meta is not None)
+        energy = self.reduce(energies, retain_graph=retain_graph)
 
         # active learning
         if self.active:
             m, n = self.update(data=data)
             if n > 0 or m > 0:  # update results
-                energy = self.calculate_results(self.bias is not None)
+                energies = self.cov@self.model.mu
+                retain_graph = self.meta is not None
+                energy = self.reduce(energies, retain_graph=retain_graph)
 
-        # bias potential
-        if self.bias is not None:
-            bias_energy = self.add_bias()
-            log_bias = f'bias: {float(bias_energy)}'
+        # meta terms
+        if self.meta is not None:
+            energies = self.meta(self)
+            meta_energy = self.reduce(energies, op='+=')
+            meta = f'meta: {meta_energy}'
         else:
-            log_bias = ''
+            meta = ''
 
         # step
-        self.log('{} {} {}'.format(float(energy), self.atoms.get_temperature(),
-                                   log_bias))
+        self.log('{} {} {}'.format(energy, self.atoms.get_temperature(),
+                                   meta))
         self.step += 1
 
-    def calculate_results(self, retain_graph=False):
-        energy = (self.cov@self.model.mu).sum()
+    def reduce(self, local_energies, op='=', retain_graph=False):
+        energy = local_energies.sum()
         if self.atoms.is_distributed:
             torch.distributed.all_reduce(energy)
         forces, stress = self.grads(energy, retain_graph=retain_graph)
-        self.results['energy'] = energy.detach().numpy()
-        self.results['forces'] = forces.detach().numpy()
-        self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
+        if op == '=':
+            self.results['energy'] = energy.detach().numpy()
+            self.results['forces'] = forces.detach().numpy()
+            self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
+        elif op == '+=':
+            self.results['energy'] += energy.detach().numpy()
+            self.results['forces'] += forces.detach().numpy()
+            self.results['stress'] += stress.flat[[0, 4, 8, 5, 2, 1]]
         return float(energy)
-
-    def add_bias(self):
-        if self.bias_pot is None:
-            self.bias_pot = torch.zeros(self.cov.size(1))
-        mu = (self.model.Mi@self.cov.detach().t()).sum(dim=1)
-        if self.atoms.is_distributed:
-            torch.distributed.all_reduce(mu)
-        self.bias_pot = pad_1d(self.bias_pot, mu) + self.bias*mu
-        bias_energy = (self.cov@self.bias_pot).sum()
-        if self.atoms.is_distributed:
-            torch.distributed.all_reduce(bias_energy)
-        bias_forces, bias_stress = self.grads(bias_energy)
-        self.results['energy'] += bias_energy.detach().numpy()
-        self.results['forces'] += bias_forces.detach().numpy()
-        self.results['stress'] += bias_stress.flat[[0, 4, 8, 5, 2, 1]]
-        return float(bias_energy)
 
     def grads(self, energy, retain_graph=False):
         if not energy.grad_fn:
@@ -250,12 +241,15 @@ class ActiveCalculator(Calculator):
         self.model.make_munu()
 
     def gather(self, x):
-        size = [s for s in x.size()]
-        size[0] = self.atoms.natoms
-        _x = torch.zeros(*size)
-        _x[self.atoms.indices] = x
-        torch.distributed.all_reduce(_x)
-        return _x
+        if self.atoms.is_distributed:
+            size = [s for s in x.size()]
+            size[0] = self.atoms.natoms
+            _x = torch.zeros(*size)
+            _x[self.atoms.indices] = x
+            torch.distributed.all_reduce(_x)
+            return _x
+        else:
+            return x
 
     def get_covloss(self):
         b = self.model.choli@self.cov.T
@@ -265,12 +259,10 @@ class ActiveCalculator(Calculator):
                                for x in self.atoms]).view(-1)
             c = c/alpha
             if self.normalized is None:
-                self.normalized = (self.gather(alpha) if self.atoms.is_distributed
-                                   else alpha).allclose(torch.ones([]))
+                self.normalized = self.gather(alpha).allclose(torch.ones([]))
                 self.log(f'kernel normalization status {self.normalized}')
         beta = (1 - c).clamp(min=0.).sqrt()
-        if self.atoms.is_distributed:
-            beta = self.gather(beta)
+        beta = self.gather(beta)
         return beta
 
     def update_inducing(self):
@@ -356,6 +348,23 @@ class ActiveCalculator(Calculator):
                 f.write('{} {} {}\n'.format(date(), self.step, mssge))
                 if self.stdout:
                     print('{} {} {}'.format(date(), self.step, mssge))
+
+
+class DummyMeta:
+
+    def __init__(self, scale=1e-3):
+        self.scale = scale
+        self.pot = None
+
+    def __call__(self, calc):
+        if self.pot is None:
+            self.pot = torch.zeros(calc.cov.size(1))
+        mu = (calc.model.Mi@calc.cov.detach().t()).sum(dim=1)
+        if calc.atoms.is_distributed:
+            torch.distributed.all_reduce(mu)
+        self.pot = pad_1d(self.pot, mu) + self.scale*mu
+        energies = (calc.cov@self.pot).sum()
+        return energies
 
 
 def parse_logfile(file='active.log'):
