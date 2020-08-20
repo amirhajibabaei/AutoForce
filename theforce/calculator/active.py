@@ -169,6 +169,11 @@ class ActiveCalculator(Calculator):
             self.results['stress'] += stress.flat[[0, 4, 8, 5, 2, 1]]
         return float(energy)
 
+    def zero(self):
+        self.results['energy'] = 0.
+        self.results['forces'] = 0.
+        self.results['stress'] = 0.
+
     def grads(self, energy, retain_graph=False):
         if not energy.grad_fn:
             return torch.zeros_like(self.atoms.xyz), np.zeros_like(self.atoms.cell)
