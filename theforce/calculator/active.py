@@ -241,6 +241,13 @@ class ActiveCalculator(Calculator):
         added.set_targets()
         self.model.make_munu()
 
+    def scatter(self, x, dim=0):
+        if self.atoms.is_distributed:
+            index = torch.tensor(self.atoms.indices)
+            return x.index_select(dim, index)
+        else:
+            return x
+
     def gather(self, x):
         if self.atoms.is_distributed:
             size = [s for s in x.size()]
