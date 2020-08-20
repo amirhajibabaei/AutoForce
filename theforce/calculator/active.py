@@ -386,6 +386,7 @@ def parse_logfile(file='active.log'):
     exact_energies = []
     errors = []
     fit = []
+    meta = []
     for line in open(file):
         split = line.split()[2:]
 
@@ -397,6 +398,8 @@ def parse_logfile(file='active.log'):
         try:
             energies += [(step, float(split[1]))]
             temperatures += [(step, float(split[2]))]
+            if 'meta:' in split:
+                meta += [(step, float(split[4]))]
         except:
             pass
 
@@ -408,12 +411,12 @@ def parse_logfile(file='active.log'):
 
         if 'fit' in line:
             fit += [(step, [float(split[k]) for k in [-5, -4, -2, -1]])]
-    return energies, exact_energies, temperatures, fit
+    return energies, exact_energies, temperatures, fit, meta
 
 
 def log_to_figure(file, figsize=(15, 10)):
     import pylab as plt
-    ml, fp, tem, fit = parse_logfile(file)
+    ml, fp, tem, fit, meta = parse_logfile(file)
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
     x, y = zip(*ml)
@@ -421,6 +424,8 @@ def log_to_figure(file, figsize=(15, 10)):
     p, q = zip(*fit)
     q = np.array(q)
     axes[0].plot(x, y)
+    if len(meta) > 0:
+        axes[0].plot(*zip(*meta), color='lime')
     axes[0].scatter(r, s, color='r')
     axes[1].plot(*zip(*tem))
     axes[2].errorbar(p, q[:, 0], yerr=q[:, 1])
