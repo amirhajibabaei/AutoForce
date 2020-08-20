@@ -141,12 +141,13 @@ class ActiveCalculator(Calculator):
                 energy = self.reduce(energies, retain_graph=retain_graph)
 
         # meta terms
+        meta = ''
         if self.meta is not None:
+            self.local_energies = self.gather(energies.detach())
             energies = self.meta(self)
-            meta_energy = self.reduce(energies, op='+=')
-            meta = f'meta: {meta_energy}'
-        else:
-            meta = ''
+            if energies is not None:
+                meta_energy = self.reduce(energies, op='+=')
+                meta = f'meta: {meta_energy}'
 
         # step
         self.log('{} {} {}'.format(energy, self.atoms.get_temperature(),
