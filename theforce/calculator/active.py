@@ -270,7 +270,7 @@ class ActiveCalculator(Calculator):
             return x
 
     def get_covloss(self):
-        b = self.model.choli@self.cov.T
+        b = self.model.choli@self.cov.detach().t()
         c = (b*b).sum(dim=0)
         if not self.normalized:
             alpha = torch.cat([self.model.gp.kern(x, x)
