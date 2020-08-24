@@ -1,6 +1,16 @@
-
+# +
 import torch
 import warnings
+
+
+def padded(t, size):
+    "adds zeros to t until t.size()=size"
+    tt = t
+    for dim, (a, b) in enumerate(zip(*[t.size(), size])):
+        s = list(tt.size())
+        s[dim] = b-a
+        tt = torch.cat([tt, torch.zeros(*s)], dim=dim)
+    return tt
 
 
 def nan_to_num(t, num=0.):
@@ -114,7 +124,6 @@ class SparseTensor:
         self._aspec = torch.LongTensor(count + [self.sdim])
 
 
-# -------------------------------------------------------------
 def test():
     # cat and split
     a = torch.rand(10, 7, 3)
@@ -167,4 +176,3 @@ def test_sparse():
 if __name__ == '__main__':
     test()
     test_sparse()
-
