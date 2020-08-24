@@ -422,7 +422,8 @@ def log_to_figure(file, figsize=(15, 10)):
     q = np.array(q)
     axes[0].plot(x, y)
     if len(meta) > 0:
-        axes[0].plot(*zip(*meta), color='lime')
+        ax_meta = axes[0].twinx()
+        ax_meta.plot(*zip(*meta), color='lime')
     axes[0].scatter(r, s, color='r')
     axes[1].plot(*zip(*tem))
     axes[2].errorbar(p, q[:, 0], yerr=q[:, 1])
