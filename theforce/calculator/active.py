@@ -1,6 +1,7 @@
 # +
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
+from theforce.util.tensors import padded
 from theforce.util.util import date
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
@@ -9,17 +10,6 @@ from torch.autograd import grad
 import torch
 import numpy as np
 import warnings
-
-
-def pad_1d(a, b):
-    c = torch.cat([a, torch.zeros(b.size(0)-a.size(0))])
-    return c
-
-
-def pad_2d(a, b):
-    c = torch.cat([a, torch.zeros(b.size(0)-a.size(0), a.size(1))], dim=0)
-    d = torch.cat([c, torch.zeros(c.size(0), b.size(1)-c.size(1))], dim=1)
-    return d
 
 
 class ActiveCalculator(Calculator):
@@ -149,9 +139,9 @@ class ActiveCalculator(Calculator):
         # meta terms
         meta = ''
         if self.meta is not None:
-            energies = self.meta(self)
+            energies, kwargs = self.meta(self)
             if energies is not None:
-                meta_energy = self.reduce(energies, op='+=')
+                meta_energy = self.reduce(energies, **kwargs)
                 meta = f'meta: {meta_energy}'
 
         # step
@@ -368,21 +358,23 @@ class ActiveCalculator(Calculator):
                     print('{} {} {}'.format(date(), self.step, mssge))
 
 
-class DummyMeta:
+class Meta:
 
-    def __init__(self, scale=1e-3):
+    def __init__(self, scale=1e-2):
         self.scale = scale
         self.pot = None
 
     def __call__(self, calc):
         if self.pot is None:
             self.pot = torch.zeros(calc.cov.size(1))
-        mu = (calc.model.Mi@calc.cov.detach().t()).sum(dim=1)
-        if calc.atoms.is_distributed:
-            torch.distributed.all_reduce(mu)
-        self.pot = pad_1d(self.pot, mu) + self.scale*mu
-        energies = (calc.cov@self.pot).sum()
-        return energies
+        cov = calc.gather(calc.cov)
+        nu = calc.model.Mi@cov.t()
+        norm = (cov@nu).sum().sqrt()
+        mu = nu.detach().sum(dim=1)/norm.detach()
+        self.pot = padded(self.pot, mu.size()) + self.scale*mu
+        energies = (cov@self.pot).sum()/norm
+        kwargs = {'op': '+=', 'reduced': True}
+        return energies, kwargs
 
 
 def parse_logfile(file='active.log'):
