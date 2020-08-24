@@ -1,3 +1,4 @@
+# +
 import torch
 from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
@@ -602,7 +603,7 @@ class PosteriorPotential(Module):
         added_refs = 0
         for k in q:
             loc = locs[k]
-            _ediff = ediff if len(self.X) > 1 else torch.finfo().tiny
+            _ediff = ediff if len(self.X) > 1 else torch.finfo().eps
             added, change = self.add_1inducing(loc, _ediff, detach=detach)
             if added:
                 added_refs += 1
@@ -828,4 +829,3 @@ def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True,
             report += ['Projected-Process']
     report = ' '.join(report)
     print('trained for {} steps ({})'.format(steps, report))
-
