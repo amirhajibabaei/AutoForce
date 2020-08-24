@@ -132,6 +132,12 @@ class ActiveCalculator(Calculator):
         retain_graph = self.active or (self.meta is not None)
         energy = self.reduce(energies, retain_graph=retain_graph)
 
+        # ... or
+        # self.allcov = self.gather(self.cov)
+        # energies = self.allcov@self.model.mu
+        # retain_graph = self.active or (self.meta is not None)
+        # energy = self.reduce(energies, retain_graph=retain_graph, reduced=True)
+
         # active learning
         if self.active:
             m, n = self.update(data=data)
@@ -143,7 +149,6 @@ class ActiveCalculator(Calculator):
         # meta terms
         meta = ''
         if self.meta is not None:
-            self.local_energies = self.gather(energies.detach())
             energies = self.meta(self)
             if energies is not None:
                 meta_energy = self.reduce(energies, op='+=')
@@ -154,9 +159,9 @@ class ActiveCalculator(Calculator):
                                    meta))
         self.step += 1
 
-    def reduce(self, local_energies, op='=', retain_graph=False):
+    def reduce(self, local_energies, op='=', retain_graph=False, reduced=False):
         energy = local_energies.sum()
-        if self.atoms.is_distributed:
+        if self.atoms.is_distributed and not reduced:
             torch.distributed.all_reduce(energy)
         forces, stress = self.grads(energy, retain_graph=retain_graph)
         if op == '=':
