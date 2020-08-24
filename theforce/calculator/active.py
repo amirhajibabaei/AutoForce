@@ -273,7 +273,7 @@ class ActiveCalculator(Calculator):
         b = self.model.choli@self.cov.detach().t()
         c = (b*b).sum(dim=0)
         if not self.normalized:
-            alpha = torch.cat([self.model.gp.kern(x, x)
+            alpha = torch.cat([self.model.gp.kern(x, x).detach()
                                for x in self.atoms]).view(-1)
             c = c/alpha
             if self.normalized is None:
@@ -309,7 +309,7 @@ class ActiveCalculator(Calculator):
                     self.blind = True
                 else:
                     _ediff = (self.ediff if len(self.model.X) > 1
-                              else torch.finfo().tiny)
+                              else torch.finfo().eps)
                     added, delta = self.model.add_1inducing(
                         loc, _ediff, detach=False)
                     if added:
