@@ -1,3 +1,4 @@
+# +
 from theforce.run.fly import fly, default_kernel, numpy_same_random_seed
 from theforce.similarity.universal import UniversalSoapKernel
 from theforce.calculator.posterior import SocketCalculator
@@ -14,6 +15,7 @@ from theforce.util.ssh import forward_port, clear_port
 import sys
 import os
 import atexit
+
 
 # training-in-progress: tip.lock
 lock = 'tip.lock'
@@ -73,7 +75,7 @@ def aneal(atoms=None, te=[100, 300, 1000], rc=7., lmax=3, nmax=3, eta=4, ediff=0
         if siz is not None:
             repeat = get_repeat_reciprocal(atoms, 1./siz)
             atoms = atoms.repeat(repeat)
-        if atoms.get_number_of_atoms() > maxat:
+        if atoms.get_global_number_of_atoms() > maxat:
             skip(f'too large: {len(atoms)} atoms')
 
     # kernel

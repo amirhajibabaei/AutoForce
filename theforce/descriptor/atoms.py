@@ -1,3 +1,4 @@
+# +
 import numpy as np
 import torch
 from torch import ones_like, as_tensor, from_numpy, cat
@@ -338,7 +339,7 @@ class TorchAtoms(Atoms):
 
     @property
     def natoms(self):
-        return self.get_number_of_atoms()
+        return self.get_global_number_of_atoms()
 
     @property
     def tnumbers(self):
