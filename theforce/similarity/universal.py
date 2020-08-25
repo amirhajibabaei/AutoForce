@@ -40,13 +40,6 @@ def indices(a, b):
     return k
 
 
-def _ps(ivs):  # should be removed after pytorch's loading of sparse tensors is fixed
-    if ivs is None:
-        return None
-    else:
-        return torch.sparse_coo_tensor(*ivs)
-
-
 class EqAll:
     def __init__(self, exceptions=[]):
         self.exceptions = exceptions
@@ -84,23 +77,23 @@ class UniversalSoapKernel(SimilarityKernel):
     def precalculate(self, loc, dont_save_grads=True):
         if loc._r.size(0) > 0 and loc.number == self.a:
             d = self.descriptor(loc._r, loc._b, grad=not dont_save_grads,
-                                sparse_tensor=False)  # fix later: sparse_tensor -> True
+                                sparse_tensor=True)
             self.save_for_later(loc, {'value': d} if dont_save_grads else
-                                {'value': (d[0], d[1], d[2]),
-                                 'grad': (d[0], d[3], d[4])})  # fix later
+                                {'value': d[0],
+                                 'grad': d[1]})
         else:
             self.save_for_later(loc, {'value': None, 'grad': None})
 
     def get_func(self, _p, _q):
         c = torch.tensor(0.)
         for p in iterable(_p):
-            d = _ps(self.saved(p, 'value'))  # fix later: _ps
+            d = self.saved(p, 'value')
             if d is None:
                 continue
             for q in iterable(_q):
                 alch = self.kern(p.number, q.number)
                 if alch > 0.:
-                    dd = _ps(self.saved(q, 'value'))
+                    dd = self.saved(q, 'value')
                     if dd is None:
                         continue
                     c += alch * torch.sparse.sum(d*dd)**self.exponent
@@ -109,16 +102,16 @@ class UniversalSoapKernel(SimilarityKernel):
     def get_leftgrad(self, _p, _q):
         g = torch.zeros(_p.natoms, 3)
         for p in iterable(_p):
-            d = _ps(self.saved(p, 'value'))  # fix later: _ps
+            d = self.saved(p, 'value')
             if d is None:
                 continue
-            grad = _ps(self.saved(p, 'grad'))  # fix later: _ps
+            grad = self.saved(p, 'grad')
             i = p.index
             j = p._j
             for q in iterable(_q):
                 alch = self.kern(p.number, q.number)
                 if alch > 0.:
-                    dd = _ps(self.saved(q, 'value'))  # fix later: _ps
+                    dd = self.saved(q, 'value')
                     if dd is None:
                         continue
                     dg = torch.stack([(dd[i, j][:, None, None]*grad[i, j]).sum(dim=0)
