@@ -1,13 +1,15 @@
+# +
 from distutils.core import setup
+
 
 setup(
     name="theforce",
-    version="0.0.1",
+    version="2020.08",
     author="Amir HajiBabaei T.",
     author_email="a.hajibabaei.86@gmail.com",
-    description="Machine Learning of the forces on atoms",
+    description="machine learning of the potential energy surface from DFT",
     url="https://github.com",
-    package_dir={'theforce':'theforce'},
+    package_dir={'theforce': 'theforce'},
     packages=['theforce'],
     classifiers=[
         "Programming Language :: Python :: 3",
