@@ -10,6 +10,7 @@ import copy
 import warnings
 from theforce.util.util import iterable, mkdir_p
 from theforce.util.parallel import balance_work
+from collections import Counter
 import random
 import itertools
 import os
@@ -501,6 +502,12 @@ class TorchAtoms(Atoms):
         self.attach_process_group(group)
         self.loc = [self.loc[i] for i in self.indices]
 
+    def counts(self):
+        c = Counter()
+        for loc in self.loc:
+            c[loc.number] += 1
+        return c
+
 
 class AtomsData:
 
@@ -661,6 +668,13 @@ class AtomsData:
     def sample_locals(self, size, keepids=False):
         return LocalsData([random.choice(random.choice(self)).detach(keepids=keepids)
                            for _ in range(size)])
+
+    def counts(self):
+        c = Counter()
+        for atoms in self:
+            for a, n in atoms.counts().items():
+                c[a] += n
+        return c
 
 
 class LocalsData:
