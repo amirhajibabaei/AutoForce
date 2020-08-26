@@ -258,16 +258,22 @@ class TorchAtoms(Atoms):
     def attach_process_group(self, group):
         self.process_group = group
         self.is_distributed = True
-        workers = torch.distributed.get_world_size(
-            group=self.process_group)
-        indices = balance_work(self.natoms, workers)
-        rank = torch.distributed.get_rank(group=self.process_group)
-        self.indices = range(*indices[rank])
+        self.distribute()
+
+    def distribute(self):
+        if self.is_distributed:
+            workers = torch.distributed.get_world_size(
+                group=self.process_group)
+            indices = balance_work(self.natoms, workers)
+            rank = torch.distributed.get_rank(group=self.process_group)
+            self.indices = range(*indices[rank])
+        else:
+            self.indices = range(self.natoms)
 
     def detach_process_group(self):
         del self.process_group
         self.is_distributed = False
-        self.indices = range(self.natoms)
+        self.distribute()
 
     def build_nl(self, rc):
         self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
@@ -279,14 +285,7 @@ class TorchAtoms(Atoms):
         except TypeError:
             self.lll = torch.from_numpy(self.cell.array)
         # distributed setup
-        if self.is_distributed:
-            workers = torch.distributed.get_world_size(
-                group=self.process_group)
-            indices = balance_work(self.natoms, workers)
-            rank = torch.distributed.get_rank(group=self.process_group)
-            self.indices = range(*indices[rank])
-        else:
-            self.indices = range(self.natoms)
+        self.distribute()
 
     def local(self, a, stage=True, dont_save_grads=True, detach=False):
         n, off = self.nl.get_neighbors(a)
