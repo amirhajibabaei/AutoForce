@@ -260,13 +260,18 @@ class ActiveCalculator(Calculator):
         b = self.model.choli@self.cov.detach().t()
         c = (b*b).sum(dim=0)
         if not self.normalized:
-            alpha = torch.cat([self.model.gp.kern(x, x).detach()
-                               for x in self.atoms]).view(-1)
+            alpha = [self.model.gp.kern(x, x).detach()
+                     for x in self.atoms]
+            alpha.append(torch.zeros(0))
+            alpha = torch.cat(alpha).view(-1)
             c = c/alpha
             if self.normalized is None:
                 self.normalized = self.gather(alpha).allclose(torch.ones([]))
                 self.log(f'kernel normalization status {self.normalized}')
-        beta = (1 - c).clamp(min=0.).sqrt()
+        if c.size(0) > 0:
+            beta = (1 - c).clamp(min=0.).sqrt()
+        else:
+            beta = c
         beta = self.gather(beta)
         return beta
 
