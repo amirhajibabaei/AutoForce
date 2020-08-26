@@ -17,6 +17,7 @@ Main:
 * scipy
 * pytorch
 * atomic simulation environment (ASE)
+* psutil
 
 Recommended: 
 * message passing interface (MPI enabled pytorch) for distributed computation.
