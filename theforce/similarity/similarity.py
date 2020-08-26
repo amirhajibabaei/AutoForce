@@ -16,8 +16,14 @@ class SimilarityKernel(Module):
 
     @method_forker
     def forward(self, first, second, operation='func'):
-        return cat([cat([getattr(self, operation)(a, b) for a in iterable(first)], dim=0
-                        ) for b in iterable(second)], dim=1)
+        mat = [torch.zeros(0)]
+        for a in iterable(first):
+            raw = [torch.zeros(0)]
+            for b in iterable(second):
+                raw.append(getattr(self, operation)(a, b))
+            mat.append(torch.cat(raw, dim=1))
+        mat = torch.cat(mat, dim=0)
+        return mat
 
     @method_forker
     def diag(self, first, operation='func'):
