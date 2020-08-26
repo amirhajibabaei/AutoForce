@@ -260,13 +260,18 @@ class TorchAtoms(Atoms):
         self.is_distributed = True
         self.index_distribute()
 
-    def index_distribute(self):
+    def index_distribute(self, randomize=True):
         if self.is_distributed:
             workers = torch.distributed.get_world_size(
                 group=self.process_group)
             indices = balance_work(self.natoms, workers)
             rank = torch.distributed.get_rank(group=self.process_group)
-            self.indices = range(*indices[rank])
+            if randomize:
+                w = np.random.permutation(workers)
+                j = np.random.permutation(self.natoms)
+                self.indices = j[range(*indices[w[rank]])].tolist()
+            else:
+                self.indices = range(*indices[rank])
         else:
             self.indices = range(self.natoms)
 
