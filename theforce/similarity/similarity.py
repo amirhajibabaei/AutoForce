@@ -16,13 +16,18 @@ class SimilarityKernel(Module):
 
     @method_forker
     def forward(self, first, second, operation='func'):
-        mat = [torch.zeros(0)]
+        mat = [torch.empty(0)]
         for a in iterable(first):
-            raw = [torch.zeros(0)]
+            raw = [torch.empty(0)]
             for b in iterable(second):
                 raw.append(getattr(self, operation)(a, b))
             mat.append(torch.cat(raw, dim=1))
         mat = torch.cat(mat, dim=0)
+        if mat.numel() == 0:
+            shape = (0, len(iterable(second)))
+            # this shape is not general, but is is
+            # chosen consistent with other parts
+            mat = mat.view(*shape)
         return mat
 
     @method_forker
@@ -60,7 +65,7 @@ class SimilarityKernel(Module):
     def saved(self, atoms_or_loc, key):
         attr = self.name+'_'+key
         try:
-            return torch.cat([loc.__dict__[attr] for loc in atoms_or_loc])
+            return torch.cat([loc.__dict__[attr] for loc in atoms_or_loc] + [torch.empty(0)])
         except TypeError:
             return atoms_or_loc.__dict__[attr]
 
