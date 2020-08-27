@@ -422,15 +422,17 @@ def log_to_figure(file, figsize=(15, 10)):
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
     x, y = zip(*ml)
-    r, s = zip(*fp)
-    p, q = zip(*fit)
-    q = np.array(q)
     axes[0].plot(x, y)
+    if len(fp) > 0:
+        r, s = zip(*fp)
+        axes[0].scatter(r, s, color='r')
     if len(meta) > 0:
         ax_meta = axes[0].twinx()
         ax_meta.plot(*zip(*meta), color='lime')
-    axes[0].scatter(r, s, color='r')
     axes[1].plot(*zip(*tem))
-    axes[2].errorbar(p, q[:, 0], yerr=q[:, 1])
-    axes[3].errorbar(p, q[:, 2], yerr=q[:, 3])
+    if len(fit) > 0:
+        p, q = zip(*fit)
+        q = np.array(q)
+        axes[2].errorbar(p, q[:, 0], yerr=q[:, 1])
+        axes[3].errorbar(p, q[:, 2], yerr=q[:, 3])
     return fig
