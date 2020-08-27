@@ -13,7 +13,7 @@ import warnings
 
 
 class ActiveCalculator(Calculator):
-    implemented_properties = ['energy', 'forces', 'stress']
+    implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
     def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
                  active=True, meta=None, logfile='active.log', storage='storage.traj', **kwargs):
@@ -148,6 +148,9 @@ class ActiveCalculator(Calculator):
         self.log('{} {} {}'.format(energy, self.atoms.get_temperature(),
                                    meta))
         self.step += 1
+
+        # needed for self.calculate_numerical_stress
+        self.results['free_energy'] = self.results['energy']
 
     def reduce(self, local_energies, op='=', retain_graph=False, reduced=False):
         energy = local_energies.sum()
