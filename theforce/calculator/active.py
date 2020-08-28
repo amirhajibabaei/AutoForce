@@ -5,11 +5,44 @@ from theforce.util.tensors import padded
 from theforce.util.util import date
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
+from ase.constraints import Filter
 import ase
 from torch.autograd import grad
 import torch
 import numpy as np
 import warnings
+
+
+class FilterDeltas(Filter):
+
+    def __init__(self, atoms, shrink=0.95):
+        """
+        wraps atoms and causes a smooth variation of
+        forces/stressed upon updating the ML potential
+        """
+        super().__init__(atoms, indices=[a.index for a in atoms])
+        self.shrink = shrink
+        self.f = 0
+        self.s = 0
+
+    def get_forces(self):
+        f = self.atoms.get_forces()
+        deltas = self.atoms.calc.deltas
+        if deltas:
+            self.f += deltas['forces']
+        self.f *= self.shrink
+        return f - self.f
+
+    def get_stress(self, *args, **kwargs):
+        s = self.atoms.get_stress(*args, **kwargs)
+        deltas = self.atoms.calc.deltas
+        if deltas:
+            self.s += deltas['stress']
+        self.s *= self.shrink
+        return s - self.s
+
+    def __getattr__(self, attr):
+        return getattr(self.atoms, attr)
 
 
 class ActiveCalculator(Calculator):
@@ -30,6 +63,10 @@ class ActiveCalculator(Calculator):
         logfile:         string | None
         storage:         string | None
         kwargs:          ASE's calculator kwargs
+
+        *** important ***
+        wrap atoms with FilterDeltas if you intend to carry out
+        molecular dynamics simulations.
 
         --------------------------------------------------------------------------------------
 
@@ -129,12 +166,17 @@ class ActiveCalculator(Calculator):
         # energy = self.reduce(energies, retain_graph=retain_graph, reduced=True)
 
         # active learning
+        self.deltas = None
         if self.active:
             m, n = self.update(data=data)
             if n > 0 or m > 0:  # update results
+                pre = self.results.copy()
                 energies = self.cov@self.model.mu
                 retain_graph = self.meta is not None
                 energy = self.reduce(energies, retain_graph=retain_graph)
+                self.deltas = {}
+                for quant in ['energy', 'forces', 'stress']:
+                    self.deltas[quant] = self.results[quant] - pre[quant]
 
         # meta terms
         meta = ''
