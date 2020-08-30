@@ -40,10 +40,10 @@ from theforce.calculator.active import ActiveCalculator
 # main_calc = see ASE calculators
 # kernel = see the proceeding
 
-calc = ActiveCalculator(main_calc, kernel)
+calc = ActiveCalculator(kernel, calculator=main_calc)
 atoms.set_calculator(calc)
 
-# proceed with desired calculations
+# proceed with the desired calculations
 ```
 
 ---
