@@ -48,17 +48,15 @@ class FilterDeltas(Filter):
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
-    def __init__(self, calculator, covariance, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
-                 active=True, meta=None, logfile='active.log', storage='storage.traj', **kwargs):
+    def __init__(self, covariance, calculator=None, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
+                 meta=None, logfile='active.log', storage='storage.traj', **kwargs):
         """
-
-        calculator:      any ASE calculator
         covariance:      similarity kernel(s) | path to a saved model | model
+        calculator:      None | any ASE calculator
         process_group:   None | group
         ediff:           energy sensitivity
         fdiff:           forces sensitivity
         covdiff:         covariance-loss sensitivity heuristic
-        active:          if False, it will not attempt updating the model
         meta:            meta energy calculator
         logfile:         string | None
         storage:         string | None
@@ -76,7 +74,10 @@ class ActiveCalculator(Calculator):
         A trained model can be saved with:
             e.g. calc.model.to_folder('model/')
         An existing model is loaded with:
-            e.g. ActiveCalculator(calculator, 'model/', ...)
+            e.g. ActiveCalculator('model/', ...)
+
+        In case one wishes to use an existing model without further updates, 
+        then pass "calculator=None".
 
         For parallelism, first call:
             torch.init_process_group('mpi')
@@ -96,7 +97,6 @@ class ActiveCalculator(Calculator):
 
         The "storage" arg is the name of the file used for saving the exact
         calculations (with the main calculator). Turn it of by "storage=None".
-
         """
         Calculator.__init__(self, **kwargs)
         self._calc = calculator
@@ -105,7 +105,6 @@ class ActiveCalculator(Calculator):
         self.ediff = ediff
         self.fdiff = fdiff
         self.covdiff = covdiff
-        self.active = active
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
@@ -113,10 +112,14 @@ class ActiveCalculator(Calculator):
         self.normalized = None
         self.step = 0
 
+    @property
+    def active(self):
+        return self._calc is not None
+
     def get_model(self, model):
         if type(model) == str:
             self.model = PosteriorPotentialFromFolder(
-                model, group=self.process_group)
+                model, load_data=self.active, group=self.process_group)
         elif type(model) == PosteriorPotential:
             self.model = model
         else:
@@ -147,7 +150,7 @@ class ActiveCalculator(Calculator):
         data = True
         if self.step == 0:
             self.log('active calculator says Hello!', mode='w')
-            if self.model.ndata == 0:
+            if self.active and self.model.ndata == 0:
                 self.initiate_model()
                 data = False
 
