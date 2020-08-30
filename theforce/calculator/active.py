@@ -49,7 +49,7 @@ class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
     def __init__(self, covariance, calculator=None, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
-                 meta=None, logfile='active.log', storage='storage.traj', **kwargs):
+                 coveps=1e-4, meta=None, logfile='active.log', storage='storage.traj', **kwargs):
         """
         covariance:      similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
@@ -57,6 +57,7 @@ class ActiveCalculator(Calculator):
         ediff:           energy sensitivity
         fdiff:           forces sensitivity
         covdiff:         covariance-loss sensitivity heuristic
+        coveps:          covariance-loss ~ 0 if less than this value
         meta:            meta energy calculator
         logfile:         string | None
         storage:         string | None
@@ -90,10 +91,15 @@ class ActiveCalculator(Calculator):
         it will be automaticaly added to the inducing set.
         Moreover, exact calculations will be triggered.
         Do not make covdiff too small!
-        covdiff = 1 eliminates this heuristic, if one wishes to keep the
+        covdiff=1 eliminates this heuristic, if one wishes to keep the
         algorithm non-parametric.
         Setting a finite covdiff (~0.1) may be necessary if the training
         starts from a state with zero forces (with an empty model).
+        If covariance-loss < coveps, the update trial will be skipped.
+        Depending on the problem at hand, coveps can be chosen as high as
+        1e-2 which can speed up the calculator by potentially a few orders
+        of magnitude.
+        If the model is volatile, one can set coveps=0 for robustness.
 
         The "storage" arg is the name of the file used for saving the exact
         calculations (with the main calculator). Turn it of by "storage=None".
@@ -105,6 +111,7 @@ class ActiveCalculator(Calculator):
         self.ediff = ediff
         self.fdiff = fdiff
         self.covdiff = covdiff
+        self.coveps = coveps
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
@@ -333,6 +340,8 @@ class ActiveCalculator(Calculator):
                 break
             beta = self.get_covloss()
             q = torch.argsort(beta, descending=True)
+            if q[0] < self.coveps:
+                break
             for k in q.tolist():
                 if k not in added_indices:
                     break
