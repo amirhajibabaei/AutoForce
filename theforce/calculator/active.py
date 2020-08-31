@@ -500,6 +500,8 @@ def log_to_figure(file, figsize=(10, 5)):
     # 2
     axes[2].plot(*zip(*covloss))
     axes[2].set_ylabel('cov-loss')
+    axes[2].set_ylim(1e-4, 0.1)
+    axes[2].set_yscale('log')
     if len(indu) > 0:
         ax_indu = axes[2].twinx()
         ax_indu.scatter(*zip(*indu), color='darkgreen')
