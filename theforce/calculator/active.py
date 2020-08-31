@@ -334,6 +334,7 @@ class ActiveCalculator(Calculator):
         added_beta = 0
         added_diff = 0
         added_indices = []
+        added_covloss = None
         self.blind = False
         while True:
             if len(added_indices) == self.atoms.natoms:
@@ -355,6 +356,7 @@ class ActiveCalculator(Calculator):
                     x = self.model.gp.kern(self.atoms, loc)
                     self.cov = torch.cat([self.cov, x], dim=1)
                     added_indices.append(k)
+                    added_covloss = beta[k]
                     self.blind = True
                 else:
                     _ediff = (self.ediff if len(self.model.X) > 1
@@ -366,13 +368,14 @@ class ActiveCalculator(Calculator):
                         x = self.model.gp.kern(self.atoms, loc)
                         self.cov = torch.cat([self.cov, x], dim=1)
                         added_indices.append(k)
+                        added_covloss = beta[k]
                     else:
                         break
         added = added_beta + added_diff
         if added > 0:
             details = [(k, self.atoms.numbers[k]) for k in added_indices]
-            self.log('added indu: {} ({},{}) -> size: {} {} details: {}'.format(
-                added, added_beta, added_diff, *self.size, details))
+            self.log('added indu: {} ({},{}) -> size: {} {} details: {:.2g} {}'.format(
+                added, added_beta, added_diff, *self.size, added_covloss, details))
             if self.blind:
                 self.log('model may be blind -> go robust')
         self.covlog = f'{float(beta[q[0]])}'
@@ -467,7 +470,8 @@ def parse_logfile(file='active.log'):
             exact_energies += [(step, float(split[3]))]
 
         if 'added indu' in line:
-            indu += [(step, float(split[3]))]
+            sf = float(split[split.index('details:') + 1])
+            indu += [(step, sf)]
 
         if 'errors' in line:
             errors += [(step, [float(v) for v in split[4:8:2]])]
@@ -498,14 +502,13 @@ def log_to_figure(file, figsize=(10, 5)):
     axes[1].plot(*zip(*tem))
     axes[1].set_ylabel('temperature')
     # 2
-    axes[2].plot(*zip(*covloss))
+    axes[2].plot(*zip(*covloss), label='max')
     axes[2].set_ylabel('cov-loss')
     axes[2].set_ylim(1e-4, 0.1)
     axes[2].set_yscale('log')
     if len(indu) > 0:
-        ax_indu = axes[2].twinx()
-        ax_indu.scatter(*zip(*indu), color='darkgreen')
-        ax_indu.set_ylabel('added indu')
+        axes[2].scatter(*zip(*indu), color='lime', label='added')
+    axes[2].legend()
     # 3
     if len(fit) > 0:
         p, q = zip(*fit)
