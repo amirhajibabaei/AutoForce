@@ -197,8 +197,8 @@ class ActiveCalculator(Calculator):
                 meta = f'meta: {meta_energy}'
 
         # step
-        self.log('{} {} {}'.format(energy, self.atoms.get_temperature(),
-                                   meta))
+        self.log('{} {} {} {}'.format(energy, self.atoms.get_temperature(),
+                                      self.covlog, meta))
         self.step += 1
 
         # needed for self.calculate_numerical_stress
@@ -375,6 +375,7 @@ class ActiveCalculator(Calculator):
                 added, added_beta, added_diff, *self.size, details))
             if self.blind:
                 self.log('model may be blind -> go robust')
+        self.covlog = f'{float(beta[q[0]])}'
         return added
 
     def update_data(self, try_fake=True):
@@ -439,7 +440,9 @@ class Meta:
 def parse_logfile(file='active.log'):
     energies = []
     temperatures = []
+    covloss = []
     exact_energies = []
+    indu = []
     errors = []
     fit = []
     meta = []
@@ -454,39 +457,62 @@ def parse_logfile(file='active.log'):
         try:
             energies += [(step, float(split[1]))]
             temperatures += [(step, float(split[2]))]
+            covloss += [(step, float(split[3]))]
             if 'meta:' in split:
-                meta += [(step, float(split[4]))]
+                meta += [(step, float(split[5]))]
         except:
             pass
 
         if 'exact energy' in line:
             exact_energies += [(step, float(split[3]))]
 
+        if 'added indu' in line:
+            indu += [(step, float(split[3]))]
+
         if 'errors' in line:
             errors += [(step, [float(v) for v in split[4:8:2]])]
 
         if 'fit' in line:
             fit += [(step, [float(split[k]) for k in [-5, -4, -2, -1]])]
-    return energies, exact_energies, temperatures, fit, meta
+    return energies, exact_energies, temperatures, covloss, meta, indu, fit
 
 
-def log_to_figure(file, figsize=(15, 10)):
+def log_to_figure(file, figsize=(10, 5)):
     import pylab as plt
-    ml, fp, tem, fit, meta = parse_logfile(file)
+    ml, fp, tem, covloss, meta, indu, fit = parse_logfile(file)
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
+    # 0
     x, y = zip(*ml)
-    axes[0].plot(x, y)
+    axes[0].plot(x, y, label='ML')
     if len(fp) > 0:
         r, s = zip(*fp)
-        axes[0].scatter(r, s, color='r')
+        axes[0].scatter(r, s, color='r', label='FP')
+    axes[0].set_ylabel('potential')
+    axes[0].legend()
     if len(meta) > 0:
         ax_meta = axes[0].twinx()
         ax_meta.plot(*zip(*meta), color='lime')
+        ax_meta.set_ylabel('meta')
+    # 1
     axes[1].plot(*zip(*tem))
+    axes[1].set_ylabel('temperature')
+    # 2
+    axes[2].plot(*zip(*covloss))
+    axes[2].set_ylabel('cov-loss')
+    if len(indu) > 0:
+        ax_indu = axes[2].twinx()
+        ax_indu.scatter(*zip(*indu), color='darkgreen')
+        ax_indu.set_ylabel('added indu')
+    # 3
     if len(fit) > 0:
         p, q = zip(*fit)
         q = np.array(q)
-        axes[2].errorbar(p, q[:, 0], yerr=q[:, 1])
-        axes[3].errorbar(p, q[:, 2], yerr=q[:, 3])
+        axes[3].errorbar(p, q[:, 0], yerr=q[:, 1], color='r', capsize=5)
+        ax_ferr = axes[3].twinx()
+        ax_ferr.errorbar(p, q[:, 2], yerr=q[:, 3],
+                         color='b', capsize=5, alpha=0.5)
+        axes[3].set_ylabel('E-err')
+        ax_ferr.set_ylabel('F-err')
+    fig.tight_layout()
     return fig
