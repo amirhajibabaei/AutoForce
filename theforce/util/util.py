@@ -89,3 +89,17 @@ def rounded(_p, s=2):
     while abs(c*p) < 1.:
         c *= 10
     return round(c*p, s)/c
+
+
+class EqAll:
+    def __init__(self, exceptions=[]):
+        self.exceptions = exceptions
+
+    def __eq__(self, val):
+        return val not in self.exceptions
+
+    def __repr__(self):
+        return f'EqAll(exceptions={self.exceptions})'
+
+    def __hash__(self):
+        return id(self)
