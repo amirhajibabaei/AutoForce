@@ -440,7 +440,7 @@ class Meta:
         return energies, kwargs
 
 
-def parse_logfile(file='active.log'):
+def parse_logfile(file='active.log', window=(None, None)):
     energies = []
     temperatures = []
     covloss = []
@@ -454,6 +454,10 @@ def parse_logfile(file='active.log'):
 
         try:
             step = int(split[0])
+            if window[0] and step < window[0]:
+                continue
+            if window[1] and step > window[1]:
+                break
         except IndexError:
             continue
 
@@ -481,9 +485,9 @@ def parse_logfile(file='active.log'):
     return energies, exact_energies, temperatures, covloss, meta, indu, fit
 
 
-def log_to_figure(file, figsize=(10, 5)):
+def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     import pylab as plt
-    ml, fp, tem, covloss, meta, indu, fit = parse_logfile(file)
+    ml, fp, tem, covloss, meta, indu, fit = parse_logfile(file, window=window)
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
     # 0
