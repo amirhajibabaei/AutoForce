@@ -17,7 +17,7 @@ class Radii:
 
     def __call__(self, numbers):
         return torch.cat([torch.as_tensor(self.get(int(num))).view(1)
-                          for num in numbers])
+                          for num in numbers] + [torch.empty(0)])
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.state_args})'
