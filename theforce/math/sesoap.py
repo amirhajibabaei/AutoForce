@@ -1,6 +1,7 @@
 # +
 from theforce.util.util import iterable
 from theforce.math.ylm import Ylm
+from torch.nn import Module
 import torch
 from math import factorial as fac
 from math import pi
@@ -51,7 +52,7 @@ class RadiiFromDict(Radii):
         return str({z: float(r) for z, r in self.d.items()})
 
 
-class SeSoap:
+class SeSoap(Module):
 
     def __init__(self, lmax, nmax, radial, radii=1., flatten=True, normalize=True):
         super().__init__()
@@ -92,7 +93,7 @@ class SeSoap:
     def __repr__(self):
         return self.state
 
-    def __call__(self, coo, numbers, central=None, grad=False, normalize=None, sparse_tensor=True):
+    def forward(self, coo, numbers, central=None, grad=False, normalize=None, sparse_tensor=True):
         units = self.radii(numbers)
         species = torch.unique(numbers, sorted=True)
         dim0 = len(species)**2
@@ -165,7 +166,7 @@ class SeSoap:
                 return ab, p.view(dim0, *self._shape), self._size
 
 
-class SubSeSoap:
+class SubSeSoap(Module):
 
     def __init__(self, lmax, nmax, radial, numbers, radii=1., flatten=True, normalize=True):
         super().__init__()
@@ -207,7 +208,7 @@ class SubSeSoap:
     def __repr__(self):
         return self.state
 
-    def __call__(self, coo, numbers, central=None, grad=False, normalize=None):
+    def forward(self, coo, numbers, central=None, grad=False, normalize=None):
         units = self.radii(numbers)
         xyz = coo/units.view(-1, 1)
         d = xyz.pow(2).sum(dim=-1).sqrt()
@@ -273,6 +274,7 @@ def test_SeSoap():
     radii = {10: 0.8, 11: 1., 18: 1.2, 19: 1.4}
     s = SeSoap(3, 3, PolyCut(8.0), radii=radii, flatten=True)
     numbers = torch.tensor(4*[10]+6*[18])
+    print(eval(s.state))
 
     # test grad
     p, dp = s(xyz, numbers, grad=True)
@@ -297,6 +299,7 @@ def test_SubSeSoap():
     radii = {10: 0.8, 11: 1., 18: 1.2, 19: 1.4}
     s = SubSeSoap(3, 3, PolyCut(8.0), [10, 18], radii=radii, flatten=True)
     numbers = torch.tensor(4*[10]+6*[18])
+    print(eval(s.state))
 
     # test grad
     p, dp = s(xyz, numbers, grad=True)
