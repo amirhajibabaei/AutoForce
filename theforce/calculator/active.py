@@ -25,8 +25,8 @@ class FilterDeltas(Filter):
         self.f = 0
         self.s = 0
 
-    def get_forces(self):
-        f = self.atoms.get_forces()
+    def get_forces(self, *args, **kwargs):
+        f = self.atoms.get_forces(*args, **kwargs)
         deltas = self.atoms.calc.deltas
         if deltas:
             self.f += deltas['forces']
