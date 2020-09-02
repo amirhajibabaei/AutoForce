@@ -92,7 +92,7 @@ class UniversalSoap:
     def __repr__(self):
         return self.state
 
-    def __call__(self, coo, numbers, grad=False, normalize=None, sparse_tensor=True):
+    def __call__(self, coo, numbers, central=None, grad=False, normalize=None, sparse_tensor=True):
         units = self.radii(numbers)
         species = torch.unique(numbers, sorted=True)
         dim0 = len(species)**2
@@ -119,7 +119,8 @@ class UniversalSoap:
         c = []
         for num in species:
             t = torch.index_select(ff, -1, i[numbers == num]).sum(dim=-1)
-            t[0, 0, 0] += Y00
+            if num == central:
+                t[0, 0, 0] += Y00
             c += [t]
         c = torch.stack(c)
         nnp = c[None, :, None, ]*c[:, None, :, None]
@@ -206,7 +207,7 @@ class HeteroSoap:
     def __repr__(self):
         return self.state
 
-    def __call__(self, coo, numbers, grad=True, normalize=None):
+    def __call__(self, coo, numbers, central=None, grad=False, normalize=None):
         units = self.radii(numbers)
         xyz = coo/units.view(-1, 1)
         d = xyz.pow(2).sum(dim=-1).sqrt()
@@ -229,7 +230,8 @@ class HeteroSoap:
         c = []
         for num in self.numbers:
             t = torch.index_select(ff, -1, i[numbers == num]).sum(dim=-1)
-            t[0, 0, 0] += Y00
+            if num == central:
+                t[0, 0, 0] += Y00
             c += [t]
         c = torch.stack(c)
         nnp = c[None, :, None, ]*c[:, None, :, None]
@@ -303,9 +305,10 @@ def test_HeteroSoap():
         xyz.grad.allclose(dp.sum(dim=0))))
 
     # test non-overlapping
-    #numbers = torch.tensor(4*[11]+6*[19])
-    #pp = s(xyz, numbers, grad=False)
-    # print(torch.sum(p*pp).isclose(torch.tensor(0.0)))
+    numbers = torch.tensor(4*[11]+6*[19])
+    pp = s(xyz, numbers, grad=False)
+    t = torch.sum(p*pp).isclose(torch.tensor(0.0))
+    print(f'non-overlapping: {t}')
 
 
 if __name__ == '__main__' and True:
