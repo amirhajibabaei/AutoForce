@@ -77,6 +77,9 @@ class SimilarityKernel(Module):
     def state(self):
         return self.__class__.__name__+'({})'.format(self.state_args)
 
+    def __repr__(self):
+        return self.state
+
 
 def lone_atoms(_p, _q):
     k = 0
