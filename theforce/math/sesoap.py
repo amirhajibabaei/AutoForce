@@ -52,6 +52,24 @@ class RadiiFromDict(Radii):
         return str({z: float(r) for z, r in self.d.items()})
 
 
+class SpecialRadii(Radii):
+
+    def __init__(self, dct, others=1.):
+        self.dct = dct
+        self.others = others
+
+    def get(self, number):
+        try:
+            return self.dct[number]
+        except KeyError:
+            return self.others
+
+    @property
+    def state_args(self):
+        dct = {z: float(r) for z, r in self.dct.items()}
+        return f'{dct}, {self.others}'
+
+
 class SeSoap(Module):
 
     def __init__(self, lmax, nmax, radial, radii=1., flatten=True, normalize=True):
