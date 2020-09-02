@@ -135,7 +135,7 @@ class UniversalSoap:
             dp = ((dnnp*self.Yr[..., None, None]).sum(dim=-3) +
                   (dnnp*self.Yi[..., None, None]).sum(dim=-4))
             p, dp = p*self.nnl, dp*self.nnl[..., None, None]/units.view(-1, 1)
-            if (normalize if normalize else self.normalize):
+            if (self.normalize if normalize is None else normalize):
                 norm = p.norm() + torch.finfo().eps
                 p = p/norm
                 dp = dp/norm
@@ -152,7 +152,7 @@ class UniversalSoap:
                 return ab, p, self._size, dp, (*self._size, *xyz.size())
         else:
             p = p*self.nnl
-            if (normalize if normalize else self.normalize):
+            if (self.normalize if normalize is None else normalize):
                 norm = p.norm() + torch.finfo().eps
                 p = p/norm
             if sparse_tensor:
