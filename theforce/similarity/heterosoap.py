@@ -27,13 +27,16 @@ class HeterogeneousSoapKernel(SimilarityKernel):
     def state_args(self):
         return super().state_args + ', ' + self._args
 
+    def call_descriptor(self, loc, grad):
+        return self.descriptor(loc._r, loc._b, grad=grad)
+
     def precalculate(self, loc, dont_save_grads=False):
         if (self.a == loc._a.unique()).all():
             if dont_save_grads:
-                d = self.descriptor(loc._r, loc._b, grad=False)
+                d = self.call_descriptor(loc, grad=False)
                 grad = torch.zeros(self.dim, 0, 3)
             else:
-                d, grad = self.descriptor(loc._r, loc._b, grad=True)
+                d, grad = self.call_descriptor(loc, grad=True)
                 grad = torch.cat([grad, -grad.sum(dim=1, keepdim=True)], dim=1)
             d = d[None]
             j = torch.cat([loc._j, loc._i.unique()])

@@ -80,6 +80,9 @@ class SimilarityKernel(Module):
     def __repr__(self):
         return self.state
 
+    def call_descriptor(self, loc, grad):
+        raise NotImplementedError('implement in subclass')
+
 
 def lone_atoms(_p, _q):
     k = 0

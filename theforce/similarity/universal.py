@@ -74,10 +74,12 @@ class UniversalSoapKernel(SimilarityKernel):
     def state_args(self):
         return self._args
 
+    def call_descriptor(self, loc, grad):
+        return self.descriptor(loc._r, loc._b, grad=grad)
+
     def precalculate(self, loc, dont_save_grads=True):
         if loc._r.size(0) > 0 and loc.number == self.a:
-            d = self.descriptor(loc._r, loc._b, grad=not dont_save_grads,
-                                sparse_tensor=True)
+            d = self.call_descriptor(loc, grad=not dont_save_grads)
             self.save_for_later(loc, {'value': d} if dont_save_grads else
                                 {'value': d[0],
                                  'grad': d[1]})
