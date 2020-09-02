@@ -1,4 +1,5 @@
 # +
+from theforce.util.util import iterable
 from theforce.math.ylm import Ylm
 import torch
 from math import factorial as fac
@@ -163,6 +164,103 @@ class UniversalSoap:
                 return ab, p.view(dim0, *self._shape), self._size
 
 
+class HeteroSoap:
+
+    def __init__(self, lmax, nmax, radial, numbers, radii=1., flatten=True, normalize=True):
+        super().__init__()
+        self.ylm = Ylm(lmax)
+        self.nmax = nmax
+        self.radial = radial
+        if type(radii) == float:
+            self.radii = UniformRadii(radii)
+        elif type(radii) == dict:
+            self.radii = RadiiFromDict(radii)
+        else:
+            self.radii = radii
+        self.numbers = sorted(iterable(numbers))
+        self.species = len(self.numbers)
+        one = torch.ones(lmax+1, lmax+1)
+        self.Yr = 2*torch.torch.tril(one) - torch.eye(lmax+1)
+        self.Yi = 2*torch.torch.triu(one, diagonal=1)
+        a = torch.tensor([[1./((2*l+1)*2**(2*n+l)*fac(n)*fac(n+l))
+                           for l in range(lmax+1)] for n in range(nmax+1)])
+        self.nnl = (a[None]*a[:, None]).sqrt()
+        self.dim = self.species**2 * (nmax+1)**2 * (lmax+1)
+        self.shape = (self.species, self.species, nmax+1, nmax+1, lmax+1)
+        if flatten:
+            self.shape = (self.dim,)
+        self.flatten = flatten
+        self.normalize = normalize
+        self.params = []
+
+    @property
+    def state_args(self):
+        return "{}, {}, {}, {}, radii={}, flatten={}, normalize={}".format(
+            self.ylm.lmax, self.nmax, self.radial.state, self.numbers, self.radii,
+            self.flatten, self.normalize)
+
+    @property
+    def state(self):
+        return self.__class__.__name__+'({})'.format(self.state_args)
+
+    def __repr__(self):
+        return self.state
+
+    def __call__(self, coo, numbers, grad=True, normalize=None):
+        units = self.radii(numbers)
+        xyz = coo/units.view(-1, 1)
+        d = xyz.pow(2).sum(dim=-1).sqrt()
+        n = 2*torch.arange(self.nmax+1).type(xyz.type())
+        #
+        r, dr = self.radial(units*d)
+        exp = (-0.5*d**2).exp()
+        if grad:
+            dr = units*dr
+            dexp = -d*exp
+            dr = dr*exp + r*dexp
+        r = r*exp
+        #
+        f = (r*d[None]**n[:, None])
+        Y = self.ylm(xyz, grad=grad)
+        if grad:
+            Y, dY = Y
+        ff = f[:, None, None]*Y[None]
+        i = torch.arange(r.size(0))
+        c = []
+        for num in self.numbers:
+            t = torch.index_select(ff, -1, i[numbers == num]).sum(dim=-1)
+            t[0, 0, 0] += Y00
+            c += [t]
+        c = torch.stack(c)
+        nnp = c[None, :, None, ]*c[:, None, :, None]
+        p = (nnp*self.Yr).sum(dim=-1) + (nnp*self.Yi).sum(dim=-2)
+        if grad:
+            df = dr*d[None]**n[:, None] + r*n[:, None]*d[None]**(n[:, None]-1)
+            df = df[..., None]*xyz/d[:, None]
+            dc = (df[:, None, None]*Y[None, ..., None] +
+                  f[:, None, None, :, None]*dY[None])
+            dc = torch.stack([(numbers == num).type(r.type())[:, None] * dc
+                              for num in self.numbers])
+            dnnp = (c[None, :, None, ..., None, None]*dc[:, None, :, None] +
+                    dc[None, :, None, ]*c[:, None, :, None, ..., None, None])
+            dp = ((dnnp*self.Yr[..., None, None]).sum(dim=-3) +
+                  (dnnp*self.Yi[..., None, None]).sum(dim=-4))
+            p, dp = p*self.nnl, dp*self.nnl[..., None, None]/units.view(-1, 1)
+            if (self.normalize if normalize is None else normalize):
+                norm = p.norm() + torch.finfo().eps
+                p = p/norm
+                dp = dp/norm
+                dp = dp - p[..., None, None]*(p[..., None, None]*dp
+                                              ).sum(dim=(0, 1, 2, 3, 4))
+            return p.view(*self.shape), dp.view(*self.shape, *xyz.size())
+        else:
+            p = p*self.nnl
+            if (self.normalize if normalize is None else normalize):
+                norm = p.norm() + torch.finfo().eps
+                p = p/norm
+            return p.view(*self.shape)
+
+
 def test_UniversalSoap():
     import torch
     from theforce.math.cutoff import PolyCut
@@ -183,8 +281,33 @@ def test_UniversalSoap():
     # test non-overlapping
     numbers = torch.tensor(4*[11]+6*[19])
     pp = s(xyz, numbers, grad=False)
-    print(torch.sparse.sum(p*pp).isclose(torch.tensor(0.0)))
+    t = torch.sparse.sum(p*pp).isclose(torch.tensor(0.0))
+    print(f'non-overlapping: {t}')
+
+
+def test_HeteroSoap():
+    import torch
+    from theforce.math.cutoff import PolyCut
+    from theforce.math.soap import RealSeriesSoap
+
+    xyz = (torch.rand(10, 3) - 0.5) * 5
+    xyz.requires_grad = True
+    radii = {10: 0.8, 11: 1., 18: 1.2, 19: 1.4}
+    s = HeteroSoap(3, 3, PolyCut(8.0), [10, 18], radii=radii, flatten=True)
+    numbers = torch.tensor(4*[10]+6*[18])
+
+    # test grad
+    p, dp = s(xyz, numbers, grad=True)
+    p.sum().backward()
+    print('fits gradients calculated by autograd: {}'.format(
+        xyz.grad.allclose(dp.sum(dim=0))))
+
+    # test non-overlapping
+    #numbers = torch.tensor(4*[11]+6*[19])
+    #pp = s(xyz, numbers, grad=False)
+    # print(torch.sum(p*pp).isclose(torch.tensor(0.0)))
 
 
 if __name__ == '__main__' and True:
     test_UniversalSoap()
+    test_HeteroSoap()
