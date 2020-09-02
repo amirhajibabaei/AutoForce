@@ -51,7 +51,7 @@ class RadiiFromDict(Radii):
         return str({z: float(r) for z, r in self.d.items()})
 
 
-class UniversalSoap:
+class SeSoap:
 
     def __init__(self, lmax, nmax, radial, radii=1., flatten=True, normalize=True):
         super().__init__()
@@ -165,7 +165,7 @@ class UniversalSoap:
                 return ab, p.view(dim0, *self._shape), self._size
 
 
-class HeteroSoap:
+class SubSeSoap:
 
     def __init__(self, lmax, nmax, radial, numbers, radii=1., flatten=True, normalize=True):
         super().__init__()
@@ -263,7 +263,7 @@ class HeteroSoap:
             return p.view(*self.shape)
 
 
-def test_UniversalSoap():
+def test_SeSoap():
     import torch
     from theforce.math.cutoff import PolyCut
     from theforce.math.soap import RealSeriesSoap
@@ -271,7 +271,7 @@ def test_UniversalSoap():
     xyz = (torch.rand(10, 3) - 0.5) * 5
     xyz.requires_grad = True
     radii = {10: 0.8, 11: 1., 18: 1.2, 19: 1.4}
-    s = UniversalSoap(3, 3, PolyCut(8.0), radii=radii, flatten=True)
+    s = SeSoap(3, 3, PolyCut(8.0), radii=radii, flatten=True)
     numbers = torch.tensor(4*[10]+6*[18])
 
     # test grad
@@ -287,7 +287,7 @@ def test_UniversalSoap():
     print(f'non-overlapping: {t}')
 
 
-def test_HeteroSoap():
+def test_SubSeSoap():
     import torch
     from theforce.math.cutoff import PolyCut
     from theforce.math.soap import RealSeriesSoap
@@ -295,7 +295,7 @@ def test_HeteroSoap():
     xyz = (torch.rand(10, 3) - 0.5) * 5
     xyz.requires_grad = True
     radii = {10: 0.8, 11: 1., 18: 1.2, 19: 1.4}
-    s = HeteroSoap(3, 3, PolyCut(8.0), [10, 18], radii=radii, flatten=True)
+    s = SubSeSoap(3, 3, PolyCut(8.0), [10, 18], radii=radii, flatten=True)
     numbers = torch.tensor(4*[10]+6*[18])
 
     # test grad
@@ -312,5 +312,5 @@ def test_HeteroSoap():
 
 
 if __name__ == '__main__' and True:
-    test_UniversalSoap()
-    test_HeteroSoap()
+    test_SeSoap()
+    test_SubSeSoap()
