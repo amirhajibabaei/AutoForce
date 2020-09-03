@@ -341,7 +341,7 @@ class ActiveCalculator(Calculator):
                 break
             beta = self.get_covloss()
             q = torch.argsort(beta, descending=True)
-            if q[0] < self.coveps:
+            if beta[q[0]] < self.coveps:
                 break
             for k in q.tolist():
                 if k not in added_indices:
