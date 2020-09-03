@@ -2,7 +2,7 @@
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
 from theforce.util.tensors import padded
-from theforce.util.util import date
+from theforce.util.util import date, timestamp
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.constraints import Filter
@@ -441,6 +441,8 @@ class Meta:
 
 
 def parse_logfile(file='active.log', window=(None, None)):
+    start = None
+    elapsed = []
     energies = []
     temperatures = []
     covloss = []
@@ -450,7 +452,12 @@ def parse_logfile(file='active.log', window=(None, None)):
     fit = []
     meta = []
     for line in open(file):
-        split = line.split()[2:]
+        s = line.split()
+        ts = timestamp(' '.join(s[:2]))
+        if start is None:
+            start = ts
+        ts = (ts-start)/60
+        split = s[2:]
 
         try:
             step = int(split[0])
@@ -460,6 +467,8 @@ def parse_logfile(file='active.log', window=(None, None)):
                 break
         except IndexError:
             continue
+
+        elapsed += [(step, ts)]
 
         try:
             energies += [(step, float(split[1]))]
@@ -482,12 +491,13 @@ def parse_logfile(file='active.log', window=(None, None)):
 
         if 'fit' in line:
             fit += [(step, [float(split[k]) for k in [-5, -4, -2, -1]])]
-    return energies, exact_energies, temperatures, covloss, meta, indu, fit
+    return energies, exact_energies, temperatures, covloss, meta, indu, fit, elapsed
 
 
 def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     import pylab as plt
-    ml, fp, tem, covloss, meta, indu, fit = parse_logfile(file, window=window)
+    ml, fp, tem, covloss, meta, indu, fit, elapsed = parse_logfile(
+        file, window=window)
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
     # 0
@@ -513,6 +523,9 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     if len(indu) > 0:
         axes[2].scatter(*zip(*indu), color='lime', label='added')
     axes[2].legend()
+    wall = axes[2].twinx()
+    wall.plot(*zip(*elapsed), color='cyan', alpha=0.5)
+    wall.set_ylabel('minutes')
     # 3
     if len(fit) > 0:
         p, q = zip(*fit)
