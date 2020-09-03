@@ -378,24 +378,39 @@ class PosteriorPotential(Module):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
     def make_munu(self, algo=1, noisegrad=False):
-        if algo == 0:
-            # allocates too much memory
-            self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
-                self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
+        parallel = torch.distributed.is_initialized()
+        if parallel:
+            rank = torch.distributed.get_rank()
         else:
-            L, self.ridge = jitcholesky(self.M)
-            #sigma = self.gp.diagonal_ridge(self.data).sqrt()
-            sigma = self.gp.noise.signal
-            if not noisegrad:
-                sigma = sigma.detach()
-            #A = torch.cat((self.K/sigma.view(-1, 1), L.t()))
-            A = torch.cat((self.K, sigma.view(1)*L.t()))
-            #Y = torch.cat((self.gp.Y(self.data)/sigma, torch.zeros(L.size(0))))
-            Y = torch.cat((self.gp.Y(self.data), torch.zeros(L.size(0))))
-            Q, R = torch.qr(A)
-            self.mu = R.inverse()@Q.t()@Y
-            self.nu = None
-            self.choli = L.inverse()
+            rank = 0
+        if rank == 0:
+            if algo == 0:
+                # allocates too much memory
+                self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
+                    self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
+            else:
+                L, ridge = jitcholesky(self.M)
+                self.ridge = torch.as_tensor(ridge)
+                #sigma = self.gp.diagonal_ridge(self.data).sqrt()
+                sigma = self.gp.noise.signal
+                if not noisegrad:
+                    sigma = sigma.detach()
+                #A = torch.cat((self.K/sigma.view(-1, 1), L.t()))
+                A = torch.cat((self.K, sigma.view(1)*L.t()))
+                #Y = torch.cat((self.gp.Y(self.data)/sigma, torch.zeros(L.size(0))))
+                Y = torch.cat((self.gp.Y(self.data), torch.zeros(L.size(0))))
+                Q, R = torch.qr(A)
+                self.mu = (R.inverse()@Q.t()@Y).contiguous()
+                # self.nu = None # is not needed anymore
+                self.choli = L.inverse().contiguous()
+        else:
+            self.ridge = torch.zeros([])
+            self.mu = torch.zeros_like(self.M[0])
+            self.choli = torch.zeros_like(self.M)
+        if parallel:
+            torch.distributed.broadcast(self.ridge, 0)
+            torch.distributed.broadcast(self.mu, 0)
+            torch.distributed.broadcast(self.choli, 0)
         if not noisegrad and (self.mu.requires_grad or self.choli.requires_grad):
             warnings.warn('mu or choli requires grad!')
         self.Mi = self.choli.t()@self.choli
