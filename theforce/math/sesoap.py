@@ -62,7 +62,7 @@ class RadiiFromArray(Radii):
 
     @property
     def state_args(self):
-        return str([z: float(r) for z in self.d])
+        return str([float(z) for z in self.d])
 
 
 class SpecialRadii(Radii):
