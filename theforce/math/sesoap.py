@@ -52,6 +52,19 @@ class RadiiFromDict(Radii):
         return str({z: float(r) for z, r in self.d.items()})
 
 
+class RadiiFromArray(Radii):
+
+    def __init__(self, d):
+        self.d = d
+
+    def get(self, number):
+        return self.d[number]
+
+    @property
+    def state_args(self):
+        return str([z: float(r) for z in self.d])
+
+
 class SpecialRadii(Radii):
 
     def __init__(self, dct, others=1.):
@@ -81,6 +94,8 @@ class SeSoap(Module):
             self.radii = UniformRadii(radii)
         elif type(radii) == dict:
             self.radii = RadiiFromDict(radii)
+        elif hasattr(radii, '__iter__'):
+            self.radii = RadiiFromArray(radii)
         else:
             self.radii = radii
         one = torch.ones(lmax+1, lmax+1)
