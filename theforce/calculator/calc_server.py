@@ -1,3 +1,4 @@
+# +
 import sys
 from ase.io import read
 from theforce.util.server import Server
@@ -19,19 +20,31 @@ def get_calc(script, ref='calc'):
     return scope[ref]
 
 
+def get_scope(script):
+    scope = {}
+    try:
+        exec(open(script).read(), scope)
+    except TypeError:
+        exec(script.read(), scope)
+    return scope
+
+
 def calculate(_file, _calc):
     calc = _calc
     file = _file.decode("utf-8")
+    scope = {}
     if ':' in file:
         msg = file.split(':')
         if len(msg) == 2:
             i, o = msg
         elif len(msg) == 3:
             i, o, c = msg
-            calc = get_calc(c)
+            scope = get_scope(c)
+            calc = scope['calc']
         elif len(msg) == 4:
             i, o, c, ref = msg
-            calc = get_calc(c, ref=ref)
+            calc = get_scope(c)
+            calc = scope[ref]
         else:
             raise RuntimeError(f'message > 3 -> {msg}')
     else:
@@ -39,10 +52,14 @@ def calculate(_file, _calc):
     try:
         reserve_ofile(o)
         atoms = read(i)
+        if 'preprocess_atoms' in scope:
+            scope['preprocess_atoms'](atoms)
         atoms.set_calculator(calc)
         atoms.get_potential_energy()
         atoms.get_forces()
         atoms.get_stress()
+        if 'postprocess_atoms' in scope:
+            scope['postprocess_atoms'](atoms)
         atoms.write(o)
     except FileNotFoundError:
         warnings.warn(f'unable to read {i} -> calculation skipped')
