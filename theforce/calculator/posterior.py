@@ -1,5 +1,5 @@
 # +
-from theforce.calculator.socket import SocketCalculator
+from theforce.calculator.socketcalc import SocketCalculator
 from theforce.descriptor.atoms import TorchAtoms
 from theforce.util.util import date
 from ase.calculators.calculator import Calculator, all_changes
