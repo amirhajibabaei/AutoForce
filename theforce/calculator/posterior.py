@@ -1,15 +1,16 @@
 # +
-import numpy as np
-from ase.calculators.calculator import Calculator, all_changes
-import torch
-from torch.autograd import grad
-import warnings
-import ase
+from theforce.calculator.socket import SocketCalculator
 from theforce.descriptor.atoms import TorchAtoms
 from theforce.util.util import date
-import socket
+from ase.calculators.calculator import Calculator, all_changes
 from ase.io import read
+import ase
+from torch.autograd import grad
+import torch
+import numpy as np
+import socket
 import os
+import warnings
 
 
 class PosteriorCalculator(Calculator):
@@ -90,74 +91,6 @@ class PosteriorVarianceCalculator(Calculator):
         self.results['forces_var'] = forces_var.detach().numpy()
         # NOTE: check if this is correct!
         self.results['free_energy'] = self.results['energy']
-
-
-class SocketCalculator(Calculator):
-    implemented_properties = ['energy', 'forces', 'stress']
-
-    def __init__(self, ip='localhost', port=6666, script=None, **kwargs):
-        Calculator.__init__(self, **kwargs)
-        self.ip = ip
-        self.port = port
-        self.script = script
-        self.log('created', 'w')
-
-    def log(self, msg, mode='a'):
-        if self.rank == 0:
-            with open('socalc.log', mode) as f:
-                f.write(f'{date()}   {msg}\n')
-
-    def ping(self):
-        s = socket.socket()
-        s.connect((self.ip, self.port))
-        s.send(b'?')
-        print(f'server says: {s.recv(1024)}')
-        s.close()
-
-    @property
-    def is_distributed(self):
-        return torch.distributed.is_initialized()
-
-    @property
-    def rank(self):
-        if self.is_distributed:
-            return torch.distributed.get_rank()
-        else:
-            return 0
-
-    @property
-    def message(self):
-        cwd = os.getcwd()
-        msg = f'{cwd}/socket_send.xyz:{cwd}/socket_recv.xyz'
-        if self.script is not None:
-            msg = f'{msg}:{os.path.abspath(self.script)}'
-        return msg
-
-    def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
-        Calculator.calculate(self, atoms, properties, system_changes)
-        # write and send request
-        self.log('s')
-        if self.rank == 0:
-            s = socket.socket()
-            s.connect((self.ip, self.port))
-            self.atoms.write('socket_send.xyz')
-            s.send(self.message.encode())
-            assert int(s.recv(1024).decode('utf-8')) == 0
-            s.close()
-        if self.is_distributed:
-            torch.distributed.barrier()
-        self.log('e')
-        # read
-        atms = read('socket_recv.xyz')
-        self.results['energy'] = atms.get_potential_energy()
-        self.results['forces'] = atms.get_forces()
-        self.results['stress'] = atms.get_stress()
-
-    def close(self):
-        s = socket.socket()
-        s.connect((self.ip, self.port))
-        s.send(b'end')
-        s.close()
 
 
 class AutoForceCalculator(Calculator):
