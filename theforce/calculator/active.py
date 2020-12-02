@@ -48,24 +48,25 @@ class FilterDeltas(Filter):
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
-    def __init__(self, covariance, calculator=None, process_group=None, ediff=0.1, fdiff=0.1, covdiff=0.1,
-                 coveps=1e-4, meta=None, logfile='active.log', storage='storage.traj', **kwargs):
+    def __init__(self, covariance, calculator=None, process_group=None,
+                 ediff=0.1, fdiff=0.1, coveps=1e-4, covdiff=1e-2, meta=None,
+                 logfile='active.log', storage='storage.traj', **kwargs):
         """
         covariance:      similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
         process_group:   None | group
         ediff:           energy sensitivity
         fdiff:           forces sensitivity
-        covdiff:         covariance-loss sensitivity heuristic
         coveps:          covariance-loss ~ 0 if less than this value
+        covdiff:         covariance-loss sensitivity heuristic
         meta:            meta energy calculator
         logfile:         string | None
         storage:         string | None
         kwargs:          ASE's calculator kwargs
 
         *** important ***
-        wrap atoms with FilterDeltas if you intend to carry out
-        molecular dynamics simulations.
+        You may wants to wrap atoms with FilterDeltas if you intend to 
+        carry out molecular dynamics simulations. 
 
         --------------------------------------------------------------------------------------
 
@@ -110,8 +111,8 @@ class ActiveCalculator(Calculator):
         self.get_model(covariance)
         self.ediff = ediff
         self.fdiff = fdiff
-        self.covdiff = covdiff
         self.coveps = coveps
+        self.covdiff = covdiff
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
@@ -352,7 +353,7 @@ class ActiveCalculator(Calculator):
                 self.blind = True
             loc = self.atoms.local(k, detach=True)
             if loc.number in self.model.gp.species:
-                if beta[k] > self.covdiff:
+                if beta[k] > self.covdiff and self.model.indu_counts[loc.number] < 2:
                     self.model.add_inducing(loc)
                     added_beta += 1
                     x = self.model.gp.kern(self.atoms, loc)
