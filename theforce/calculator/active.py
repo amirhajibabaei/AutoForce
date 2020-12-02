@@ -177,6 +177,7 @@ class ActiveCalculator(Calculator):
 
         # active learning
         self.deltas = None
+        self.covlog = ''
         if self.active:
             m, n = self.update(data=data)
             if n > 0 or m > 0:  # update results
