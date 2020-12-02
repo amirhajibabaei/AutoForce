@@ -8,6 +8,7 @@ from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
 from theforce.optimize.optimizers import ClampedSGD
+from collections import Counter
 import copy
 import os
 import functools
@@ -422,6 +423,10 @@ class PosteriorPotential(Module):
         self._fdiff = diff[len(self.data):]
         self._stats = [self._ediff.mean(), self._ediff.var().sqrt(),
                        self._fdiff.mean(), self._fdiff.var().sqrt()]
+        # needed for special cases
+        self.indu_counts = Counter()
+        for x in self.X:
+            self.indu_counts[x.number] += 1
 
     @property
     def sigma_e(self):
