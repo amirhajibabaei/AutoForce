@@ -29,9 +29,7 @@ def get_scope(script):
     return scope
 
 
-def calculate(_file, _calc):
-    calc = _calc
-    file = _file.decode("utf-8")
+def calculate(file, calc):
     scope = {}
     if ':' in file:
         msg = file.split(':')

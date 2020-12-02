@@ -10,17 +10,21 @@ class Server:
         self.socket.bind((ip, port))
         self.callback = callback if callback else lambda a: 0
         self.args = args
-        with open('server.log', 'w') as log:
-            log.write(f'server initiated at: {date()}\n')
-            log.write(f'host name: {socket.gethostname()}\n')
-            log.write(f'socket name: {self.socket.getsockname()}\n')
+        h = socket.gethostname()
+        s = self.socket.getsockname()
+        self.log(f'server initiated at: {h} {s}', 'w')
 
-    def listen(self, end=b'end', ping=b'?'):
+    def log(self, msg, mode='a'):
+        with open('server.log', mode) as log:
+            log.write(f'{date()}: {msg}\n')
+
+    def listen(self, end='end', ping='?'):
         self.socket.listen(5)
         resume = True
         while resume:
             c, addr = self.socket.accept()
-            request = c.recv(1024)
+            request = c.recv(1024).decode("utf-8").strip()
+            self.log(request)
             if request == end:
                 resume = False
             elif request == ping:
