@@ -157,6 +157,7 @@ class ActiveCalculator(Calculator):
         data = True
         if self.step == 0:
             self.log('active calculator says Hello!', mode='w')
+            self.log_settings()
             if self.active and self.model.ndata == 0:
                 self.initiate_model()
                 data = False
@@ -421,6 +422,11 @@ class ActiveCalculator(Calculator):
                 if self.stdout:
                     print('{} {} {}'.format(date(), self.step, mssge))
 
+    def log_settings(self):
+        settings = ['ediff', 'fdiff', 'coveps', 'covdiff']
+        s = ''.join([f' {s}: {getattr(self, s)} ' for s in settings])
+        self.log(f'settings: {s}')
+
 
 class Meta:
 
@@ -443,6 +449,7 @@ class Meta:
 
 def parse_logfile(file='active.log', window=(None, None)):
     start = None
+    settings = []
     elapsed = []
     energies = []
     temperatures = []
@@ -459,6 +466,9 @@ def parse_logfile(file='active.log', window=(None, None)):
             start = ts
         ts = (ts-start)/60
         split = s[2:]
+
+        if split[1] == 'settings:':
+            settings = {a: float(b) for a, b in zip(split[2::2], split[3::2])}
 
         try:
             step = int(split[0])
@@ -492,12 +502,12 @@ def parse_logfile(file='active.log', window=(None, None)):
 
         if 'fit' in line:
             fit += [(step, [float(split[k]) for k in [-5, -4, -2, -1]])]
-    return energies, exact_energies, temperatures, covloss, meta, indu, fit, elapsed
+    return energies, exact_energies, temperatures, covloss, meta, indu, fit, elapsed, settings
 
 
 def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     import pylab as plt
-    ml, fp, tem, covloss, meta, indu, fit, elapsed = parse_logfile(
+    ml, fp, tem, covloss, meta, indu, fit, elapsed, settings = parse_logfile(
         file, window=window)
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
@@ -527,6 +537,8 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     wall = axes[2].twinx()
     wall.plot(*zip(*elapsed), color='cyan', alpha=0.5)
     wall.set_ylabel('minutes')
+    axes[2].axhline(y=settings['coveps:'], ls='--', color='k')
+    axes[2].axhline(y=settings['covdiff:'], ls='--', color='k')
     # 3
     if len(fit) > 0:
         p, q = zip(*fit)
