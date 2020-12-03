@@ -366,6 +366,7 @@ class ActiveCalculator(Calculator):
                               else torch.finfo().eps)
                     added, delta = self.model.add_1inducing(
                         loc, _ediff, detach=False)
+                    self.log_cov(beta[k], delta)
                     if added:
                         added_diff += 1
                         x = self.model.gp.kern(self.atoms, loc)
@@ -422,6 +423,15 @@ class ActiveCalculator(Calculator):
                 f.write('{} {} {}\n'.format(date(), self.step, mssge))
                 if self.stdout:
                     print('{} {} {}'.format(date(), self.step, mssge))
+            # cov log
+            if mode == 'w':
+                with open('cov.log', mode) as f:
+                    f.write('# covariance data\n')
+
+    def log_cov(self, *args):
+        if self.logfile and self.rank == 0:
+            with open('cov.log', 'a') as f:
+                f.write(' '.join([str(float(arg)) for arg in args])+'\n')
 
     def log_settings(self):
         settings = ['ediff', 'fdiff', 'coveps', 'covdiff']
