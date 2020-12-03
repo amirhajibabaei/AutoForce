@@ -85,7 +85,7 @@ class SpecialRadii(Radii):
 
 class SeSoap(Module):
 
-    def __init__(self, lmax, nmax, radial, radii=1., flatten=True, normalize=True):
+    def __init__(self, lmax, nmax, radial, radii=1., flatten=True, normalize=False):
         super().__init__()
         self.ylm = Ylm(lmax)
         self.nmax = nmax
@@ -201,7 +201,7 @@ class SeSoap(Module):
 
 class SubSeSoap(Module):
 
-    def __init__(self, lmax, nmax, radial, numbers, radii=1., flatten=True, normalize=True):
+    def __init__(self, lmax, nmax, radial, numbers, radii=1., flatten=True, normalize=False):
         super().__init__()
         self.ylm = Ylm(lmax)
         self.nmax = nmax
