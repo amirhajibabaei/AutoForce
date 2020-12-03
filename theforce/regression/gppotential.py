@@ -393,7 +393,7 @@ class PosteriorPotential(Module):
                 L, ridge = jitcholesky(self.M)
                 self.ridge = torch.as_tensor(ridge)
                 #sigma = self.gp.diagonal_ridge(self.data).sqrt()
-                sigma = self.gp.noise.signal
+                sigma = self.gp.noise.signal*self.M.diag().mean()
                 if not noisegrad:
                     sigma = sigma.detach()
                 #A = torch.cat((self.K/sigma.view(-1, 1), L.t()))
