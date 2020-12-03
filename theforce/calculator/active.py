@@ -549,16 +549,22 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     wall.plot(*zip(*elapsed), color='cyan', alpha=0.5)
     wall.set_ylabel('minutes')
     axes[2].axhline(y=settings['coveps:'], ls='--', color='k')
-    axes[2].axhline(y=settings['covdiff:'], ls='--', color='k')
+    axes[2].axhline(y=settings['covdiff:'], ls='--', color='k', alpha=0.3)
+    axes[2].grid()
     # 3
     if len(fit) > 0:
         p, q = zip(*fit)
         q = np.array(q)
-        axes[3].errorbar(p, q[:, 0], yerr=q[:, 1], color='r', capsize=5)
-        ax_ferr = axes[3].twinx()
-        ax_ferr.errorbar(p, q[:, 2], yerr=q[:, 3],
-                         color='b', capsize=5, alpha=0.5)
-        axes[3].set_ylabel('E-err')
-        ax_ferr.set_ylabel('F-err')
+        q[:, 0:2] *= 10
+        axes[3].axhline(y=0, ls=':', lw=1, color='k')
+        axes[3].fill_between(p, q[:, 2]-q[:, 3], q[:, 2] + q[:, 3], color='cornflowerblue',
+                             interpolate=True, alpha=0.5, label=r'$\Delta f$')
+        axes[3].scatter(p, q[:, 2], color='cornflowerblue')
+        axes[3].fill_between(p, q[:, 0]-q[:, 1], q[:, 0] + q[:, 1], color='salmon',
+                             interpolate=True, alpha=0.5, label=r'$10\times\Delta(E/N)$')
+        axes[3].scatter(p, q[:, 0], color='salmon')
+        axes[3].grid()
+        axes[3].legend()
+        axes[3].set_ylabel('Errors')
     fig.tight_layout()
     return fig
