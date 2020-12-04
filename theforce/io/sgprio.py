@@ -40,6 +40,11 @@ def convert_block(typ, blk):
         obj = read(io.StringIO(''.join(blk)), format='xyz')
     elif typ == 'local':
         obj = read_lce(blk)
+    elif typ == 'params':
+        obj = {}
+        for line in blk:
+            a, b = line.split()
+            obj[a] = eval(b)
     else:
         raise RuntimeError(f'type {typ} is unknown')
     return obj
@@ -72,6 +77,14 @@ class SgprIO:
             atoms.write(self.path, format='xyz', append=True)
             with open(self.path, 'a') as f:
                 f.write('end: atoms\n')
+
+    def write_params(self, **kwargs):
+        if rank() == 0:
+            with open(self.path, 'a') as f:
+                f.write('\nstart: params\n')
+                for a, b in kwargs.items():
+                    f.write(f'{a} {b}\n')
+                f.write('end: params\n')
 
     def read(self):
         with open(self.path, 'r') as f:
