@@ -3,6 +3,7 @@ from theforce.regression.gppotential import PosteriorPotential, PosteriorPotenti
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
 from theforce.util.tensors import padded
 from theforce.util.util import date, timestamp
+from theforce.io.sgprio import SgprIO
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.constraints import Filter
@@ -50,7 +51,7 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance, calculator=None, process_group=None,
                  ediff=0.1, fdiff=0.1, coveps=1e-4, covdiff=1e-2, meta=None,
-                 logfile='active.log', storage='storage.traj', **kwargs):
+                 logfile='active.log', storage='model.sgpr', **kwargs):
         """
         covariance:      similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
@@ -61,7 +62,7 @@ class ActiveCalculator(Calculator):
         covdiff:         covariance-loss sensitivity heuristic
         meta:            meta energy calculator
         logfile:         string | None
-        storage:         string | None
+        storage:         string (with suffix .sgpr)
         kwargs:          ASE's calculator kwargs
 
         *** important ***
@@ -102,8 +103,8 @@ class ActiveCalculator(Calculator):
         of magnitude.
         If the model is volatile, one can set coveps=0 for robustness.
 
-        The "storage" arg is the name of the file used for saving the exact
-        calculations (with the main calculator). Turn it of by "storage=None".
+        The "storage" arg is the name of the file used for saving the 
+        updates (the added data and inducing).
         """
         Calculator.__init__(self, **kwargs)
         self._calc = calculator
@@ -116,7 +117,7 @@ class ActiveCalculator(Calculator):
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
-        self.storage = storage
+        self.storage = SgprIO(storage)
         self.normalized = None
         self.step = 0
 
@@ -254,6 +255,9 @@ class ActiveCalculator(Calculator):
         i = self.atoms.first_of_each_atom_type()
         inducing = LocalsData([self.atoms.local(j, detach=True) for j in i])
         self.model.set_data(data, inducing)
+        # data is stored in _exact, thus we only store the inducing
+        for loc in inducing:
+            self.storage.write(loc)
         details = [(j, self.atoms.numbers[j]) for j in i]
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
@@ -263,8 +267,7 @@ class ActiveCalculator(Calculator):
         tmp.set_calculator(self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
-        if self.storage and self.rank == 0:
-            ase.io.Trajectory(self.storage, 'a').write(tmp)
+        self.storage.write(tmp)
         self.log('exact energy: {}'.format(energy))
         #
         if self.model.ndata > 0:
@@ -355,6 +358,7 @@ class ActiveCalculator(Calculator):
             if loc.number in self.model.gp.species:
                 if beta[k] > self.covdiff and self.model.indu_counts[loc.number] < 2:
                     self.model.add_inducing(loc)
+                    self.storage.write(loc)
                     added_beta += 1
                     x = self.model.gp.kern(self.atoms, loc)
                     self.cov = torch.cat([self.cov, x], dim=1)
@@ -368,6 +372,7 @@ class ActiveCalculator(Calculator):
                         loc, _ediff, detach=False)
                     self.log_cov(beta[k], delta)
                     if added:
+                        self.storage.write(loc)
                         added_diff += 1
                         x = self.model.gp.kern(self.atoms, loc)
                         self.cov = torch.cat([self.cov, x], dim=1)
