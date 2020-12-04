@@ -56,8 +56,8 @@ class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
     def __init__(self, covariance=None, calculator=None, process_group=None,
-                 ediff=0.1, fdiff=0.1, coveps=1e-4, covdiff=1e-2, meta=None,
-                 logfile='active.log', storage='model.sgpr', **kwargs):
+                 ediff=0.05, fdiff=0.1, coveps=1e-4, covdiff=1e-2, meta=None,
+                 logfile='active.log', tape='model.pes.sgpr', **kwargs):
         """
         covariance:      None | similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
@@ -68,14 +68,23 @@ class ActiveCalculator(Calculator):
         covdiff:         covariance-loss sensitivity heuristic
         meta:            meta energy calculator
         logfile:         string | None
-        storage:         string (with suffix .sgpr)
+        tape:            string (with suffix .pes.sgpr), the file used to save/load updates
         kwargs:          ASE's calculator kwargs
+
+        *** important ***
+        All of the updates are recorded in the tape.
+        If the tape already exists, it will be loaded.
 
         *** important ***
         You may wants to wrap atoms with FilterDeltas if you intend to 
         carry out molecular dynamics simulations. 
 
+        *** important ***
+        You can use log_to_figure function in this module for visualization.
+            e.g. log_to_figure('active.log')
+
         --------------------------------------------------------------------------------------
+        Notes:
 
         If covariance is None, the default kernel will be used.
         At the beginning, covariance is often a list of similarity kernels:
@@ -89,26 +98,26 @@ class ActiveCalculator(Calculator):
         In case one wishes to use an existing model without further updates, 
         then pass "calculator=None".
 
-        For parallelism, first call:
-            torch.init_process_group('mpi')
-        then, set process_group=torch.distributed.group.WORLD in kwargs.
+        For parallelism, import "mpi_init" from theforce.util.parallel,
+        then set 
+            process_group = mpi_init()
+        as kwarg when creating the ActiveCalculator.
 
-        If covariance-loss (range [0,1]) for a LCE is greater than covdiff,
-        it will be automaticaly added to the inducing set.
-        Moreover, exact calculations will be triggered.
-        Do not make covdiff too small!
-        covdiff=1 eliminates this heuristic, if one wishes to keep the
-        algorithm non-parametric.
-        Setting a finite covdiff (~0.1) may be necessary if the training
-        starts from a state with zero forces (with an empty model).
+        Setting a finite covdiff (0.01~0.1) may be necessary if the training
+        starts with an empty model and a state with zero initial forces.
         If covariance-loss < coveps, the update trial will be skipped.
         Depending on the problem at hand, coveps can be chosen as high as
         1e-2 which can speed up the calculator by potentially a few orders
         of magnitude.
         If the model is volatile, one can set coveps=0 for robustness.
 
-        The "storage" arg is the name of the file used for saving the 
-        updates (the added data and inducing).
+        The tape arg is the name of the file used for saving the 
+        updates (the added data and inducing). 
+        The model can be regenarated using this file.
+        "tape" files are never overwritten (allways appended).
+        This file can also be used to import other tapes by a line 
+        containing 
+            include: path-to-another-tape
         """
         Calculator.__init__(self, **kwargs)
         self._calc = calculator
@@ -121,8 +130,10 @@ class ActiveCalculator(Calculator):
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
-        self.storage = SgprIO(storage)
-        self.storage.write_params(ediff=self.ediff, fdiff=self.fdiff)
+        self.tape = SgprIO(tape)
+        if os.path.isfile(tape):
+            self.model.include(self.tape)
+        self.tape.write_params(ediff=self.ediff, fdiff=self.fdiff)
         self.normalized = None
         self.step = 0
 
@@ -262,7 +273,7 @@ class ActiveCalculator(Calculator):
         self.model.set_data(data, inducing)
         # data is stored in _exact, thus we only store the inducing
         for loc in inducing:
-            self.storage.write(loc)
+            self.tape.write(loc)
         details = [(j, self.atoms.numbers[j]) for j in i]
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
@@ -272,7 +283,7 @@ class ActiveCalculator(Calculator):
         tmp.set_calculator(self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
-        self.storage.write(tmp)
+        self.tape.write(tmp)
         self.log('exact energy: {}'.format(energy))
         #
         if self.model.ndata > 0:
@@ -363,7 +374,7 @@ class ActiveCalculator(Calculator):
             if loc.number in self.model.gp.species:
                 if beta[k] > self.covdiff and self.model.indu_counts[loc.number] < 2:
                     self.model.add_inducing(loc)
-                    self.storage.write(loc)
+                    self.tape.write(loc)
                     added_beta += 1
                     x = self.model.gp.kern(self.atoms, loc)
                     self.cov = torch.cat([self.cov, x], dim=1)
@@ -377,7 +388,7 @@ class ActiveCalculator(Calculator):
                         loc, _ediff, detach=False)
                     self.log_cov(beta[k], delta)
                     if added:
-                        self.storage.write(loc)
+                        self.tape.write(loc)
                         added_diff += 1
                         x = self.model.gp.kern(self.atoms, loc)
                         self.cov = torch.cat([self.cov, x], dim=1)
