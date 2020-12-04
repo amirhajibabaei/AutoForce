@@ -6,7 +6,7 @@ from theforce.regression.kernel import White
 from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_D
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
-from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
+from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
 from theforce.optimize.optimizers import ClampedSGD
 from collections import Counter
 import copy
@@ -632,14 +632,21 @@ class PosteriorPotential(Module):
                     break
         return added_refs, change
 
-    def eat(self, _atoms, ediff, fdiff, group=None):
-        if type(_atoms) == TorchAtoms:
-            atoms = _atoms
+    def as_(self, _obj, group=None):
+        if type(_obj) == Local:
+            obj = _obj
+            obj.stage(self.descriptors)
+        elif type(_obj) == TorchAtoms:
+            obj = _obj
         else:
             if group is None and torch.distributed.is_initialized():
                 group = torch.distributed.group.WORLD
-            atoms = TorchAtoms(ase_atoms=_atoms, cutoff=self.cutoff,
-                               descriptors=self.descriptors, group=group)
+            obj = TorchAtoms(ase_atoms=_obj, cutoff=self.cutoff,
+                             descriptors=self.descriptors, group=group)
+        return obj
+
+    def eat(self, _atoms, ediff, fdiff, group=None):
+        atoms = self.as_(_atoms, group=group)
         if len(self.data) == 0:
             i = atoms.first_of_each_atom_type()
             locs = atoms.gathered()
