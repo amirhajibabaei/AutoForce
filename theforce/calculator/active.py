@@ -131,12 +131,16 @@ class ActiveCalculator(Calculator):
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
+        self.step = 0
+        self.log('active calculator says Hello!', mode='w')
+        self.log_settings()
+        self.log('model size: {} {}'.format(*self.size))
         self.tape = SgprIO(tape)
         if os.path.isfile(tape):
-            self.model.include(self.tape)
+            call, cadd = self.model.include(self.tape)
+            self.log(f'{tape}: {call} -> {cadd}')
         self.tape.write_params(ediff=self.ediff, fdiff=self.fdiff)
         self.normalized = None
-        self.step = 0
 
     @property
     def active(self):
@@ -175,9 +179,6 @@ class ActiveCalculator(Calculator):
         # build a model
         data = True
         if self.step == 0:
-            self.log('active calculator says Hello!', mode='w')
-            self.log('model size: {} {}'.format(*self.size))
-            self.log_settings()
             if self.active and self.model.ndata == 0:
                 self.initiate_model()
                 data = False
