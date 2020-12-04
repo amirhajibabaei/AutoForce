@@ -6,6 +6,7 @@ from ase.atoms import Atoms
 import torch
 import numpy as np
 import io
+import os
 
 
 def write_lce(loc, f):
@@ -87,6 +88,8 @@ class SgprIO:
                 f.write('end: params\n')
 
     def read(self):
+        if not os.path.isfile(self.path):
+            return []
         with open(self.path, 'r') as f:
             lines = f.readlines()
         on = False
