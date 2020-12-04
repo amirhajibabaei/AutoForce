@@ -17,6 +17,13 @@ def mpi_init(unify_randomness=True):
     return dist.group.WORLD
 
 
+def rank():
+    if dist.is_initialized():
+        return dist.get_rank()
+    else:
+        return 0
+
+
 def index_gather(x, index, size=None):
     """currently only along dim 0 -> TODO: general dim"""
     if size is None:
