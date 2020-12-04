@@ -320,7 +320,12 @@ class PosteriorPotential(Module):
         if data is not None:
             self.set_data(data, inducing=inducing, **setting)
         else:
-            self.data = []
+            self.data = AtomsData([])
+            self.X = LocalsData([])
+            self.has_target_forces = False
+            self.M = torch.empty(0, 0)
+            self.Ke = torch.empty(0, 0)
+            self.Kf = torch.empty(0, 0)
 
     @property
     def ndata(self):
@@ -379,6 +384,8 @@ class PosteriorPotential(Module):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
     def make_munu(self, algo=1, noisegrad=False):
+        if self.M.numel() == 0 or self.K.numel() == 0:
+            return
         parallel = torch.distributed.is_initialized()
         if parallel:
             rank = torch.distributed.get_rank()
@@ -526,8 +533,12 @@ class PosteriorPotential(Module):
         if self.data.is_distributed:
             torch.distributed.all_reduce(Ke)
             torch.distributed.all_reduce(Kf)
-        self.Ke = torch.cat([self.Ke, Ke], dim=1)
-        self.Kf = torch.cat([self.Kf, Kf], dim=1)
+        if self.Ke.numel() > 0:
+            self.Ke = torch.cat([self.Ke, Ke], dim=1)
+            self.Kf = torch.cat([self.Kf, Kf], dim=1)
+        else:
+            self.Ke = Ke
+            self.Kf = Kf
         a = self.gp.kern(self.X, X, cov='energy_energy')
         b = self.gp.kern(X, X, cov='energy_energy')
         self.M = torch.cat(
@@ -567,6 +578,14 @@ class PosteriorPotential(Module):
         if not atoms.includes_species(self.gp.species):
             return 0, 0
         kwargs = {'use_caching': True}
+        #
+        if len(self.data) == 0:
+            if len(self.X) > 0:
+                self.add_data([atoms], **kwargs)
+            else:
+                self.data.append(atoms)
+            return float('inf'), float('inf')
+        #
         e1 = self([atoms], all_reduce=atoms.is_distributed, **kwargs)
         if fdiff < float('inf'):
             f1 = self([atoms], 'forces',
@@ -594,6 +613,14 @@ class PosteriorPotential(Module):
             loc.stage(self.gp.kern.kernels, dont_save_grads=True)
         else:
             loc = _loc
+        #
+        if len(self.X) == 0:
+            if len(self.data) > 0:
+                self.add_inducing(loc, **kwargs)
+            else:
+                self.X += loc
+            return 1, float('inf')
+        #
         e1 = self(loc, **kwargs)
         self.add_inducing(loc, **kwargs)
         e2 = self(loc, **kwargs)
@@ -605,6 +632,17 @@ class PosteriorPotential(Module):
         else:
             added = 1
         return added, de
+
+    def include(self, file, params=None, group=None):
+        for a, b in file.read():
+            if a == 'params':
+                par = params or b
+            elif a == 'atoms':
+                self.add_1atoms(self.as_(b, group=group),
+                                ediff=par['ediff'], fdiff=par['fdiff'])
+            elif a == 'local':
+                self.add_1inducing(self.as_(b, group=group),
+                                   ediff=par['ediff'])
 
     def add_ninducing(self, _locs, ediff, detach=True, descending=True, leaks=None):
         selected = torch.as_tensor([i for i, loc in enumerate(_locs)
