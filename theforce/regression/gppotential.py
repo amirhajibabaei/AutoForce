@@ -637,15 +637,21 @@ class PosteriorPotential(Module):
         return added, de
 
     def include(self, file, params=None, group=None):
+        call = Counter()
+        cadd = Counter()
         for a, b in file.read():
             if a == 'params':
                 par = params or b
             elif a == 'atoms':
-                self.add_1atoms(self.as_(b, group=group),
-                                ediff=par['ediff'], fdiff=par['fdiff'])
+                r = self.add_1atoms(self.as_(b, group=group),
+                                    ediff=par['ediff'], fdiff=par['fdiff'])
             elif a == 'local':
-                self.add_1inducing(self.as_(b, group=group),
-                                   ediff=par['ediff'])
+                r = self.add_1inducing(self.as_(b, group=group),
+                                       ediff=par['ediff'])
+            if a != 'params':
+                call[a] += 1
+                cadd[a] += r[0]
+        return call, cadd
 
     def add_ninducing(self, _locs, ediff, detach=True, descending=True, leaks=None):
         selected = torch.as_tensor([i for i, loc in enumerate(_locs)
