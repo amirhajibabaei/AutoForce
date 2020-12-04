@@ -564,7 +564,7 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     # 2
     axes[2].plot(*zip(*covloss), label='max')
     axes[2].set_ylabel('cov-loss')
-    axes[2].set_ylim(1e-4, 0.1)
+    axes[2].set_ylim(1e-5, 1e-1)
     axes[2].set_yscale('log')
     if len(indu) > 0:
         axes[2].scatter(*zip(*indu), color='lime', label='added')
