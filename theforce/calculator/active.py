@@ -1,6 +1,8 @@
 # +
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
+from theforce.similarity.sesoap import SeSoap
+from theforce.math.sesoap import SpecialRadii
 from theforce.util.tensors import padded
 from theforce.util.util import date, timestamp
 from theforce.io.sgprio import SgprIO
@@ -12,6 +14,10 @@ from torch.autograd import grad
 import torch
 import numpy as np
 import warnings
+
+
+def default_kernel(cutoff=6.):
+    return SeSoap(3, 3, 4, cutoff, radii=SpecialRadii({1: 0.5}))
 
 
 class FilterDeltas(Filter):
@@ -49,11 +55,11 @@ class FilterDeltas(Filter):
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
-    def __init__(self, covariance, calculator=None, process_group=None,
+    def __init__(self, covariance=None, calculator=None, process_group=None,
                  ediff=0.1, fdiff=0.1, coveps=1e-4, covdiff=1e-2, meta=None,
                  logfile='active.log', storage='model.sgpr', **kwargs):
         """
-        covariance:      similarity kernel(s) | path to a saved model | model
+        covariance:      None | similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
         process_group:   None | group
         ediff:           energy sensitivity
@@ -71,8 +77,9 @@ class ActiveCalculator(Calculator):
 
         --------------------------------------------------------------------------------------
 
+        If covariance is None, the default kernel will be used.
         At the beginning, covariance is often a list of similarity kernels:
-            e.g. theforce.similarity.universal.UniversalSoapKernel(...)
+            e.g. theforce.similarity.sesoap.SeSoapKernel(...)
         Later we can use an existing model.
         A trained model can be saved with:
             e.g. calc.model.to_folder('model/')
@@ -106,7 +113,7 @@ class ActiveCalculator(Calculator):
         Calculator.__init__(self, **kwargs)
         self._calc = calculator
         self.process_group = process_group
-        self.get_model(covariance)
+        self.get_model(covariance or default_kernel())
         self.ediff = ediff
         self.fdiff = fdiff
         self.coveps = coveps
