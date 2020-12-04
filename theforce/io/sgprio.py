@@ -5,6 +5,7 @@ from ase.io import read
 from ase.atoms import Atoms
 import torch
 import numpy as np
+from collections import Counter
 import io
 import os
 
@@ -94,16 +95,24 @@ class SgprIO:
             lines = f.readlines()
         on = False
         data = []
+        c = Counter()
         for line in lines:
-            if line.startswith('start:'):
-                on = True
-                typ = line.split()[-1]
-                blk = []
-            elif line.startswith('end:'):
-                assert line.split()[-1] == typ
-                on = False
-                obj = convert_block(typ, blk)
-                data.append((typ, obj))
-            elif on:
-                blk.append(line)
+            if not on:
+                if line.startswith('start:'):
+                    on = True
+                    typ = line.split()[-1]
+                    blk = []
+                elif line.startswith('include:'):
+                    data = data + SgprIO(line.split()[-1]).read()
+            else:
+                if line.startswith('end:'):
+                    assert line.split()[-1] == typ
+                    on = False
+                    obj = convert_block(typ, blk)
+                    data.append((typ, obj))
+                    c[typ] += 1
+                else:
+                    blk.append(line)
+        if rank() == 0:
+            print(f'included {self.path} {c}')
         return data

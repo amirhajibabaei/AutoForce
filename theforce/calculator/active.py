@@ -176,6 +176,7 @@ class ActiveCalculator(Calculator):
         data = True
         if self.step == 0:
             self.log('active calculator says Hello!', mode='w')
+            self.log('model size: {} {}'.format(*self.size))
             self.log_settings()
             if self.active and self.model.ndata == 0:
                 self.initiate_model()
