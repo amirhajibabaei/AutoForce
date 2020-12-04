@@ -14,6 +14,7 @@ from torch.autograd import grad
 import torch
 import numpy as np
 import warnings
+import os
 
 
 def default_kernel(cutoff=6.):
