@@ -86,9 +86,6 @@ class ActiveCalculator(Calculator):
             torch.init_process_group('mpi')
         then, set process_group=torch.distributed.group.WORLD in kwargs.
 
-        Sensitivity params can be changed on-the-fly:
-            e.g. calc.ediff = 0.05
-
         If covariance-loss (range [0,1]) for a LCE is greater than covdiff,
         it will be automaticaly added to the inducing set.
         Moreover, exact calculations will be triggered.
@@ -118,6 +115,7 @@ class ActiveCalculator(Calculator):
         self.logfile = logfile
         self.stdout = True
         self.storage = SgprIO(storage)
+        self.storage.write_params(ediff=self.ediff, fdiff=self.fdiff)
         self.normalized = None
         self.step = 0
 
