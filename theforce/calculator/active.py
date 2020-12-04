@@ -1,7 +1,7 @@
 # +
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
-from theforce.similarity.sesoap import SeSoap
+from theforce.similarity.sesoap import SeSoapKernel
 from theforce.math.sesoap import SpecialRadii
 from theforce.util.tensors import padded
 from theforce.util.util import date, timestamp
@@ -17,7 +17,7 @@ import warnings
 
 
 def default_kernel(cutoff=6.):
-    return SeSoap(3, 3, 4, cutoff, radii=SpecialRadii({1: 0.5}))
+    return SeSoapKernel(3, 3, 4, cutoff, radii=SpecialRadii({1: 0.5}))
 
 
 class FilterDeltas(Filter):
