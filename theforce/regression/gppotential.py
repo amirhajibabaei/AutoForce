@@ -576,7 +576,7 @@ class PosteriorPotential(Module):
 
     def add_1atoms(self, atoms, ediff, fdiff):
         if not atoms.includes_species(self.gp.species):
-            return 0, 0
+            return 0, 0, 0
         kwargs = {'use_caching': True}
         #
         if len(self.data) == 0:
@@ -584,7 +584,7 @@ class PosteriorPotential(Module):
                 self.add_data([atoms], **kwargs)
             else:
                 self.data.append(atoms)
-            return float('inf'), float('inf')
+            return 1, float('inf'), float('inf')
         #
         e1 = self([atoms], all_reduce=atoms.is_distributed, **kwargs)
         if fdiff < float('inf'):
@@ -602,7 +602,10 @@ class PosteriorPotential(Module):
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         if de < ediff and df < fdiff and not blind:
             self.pop_1data(clear_cached=True)
-        return de, df
+            added = 0
+        else:
+            added = 1
+        return added, de, df
 
     def add_1inducing(self, _loc, ediff, detach=True):
         if _loc.number not in self.gp.species:
