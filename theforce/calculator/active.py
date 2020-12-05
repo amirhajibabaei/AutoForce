@@ -548,10 +548,10 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     axes = _axes.reshape(-1)
     # 0
     x, y = zip(*ml)
-    axes[0].plot(x, y, label='ML')
+    axes[0].plot(x, y, label='ML', zorder=1)
     if len(fp) > 0:
         r, s = zip(*fp)
-        axes[0].scatter(r, s, color='r', label='FP')
+        axes[0].scatter(r, s, color='r', label='ab initio', zorder=2)
     axes[0].set_ylabel('potential')
     axes[0].legend()
     if len(meta) > 0:
@@ -562,12 +562,12 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None)):
     axes[1].plot(*zip(*tem))
     axes[1].set_ylabel('temperature')
     # 2
-    axes[2].plot(*zip(*covloss), label='max')
+    axes[2].plot(*zip(*covloss), label='max', zorder=1)
     axes[2].set_ylabel('cov-loss')
     axes[2].set_ylim(1e-5, 1e-1)
     axes[2].set_yscale('log')
     if len(indu) > 0:
-        axes[2].scatter(*zip(*indu), color='lime', label='added')
+        axes[2].scatter(*zip(*indu), color='lime', label='added', zorder=2)
     axes[2].legend()
     wall = axes[2].twinx()
     wall.plot(*zip(*elapsed), color='cyan', alpha=0.5)
