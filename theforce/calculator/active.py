@@ -542,7 +542,7 @@ def parse_logfile(file='active.log', window=(None, None)):
     return energies, exact_energies, temperatures, covloss, meta, indu, fit, elapsed, settings
 
 
-def log_to_figure(file, figsize=(10, 5), window=(None, None)):
+def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
     import pylab as plt
     ml, fp, tem, covloss, meta, indu, fit, elapsed, settings = parse_logfile(
         file, window=window)
@@ -556,9 +556,9 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None)):
         axes[0].scatter(r, s, color='r', label='ab initio', zorder=2)
     axes[0].set_ylabel('potential')
     axes[0].legend()
-    if len(meta) > 0:
+    if len(meta) > 0 and meta_ax:
         ax_meta = axes[0].twinx()
-        ax_meta.plot(*zip(*meta), color='lime')
+        ax_meta.plot(*zip(*meta), color='goldenrod', lw=0.5)
         ax_meta.set_ylabel('meta')
     # 1
     axes[1].plot(*zip(*tem))
