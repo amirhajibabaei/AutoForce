@@ -253,6 +253,8 @@ class ActiveCalculator(Calculator):
                            allow_unused=True)[0]
             cellgrad, = grad(energy, self.atoms.lll, retain_graph=retain_graph,
                              allow_unused=True)
+            if cellgrad is None:
+                cellgrad = torch.zeros_like(self.atoms.lll)
         else:
             forces = torch.zeros_like(self.atoms.xyz)
             cellgrad = torch.zeros_like(self.atoms.lll)
