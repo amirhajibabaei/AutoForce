@@ -107,8 +107,15 @@ class TrajAnalyser:
                    for _ in range(sample_size)])
         return v
 
-    def msd(self, select='all', wrt=None, **kwargs):
-        I = self.select(select)
+    def msd(self, select='all', I=None, wrt=None, **kwargs):
+        """
+        select: atoms types e.g. select=[3] for all Li atoms
+        I:      indices, if I is given, select is ignored
+        wrt:    with respect to which MD step
+        kwargs: start, stop, step
+        """
+        if I is None:
+            I = self.select(select)
         start, stop, step = self.get_slice(**kwargs)
         if wrt is None:
             wrt = start
