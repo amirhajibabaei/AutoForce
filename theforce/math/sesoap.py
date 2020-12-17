@@ -112,6 +112,11 @@ class SeSoap(Module):
         self._size = (119, 119, *self._shape)
         self.normalize = normalize
         self.params = []
+        # an numerical factor to amplify near-zero norms (if not normalized)
+        coo = torch.tensor([[1., 0., 0.]])*self.radial.rc/4
+        num = torch.zeros(coo.size(0)).int()
+        self.amplify = 1.
+        self.amplify = self.forward(coo, num).norm().sqrt()
 
     @property
     def state_args(self):
@@ -177,6 +182,9 @@ class SeSoap(Module):
                 dp = dp/norm
                 dp = dp - p[..., None, None]*(p[..., None, None]*dp
                                               ).sum(dim=(0, 1, 2, 3, 4))
+            else:
+                p = p/self.amplify
+                dp = dp/self.amplify
             p = p.view(dim0, *self._shape)
             dp = dp.view(dim0, *self._shape, *xyz.size())
             if sparse_tensor:
@@ -191,6 +199,8 @@ class SeSoap(Module):
             if (self.normalize if normalize is None else normalize):
                 norm = p.norm() + torch.finfo().eps
                 p = p/norm
+            else:
+                p = p/self.amplify
             if sparse_tensor:
                 p = torch.sparse_coo_tensor(ab, p.view(dim0, *self._shape),
                                             size=self._size)
