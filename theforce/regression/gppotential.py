@@ -435,7 +435,7 @@ class PosteriorPotential(Module):
         self.kern_diag_mean = Counter()
         for i, x in enumerate(self.X):
             self.indu_counts[x.number] += 1
-            self.kern_diag_mean[x.number] += self.M[i, i]
+            self.kern_diag_mean[x.number] += float(self.M[i, i])
         for num in self.kern_diag_mean.keys():
             self.kern_diag_mean[num] /= self.indu_counts[num]
 
