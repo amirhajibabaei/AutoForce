@@ -58,7 +58,7 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance=None, calculator=None, process_group=None,
                  ediff=0.01, fdiff=0.05, coveps=1e-4, covdiff=1e-2, meta=None,
-                 logfile='active.log', tape='model.pes.sgpr', **kwargs):
+                 logfile='active.log', tape='model.sgpr', **kwargs):
         """
         covariance:      None | similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
@@ -406,6 +406,7 @@ class ActiveCalculator(Calculator):
             details = [(k, self.atoms.numbers[k]) for k in added_indices]
             self.log('added indu: {} ({},{}) -> size: {} {} details: {:.2g} {}'.format(
                 added, added_beta, added_diff, *self.size, added_covloss, details))
+            self.log(f'kernel diag mean: {self.model.kern_diag_mean}')
             if self.blind:
                 self.log('model may be blind -> go robust')
         self.covlog = f'{float(beta[q[0]])}'
