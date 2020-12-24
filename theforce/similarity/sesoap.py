@@ -9,17 +9,18 @@ from theforce.math.cutoff import PolyCut
 
 class SeSoapKernel(UniversalSoapKernel):
 
-    def __init__(self, lmax, nmax, exponent, cutoff, a=None, radii=1.):
+    def __init__(self, lmax, nmax, exponent, cutoff, a=None, radii=1., normalize=True):
         radial = PolyCut(cutoff) if type(cutoff) == float else cutoff
         super().__init__(lmax, nmax, exponent, cutoff)
-        self.descriptor = SeSoap(lmax, nmax, radial, radii=radii)
+        self.descriptor = SeSoap(lmax, nmax, radial, radii=radii,
+                                 normalize=normalize)
         self.dim = self.descriptor.dim
         self._a = EqAll() if a is None else a
         self._args = f'{lmax}, {nmax}, {exponent}, {cutoff}, a={a}'
 
     @property
     def state_args(self):
-        return f'{self._args}, radii={self.descriptor.radii}'
+        return f'{self._args}, radii={self.descriptor.radii}, normalize={self.descriptor.normalize}'
 
     def call_descriptor(self, loc, grad):
         return self.descriptor(loc._r, loc._b, central=loc.number, grad=grad)
@@ -27,17 +28,18 @@ class SeSoapKernel(UniversalSoapKernel):
 
 class SubSeSoapKernel(HeterogeneousSoapKernel):
 
-    def __init__(self, lmax, nmax, exponent, cutoff, a, b, radii=1.):
+    def __init__(self, lmax, nmax, exponent, cutoff, a, b, radii=1., normalize=True):
         kern = DotProd()**exponent
         radial = PolyCut(cutoff) if type(cutoff) == float else cutoff
         super().__init__(kern, a, b, lmax, nmax, radial)
-        self.descriptor = SubSeSoap(lmax, nmax, radial, b, radii=radii)
+        self.descriptor = SubSeSoap(lmax, nmax, radial, b, radii=radii,
+                                    normalize=normalize)
         self.dim = self.descriptor.dim
         self._args = f'{lmax}, {nmax}, {exponent}, {cutoff}, {a}, {b}'
 
     @property
     def state_args(self):
-        return f'{self._args}, radii={self.descriptor.radii}'
+        return f'{self._args}, radii={self.descriptor.radii}, normalize={self.descriptor.normalize}'
 
     def call_descriptor(self, loc, grad):
         return self.descriptor(loc._r, loc._b, central=loc.number, grad=grad)
