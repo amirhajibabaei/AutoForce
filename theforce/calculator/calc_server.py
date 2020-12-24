@@ -50,9 +50,9 @@ def calculate(file, calc):
     try:
         reserve_ofile(o)
         atoms = read(i)
+        atoms.set_calculator(calc)
         if 'preprocess_atoms' in scope:
             scope['preprocess_atoms'](atoms)
-        atoms.set_calculator(calc)
         atoms.get_potential_energy()
         atoms.get_forces()
         atoms.get_stress()
