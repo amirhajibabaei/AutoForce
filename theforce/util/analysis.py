@@ -119,7 +119,10 @@ class TrajAnalyser:
         start, stop, step = self.get_slice(**kwargs)
         if wrt is None:
             wrt = start
-        x = self[wrt].get_positions()[I]
+        if type(wrt) == int:
+            x = self[wrt].get_positions()[I]
+        else:
+            x = wrt[I]
         d = np.array([((atoms.get_positions()[I]-x)**2).sum(axis=-1).mean()
                       for atoms in self.slice(**kwargs)])
         return np.arange(start, stop, step), d
