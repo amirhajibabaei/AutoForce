@@ -9,7 +9,7 @@ import os
 
 
 def mlmd(atoms, calc_script=None, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None,
-         group=None, tape='model.sgpr', trajectory='md.traj', loginterval=1, append=False, rattle=0.0):
+         group=None, tape='model.sgpr', trajectory='md.traj', loginterval=1, append=False, rattle=0.05):
     """
     atoms:        ASE atoms
     calc_script:  path to a python script where the DFT calculator is defined
@@ -24,7 +24,7 @@ def mlmd(atoms, calc_script=None, dt=None, tem=300., picos=100, bulk_modulus=Non
     trajectory:   traj file name
     loginterval:  for traj file
     append:       append to traj file
-    rattle:       rattle atoms at initial step (recommended ~0.1)
+    rattle:       rattle atoms at initial step (recommended ~0.05)
     """
     # set calculator
     if calc_script is None:
