@@ -54,11 +54,34 @@ picos = 20
 ```
 
 A practical issue may rise if the MD simulation starts 
-with an empty model and from an initial forces very close to zero.
+with an empty model and from an initial forces very 
+close to zero.
 Although this is not a issue in most of the cases, 
 sometimes the active learning algorithm may fail.
 For this, we have introduced the `rattle` tag 
 which disturbs the atoms at the initial state.
+
+The default timestep is `dt=1.` femtosecond 
+(`dt=0.25` if hydrogen is present) which is 
+intentionally smaller than typical `dt` for AIMD
+because updating the model on-the-fly causes 
+discontinuity in the forces.
+Smaller `dt` increases the stability in these cases.
+If the ML model is mature, larger `dt` can be used
+(even larger than AIMD).
+
+If `tape` is not given, the ML updates will be 
+saved in a file called `model.sgpr`.
+If this file is present when the simulation starts,
+it will be loaded automatically.
+This file can be used for checkpointing.
+
+If `bulk_modulus` is given, NPT simulation
+will be performed.
+It is recommended to first perform a NVT
+simulation and then use the result `model.sgpr`
+as the starting potential for the NPT simulation.
+
 
 #### Run
 Lets assume that 20 cores are available.
