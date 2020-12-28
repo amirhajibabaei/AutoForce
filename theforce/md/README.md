@@ -49,10 +49,16 @@ All of the above tags have default values which will be overridden
 with the settings in `MD`. 
 A minimal `MD` file could contain the following
 ```
-dt = 2.
 tem = 300.
 picos = 20
 ```
+
+A practical issue may rise if the MD simulation starts 
+with an empty model and from an initial forces very close to zero.
+Although this is not a issue in most of the cases, 
+sometimes the active learning algorithm may fail.
+For this, we have introduced the `rattle` tag 
+which disturbs the atoms at the initial state.
 
 #### Run
 Lets assume that 20 cores are available.
@@ -63,7 +69,7 @@ mpirun -n 12 vasp_std
 ```
 After this, the simulation can be started with the following script
 ```sh
-python -m thefoce.calculator.calc_server &
+python -m theforce.calculator.calc_server &
 sleep 1 # waits 1 sec for the server to be set
 mpirun -n 8 theforce.md.vasp
 ```
