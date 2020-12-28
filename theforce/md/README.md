@@ -25,7 +25,7 @@ Second, if necessary, we set the initial magnetic moments not in `INCAR`,
 but in a new file named `IMAG`.
 For example a line like 
 ```
-28 2.
+28 = 2.
 ```
 in `IMAG` sets the initial magnetic moment of 2. for all Ni atoms.
 
