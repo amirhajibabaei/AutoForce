@@ -21,6 +21,18 @@ def get_command():
     return command
 
 
+def get_setups():
+    setup = {}
+    if os.path.isfile('SETUPS'):
+        for line in open('SETUPS'):
+            if '=' in line:
+                a, b = line.split('=')
+            else:
+                a, b = line.split()
+            setups[a] = b
+    return setups
+
+
 def preprocess_atoms(atoms):
     if os.path.isfile('IMAG'):
         imag = {}
@@ -36,6 +48,7 @@ def preprocess_atoms(atoms):
 
 command = get_command()
 calc = Vasp2(command=command,
+             setups=get_setups(),
              directory='vasp')
 if os.path.isfile('INCAR'):
     calc.read_incar()
