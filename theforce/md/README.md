@@ -9,11 +9,7 @@ with few minor modifications and extensions.
 Create these files as usual.
 
 #### POTCAR
-`POTCAR` can also be generated as usual, if one doesn't want it 
-to be generated automatically.
-
-`POTCAR` will be created automatically if no `POTCAR` is present
-in the working directory and the environment variable 
+`POTCAR` will be created automatically if the environment variable 
 `VASP_PP_PATH` is properly set.
 For more information see [this](https://wiki.fysik.dtu.dk/ase/ase/calculators/vasp.html).
 In this case one can control which potcars are used by creating a 

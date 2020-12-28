@@ -12,7 +12,7 @@ try:
     from theforce.calculator import vasp
     calc_script = vasp.__file__
 except:
-    pass
+    raise
 
 atoms = read('POSCAR')
 mlmd(atoms, calc_script, **read_md('MD'), group=group)

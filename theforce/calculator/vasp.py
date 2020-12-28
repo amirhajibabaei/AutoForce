@@ -24,8 +24,12 @@ def get_command():
 def get_setups():
     setups = {}
     if os.path.isfile('SETUPS'):
-        for line in open('SETUPS'):
-            if line.startswith('#') or len(line.split()) == 0:
+        for _line in open('SETUPS'):
+            if '#' in _line:
+                line = _line[:_line.index('#')]
+            else:
+                line = _line
+            if len(line.split()) == 0:
                 continue
             if '=' in line:
                 a, b = line.split('=')
@@ -38,8 +42,12 @@ def get_setups():
 def preprocess_atoms(atoms):
     if os.path.isfile('IMAG'):
         imag = {}
-        for line in open('IMAG'):
-            if line.startswith('#') or len(line.split()) == 0:
+        for _line in open('IMAG'):
+            if '#' in _line:
+                line = _line[:_line.index('#')]
+            else:
+                line = _line
+            if len(line.split()) == 0:
                 continue
             if '=' in line:
                 a, b = line.split('=')
@@ -58,5 +66,3 @@ if os.path.isfile('INCAR'):
     calc.read_incar()
 if os.path.isfile('KPOINTS'):
     calc.read_kpoints()
-if os.path.isfile('POTCAR'):
-    calc.read_potcar('POTCAR')
