@@ -595,3 +595,10 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
         axes[3].set_ylabel('Errors')
     fig.tight_layout()
     return fig
+
+
+if __name__ == '__main__':
+    import sys
+    log = sys.argv[1]
+    fig = log_to_figure(log)
+    fig.savefig(log.replace('.log', '.pdf'))
