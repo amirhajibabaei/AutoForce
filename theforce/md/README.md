@@ -33,17 +33,17 @@ in `IMAG` sets the initial magnetic moment of 2. for all Ni atoms.
 The parameters for MD are set in a file named `MD`.
 The following tags are available
 ```
-dt:           time-step in fs
-tem:          temperature in Kelvin
-picos:        pico-seconds for md
-bulk_modulus: bulk_modulus for NPT simulations. if None, NVT is performed
-stress:       external stress (GPa) for NPT
-mask:         see ase.npt.NPT
-tape:         checkpoint for the ML potential
-trajectory:   traj file name
-loginterval:  for traj file
-append:       append to traj file
-rattle:       rattle atoms at initial step (recommended ~0.05)
+dt:           time-step in fs (default=1. or 0.25 if H is present)
+tem:          temperature in Kelvin (default=300.)
+picos:        pico-seconds for md (default=100)
+bulk_modulus: bulk_modulus for NPT simulations. if None (default), NVT is performed
+stress:       external stress (GPa) for NPT (default=0.)
+mask:         see ase.npt.NPT (default=None)
+tape:         checkpoint for the ML potential (default='model.sgpr')
+trajectory:   traj file name (default='md.traj')
+loginterval:  for traj file (default=1)
+append:       append to traj file (default=False)
+rattle:       rattle atoms at the initial step (default=0.05)
 ```
 All of the above tags have default values which will be overridden
 with the settings in `MD`. 
@@ -66,7 +66,7 @@ The default timestep is `dt=1.` femtosecond
 (`dt=0.25` if hydrogen is present) which is 
 intentionally smaller than typical `dt` for AIMD
 because updating the model on-the-fly causes 
-discontinuity in the forces.
+discontinuities in the forces.
 Smaller `dt` increases the stability in these cases.
 If the ML model is mature, larger `dt` can be used
 (even larger than AIMD).
@@ -78,11 +78,12 @@ it will be loaded automatically.
 This file can be used for checkpointing.
 
 If `bulk_modulus` is given, NPT simulation
-will be performed.
+will be performed (with cell fluctuations).
 It is recommended to first perform a NVT
 simulation and then use the result `model.sgpr`
 as the starting potential for the NPT simulation.
-
+NPT simulations are more vulnerable to sudden ML updates.
+If the model is mature, this is not an issue.
 
 #### Run
 Lets assume that 20 cores are available.
@@ -97,4 +98,16 @@ python -m theforce.calculator.calc_server &
 sleep 1 # waits 1 sec for the server to be set
 mpirun -n 8 theforce.md.vasp
 ```
+
+#### Outputs
+The trajectory is saved in `md.traj` by default.
+This file can be processed using the `ase.io` module.
+The log for ML is written in `active.log` which 
+can be visualized (converted to `active.pdf`) by
+```sh
+python -m theforce.calculator.active active.log
+```
+ML updates are saved in the tape (default=`model.sgpr`)
+which can be used as the input model for the next
+simulation.
 <!-- #endregion -->
