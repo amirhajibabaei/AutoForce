@@ -22,7 +22,7 @@ def get_command():
 
 
 def get_setups():
-    setup = {}
+    setups = {}
     if os.path.isfile('SETUPS'):
         for line in open('SETUPS'):
             if '=' in line:
