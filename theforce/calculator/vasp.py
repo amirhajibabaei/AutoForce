@@ -41,3 +41,5 @@ if os.path.isfile('INCAR'):
     calc.read_incar()
 if os.path.isfile('KPOINTS'):
     calc.read_kpoints()
+if os.path.isfile('POTCAR'):
+    calc.read_potcar('POTCAR')
