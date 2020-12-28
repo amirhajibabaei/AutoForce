@@ -25,6 +25,8 @@ def get_setups():
     setups = {}
     if os.path.isfile('SETUPS'):
         for line in open('SETUPS'):
+            if line.startswith('#') or len(line.split()) == 0:
+                continue
             if '=' in line:
                 a, b = line.split('=')
             else:
@@ -37,10 +39,12 @@ def preprocess_atoms(atoms):
     if os.path.isfile('IMAG'):
         imag = {}
         for line in open('IMAG'):
+            if line.startswith('#') or len(line.split()) == 0:
+                continue
             if '=' in line:
-                a, b = line.strip().split('=')
+                a, b = line.split('=')
             else:
-                a, b = line.strip().split()
+                a, b = line.split()
             imag[int(a)] = float(b)
         m = [imag[z] if z in imag else 0. for z in atoms.numbers]
         atoms.set_initial_magnetic_moments(m)
