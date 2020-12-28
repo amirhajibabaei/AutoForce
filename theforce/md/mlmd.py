@@ -5,6 +5,7 @@ from theforce.util.parallel import mpi_init
 from theforce.util.aseutil import init_velocities, make_cell_upper_triangular
 from ase.md.npt import NPT
 from ase import units
+import numpy as np
 import os
 
 
@@ -34,7 +35,7 @@ def mlmd(atoms, calc_script=None, dt=None, tem=300., picos=100, bulk_modulus=Non
                             process_group=group or mpi_init(),
                             tape=tape
                             )
-    atoms.rattle(rattle)  # rattle after mpi_init
+    atoms.rattle(rattle, rng=np.random)  # rattle after mpi_init
     atoms.set_calculator(calc)
 
     # define and run Nose-Hoover dynamics
