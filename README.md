@@ -26,7 +26,12 @@ Go to the source code directory and install by
 pip install .
 ```
 
-### Usage
+### Commandline
+For machine learning accelerated molecular dynamics
+(using VASP) from the commandline see 
+[this](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/md).
+
+### Python usage
 It wraps ASE calculators:
 
 ```python
