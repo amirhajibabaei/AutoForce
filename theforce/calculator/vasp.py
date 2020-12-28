@@ -26,10 +26,10 @@ def get_setups():
     if os.path.isfile('SETUPS'):
         for line in open('SETUPS'):
             if '=' in line:
-                a, b = line.strip().split('=')
+                a, b = line.split('=')
             else:
-                a, b = line.strip().split()
-            setups[a] = b
+                a, b = line.split()
+            setups[a.strip()] = b.strip()
     return setups
 
 
