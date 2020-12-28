@@ -1,6 +1,5 @@
 <!-- #region -->
 ### MLMD from commandline
-
 Here we describe the steps required for the machine learning accelerated 
 molecular dynamics (MLMD) using VASP from the command line.
 For this, we create the usual files required for a VASP calculation 
@@ -10,9 +9,19 @@ with few minor modifications and extensions.
 Create these files as usual.
 
 #### POTCAR
-`POTCAR` will be created automatically if the environment variable 
+`POTCAR` can also be generated as usual, if one doesn't want it 
+to be generated automatically.
+
+`POTCAR` will be created automatically if no `POTCAR` is present
+in the working directory and the environment variable 
 `VASP_PP_PATH` is properly set.
 For more information see [this](https://wiki.fysik.dtu.dk/ase/ase/calculators/vasp.html).
+In this case one can control which potcars are used by creating a 
+file called `SETUPS`.
+For example a `SETUPS` containing the following will use `Li_sv`.
+```
+Li = _sv
+```
 
 #### INCAR
 Set the tags in `INCAR` as usual while adhering to the following.
