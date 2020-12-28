@@ -451,12 +451,12 @@ class ActiveCalculator(Calculator):
                 if self.stdout:
                     print('{} {} {}'.format(date(), self.step, mssge))
             # cov log
-            if mode == 'w':
+            if mode == 'w' and False:
                 with open('cov.log', mode) as f:
                     f.write('# covariance data\n')
 
     def log_cov(self, *args):
-        if self.logfile and self.rank == 0:
+        if self.logfile and self.rank == 0 and False:
             with open('cov.log', 'a') as f:
                 f.write(' '.join([str(float(arg)) for arg in args])+'\n')
 

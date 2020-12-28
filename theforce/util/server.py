@@ -4,7 +4,7 @@ from theforce.util.util import date
 
 class Server:
 
-    def __init__(self, ip, port, callback=None, args=()):
+    def __init__(self, ip, port, callback=None, args=(), wlog=False):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((ip, port))
@@ -12,11 +12,15 @@ class Server:
         self.args = args
         h = socket.gethostname()
         s = self.socket.getsockname()
+        self.wlog = wlog
         self.log(f'server initiated at: {h} {s}', 'w')
 
     def log(self, msg, mode='a'):
-        with open('server.log', mode) as log:
-            log.write(f'{date()}: {msg}\n')
+        if self.wlog:
+            with open('server.log', mode) as log:
+                log.write(f'{date()}: {msg}\n')
+        else:
+            print(f'{date()}: {msg}\n')
 
     def listen(self, end='end', ping='?'):
         self.socket.listen(5)

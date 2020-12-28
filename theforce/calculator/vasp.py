@@ -16,6 +16,8 @@ def get_command():
         else:
             cores_for_vasp = os.cpu_count()
         command = f'mpirun -n {cores_for_vasp} vasp_std'
+        with open('_vasp_command', 'w') as f:
+            f.write(command)
     return command
 
 
@@ -30,8 +32,6 @@ def preprocess_atoms(atoms):
 
 
 command = get_command()
-with open('_vasp_command', 'w') as f:
-    f.write(command)
 calc = Vasp2(command=command,
              directory='vasp')
 if os.path.isfile('INCAR'):

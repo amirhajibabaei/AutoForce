@@ -10,15 +10,16 @@ import os
 class SocketCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
-    def __init__(self, ip='localhost', port=6666, script=None, **kwargs):
+    def __init__(self, ip='localhost', port=6666, script=None, wlog=False, **kwargs):
         Calculator.__init__(self, **kwargs)
         self.ip = ip
         self.port = port
         self.script = script
+        self.wlog = wlog
         self.log('created', 'w')
 
     def log(self, msg, mode='a'):
-        if self.rank == 0:
+        if self.rank == 0 and self.wlog:
             with open('socalc.log', mode) as f:
                 f.write(f'{date()}   {msg}\n')
 
@@ -52,13 +53,15 @@ class SocketCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
         # write and send request
         self.log('s')
+        ierr = 0
         if self.rank == 0:
             s = socket.socket()
             s.connect((self.ip, self.port))
             self.atoms.write('socket_send.xyz')
             s.send(self.message.encode())
-            assert int(s.recv(1024).decode('utf-8')) == 0
+            ierr = int(s.recv(1024).decode('utf-8'))
             s.close()
+        assert ierr == 0
         if self.is_distributed:
             torch.distributed.barrier()
         self.log('e')
@@ -67,6 +70,11 @@ class SocketCalculator(Calculator):
         self.results['energy'] = atms.get_potential_energy()
         self.results['forces'] = atms.get_forces()
         self.results['stress'] = atms.get_stress()
+        # delete files
+        if self.is_distributed:
+            torch.distributed.barrier()
+        if self.rank == 0:
+            os.system('rm -f socket_send.xyz socket_recv.xyz')
 
     def close(self):
         s = socket.socket()
