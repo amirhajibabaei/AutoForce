@@ -25,7 +25,7 @@ def preprocess_atoms(atoms):
         for line in open('IMAG'):
             a, b = line.split()
             imag[int(a)] = float(b)
-        m = [imag[z] for z in atoms.numbers]
+        m = [imag[z] if z in imag else 0. for z in atoms.numbers]
         atoms.set_initial_magnetic_moments(m)
 
 
