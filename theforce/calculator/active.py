@@ -69,7 +69,7 @@ class ActiveCalculator(Calculator):
         covdiff:         covariance-loss sensitivity heuristic
         meta:            meta energy calculator
         logfile:         string | None
-        tape:            string (with suffix .pes.sgpr), the file used to save/load updates
+        tape:            string (with suffix .sgpr), the file used to save/load updates
         kwargs:          ASE's calculator kwargs
 
         *** important ***
@@ -136,10 +136,12 @@ class ActiveCalculator(Calculator):
         self.log_settings()
         self.log('model size: {} {}'.format(*self.size))
         self.tape = SgprIO(tape)
-        if os.path.isfile(tape):
+        read_tape = not (type(covariance) == str and not self.active)
+        if os.path.isfile(tape) and read_tape:
             call, cadd = self.model.include(self.tape)
             self.log(f'{tape}: {call} -> {cadd}')
-        self.tape.write_params(ediff=self.ediff, fdiff=self.fdiff)
+        if self.active:
+            self.tape.write_params(ediff=self.ediff, fdiff=self.fdiff)
         self.normalized = None
 
     @property
