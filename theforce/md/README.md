@@ -1,5 +1,5 @@
 <!-- #region -->
-### MLMD from commandline
+### MLMD from command line
 Here we describe the steps required for the machine learning accelerated 
 molecular dynamics (MLMD) using VASP from the command line.
 For this, we create the usual files required for a VASP calculation 
@@ -59,9 +59,8 @@ picos = 20
 ```
 
 A practical issue may rise if the MD simulation starts 
-with an empty model and from an initial forces very 
-close to zero.
-Although this is not a issue in most of the cases, 
+with an empty model and a state with forces close to zero.
+Although this is not a issue in most cases, 
 sometimes the active learning algorithm may fail.
 For this, we have introduced the `rattle` tag 
 which disturbs the atoms at the initial state.
@@ -76,16 +75,17 @@ Smaller `dt` increases the stability in these cases.
 If the ML model is mature, larger `dt` can be used
 (even larger than AIMD).
 
-If `tape` is not given, the ML updates will be 
-saved in a file called `model.sgpr`.
+The ML updates will be saved in a file called `tape` 
+(default=`model.sgpr`).
 If this file is present when the simulation starts,
-it will be loaded automatically.
+it will be loaded automatically 
+(see post-training for exceptions).
 This file can be used for checkpointing.
 
 If `bulk_modulus` is given, NPT simulation
 will be performed (with cell fluctuations).
 It is recommended to first perform a NVT
-simulation and then use the result `model.sgpr`
+simulation and then use the result `tape`
 as the starting potential for the NPT simulation.
 NPT simulations are more vulnerable to sudden ML updates.
 If the model is mature, this is not an issue.
@@ -112,7 +112,33 @@ can be visualized (converted to `active.pdf`) by
 ```sh
 python -m theforce.calculator.active active.log
 ```
-ML updates are saved in the tape (default=`model.sgpr`)
+ML updates are saved in the `tape` (default=`model.sgpr`)
 which can be used as the input model for the next
 simulation.
+
+#### Post-training
+After the training is finished, we can perform MD
+using only the ML potential (without further updates) simply by
+```sh
+mpirun -n 20 theforce.md.mlmd
+```
+This time all 20 cores are used for ML and we can simulate
+much bigger systems.
+All the other parameters are set similar to the training stage.
+With this command, the model will be loaded and reconstructed 
+from the `tape` which can cause some overhead.
+In order to eliminate this overhead we can export 
+the model by
+```sh
+mpirun -n 20 theforce.md.mlmd -i export
+```
+which will write the pickled model (loaded from `tape`) to 
+the `model/` folder.
+We can use a different folder-name by using `export-foldername`.
+Do not use `-` in `foldername`.
+For using the pickled model we put the following line in `MD` file
+```
+covariance = 'model/' # or foldername
+```
+This way there is no overhead for re-building the model.
 <!-- #endregion -->
