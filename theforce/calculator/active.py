@@ -408,7 +408,8 @@ class ActiveCalculator(Calculator):
             details = [(k, self.atoms.numbers[k]) for k in added_indices]
             self.log('added indu: {} ({},{}) -> size: {} {} details: {:.2g} {}'.format(
                 added, added_beta, added_diff, *self.size, added_covloss, details))
-            self.log(f'kernel diag mean: {self.model.kern_diag_mean}')
+            if not self.normalized:
+                self.log(f'kernel diag mean: {self.model.kern_diag_mean}')
             if self.blind:
                 self.log('model may be blind -> go robust')
         self.covlog = f'{float(beta[q[0]])}'
