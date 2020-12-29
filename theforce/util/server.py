@@ -19,8 +19,6 @@ class Server:
         if self.wlog:
             with open('server.log', mode) as log:
                 log.write(f'{date()}: {msg}\n')
-        else:
-            print(f'{date()}: {msg}\n')
 
     def listen(self, end='end', ping='?'):
         self.socket.listen(5)
