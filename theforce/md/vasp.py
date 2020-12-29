@@ -15,4 +15,4 @@ except:
     raise
 
 atoms = read('POSCAR')
-mlmd(atoms, calc_script, **read_md('MD'), group=group)
+mlmd(atoms, calc_script=calc_script, **read_md('MD'), group=group)
