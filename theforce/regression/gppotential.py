@@ -362,6 +362,7 @@ class PosteriorPotential(Module):
     @noise.setter
     def noise(self, value):
         self.gp.noise.signal = value
+        self.make_munu()
 
     @property
     def descriptors(self):
