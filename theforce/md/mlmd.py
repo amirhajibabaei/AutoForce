@@ -9,10 +9,12 @@ import numpy as np
 import os
 
 
-def mlmd(atoms, calc_script=None, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None,
-         group=None, tape='model.sgpr', trajectory='md.traj', loginterval=1, append=False, rattle=0.05):
+def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
+         bulk_modulus=None, stress=0., mask=None, group=None, tape='model.sgpr',
+         trajectory='md.traj', loginterval=1, append=False, rattle=0.05):
     """
     atoms:        ASE atoms
+    covariance:   kernel or model
     calc_script:  path to a python script where the DFT calculator is defined
     dt:           time-step in fs
     tem:          temperature in Kelvin
@@ -31,7 +33,8 @@ def mlmd(atoms, calc_script=None, dt=None, tem=300., picos=100, bulk_modulus=Non
     if calc_script is None:
         from autopes.calculators import vasp
         calc_script = vasp.__file__
-    calc = ActiveCalculator(calculator=SocketCalculator(script=calc_script),
+    calc = ActiveCalculator(covariance=covariance,
+                            calculator=SocketCalculator(script=calc_script),
                             process_group=group or mpi_init(),
                             tape=tape
                             )
@@ -66,3 +69,9 @@ def read_md(file='MD'):
         return eval(f'dict({lines})')
     else:
         return {}
+
+
+if __name__ == '__main__':
+    from ase.io import read
+    atoms = read('POSCAR')
+    mlmd(atoms, **read_md('MD'))
