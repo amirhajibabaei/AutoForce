@@ -4,6 +4,7 @@ from theforce.calculator.active import ActiveCalculator, FilterDeltas
 from theforce.util.parallel import mpi_init
 from theforce.util.aseutil import init_velocities, make_cell_upper_triangular
 from ase.md.npt import NPT
+from ase.io import read
 from ase import units
 import numpy as np
 import os
@@ -30,14 +31,20 @@ def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
     rattle:       rattle atoms at initial step (recommended ~0.05)
     """
     # set calculator
-    if calc_script is None:
-        from autopes.calculators import vasp
-        calc_script = vasp.__file__
     calc = ActiveCalculator(covariance=covariance,
                             calculator=SocketCalculator(script=calc_script),
                             process_group=group or mpi_init(),
                             tape=tape
                             )
+
+    # process atoms
+    if type(atoms) == str:
+        if atoms.startswith('export'):
+            folder = atoms.split('-')[1] if '-' in atoms else 'model'
+            calc.model.to_folder(folder)
+            return
+        else:
+            atoms = read(atoms)
     atoms.rattle(rattle, rng=np.random)  # rattle after mpi_init
     atoms.set_calculator(calc)
 
@@ -72,6 +79,10 @@ def read_md(file='MD'):
 
 
 if __name__ == '__main__':
-    from ase.io import read
-    atoms = read('POSCAR')
-    mlmd(atoms, **read_md('MD'))
+    import argparse
+    parser = argparse.ArgumentParser(
+        description='Machine Learning Molecular Dynamics (MLMD)')
+    parser.add_argument('-i', '--input', default='POSCAR', type=str,
+                        help='a command or the initial coordinates of atoms')
+    args = parser.parse_args()
+    mlmd(args.input, **read_md('MD'))
