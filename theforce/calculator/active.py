@@ -151,7 +151,7 @@ class ActiveCalculator(Calculator):
     def get_model(self, model):
         if type(model) == str:
             self.model = PosteriorPotentialFromFolder(
-                model, load_data=self.active, group=self.process_group)
+                model, load_data=True, update_data=self.active, group=self.process_group)
         elif type(model) == PosteriorPotential:
             self.model = model
         else:

@@ -31,8 +31,10 @@ def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
     rattle:       rattle atoms at initial step (recommended ~0.05)
     """
     # set calculator
+    if calc_script is not None:
+        calc_script = SocketCalculator(script=calc_script)
     calc = ActiveCalculator(covariance=covariance,
-                            calculator=SocketCalculator(script=calc_script),
+                            calculator=calc_script,
                             process_group=group or mpi_init(),
                             tape=tape
                             )
