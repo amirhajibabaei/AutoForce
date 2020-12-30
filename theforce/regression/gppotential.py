@@ -845,6 +845,71 @@ class PosteriorPotential(Module):
         return out
 
 
+def to_0_1(x):
+    return 1/x.neg().exp().add(1.)
+
+
+def to_inf_inf(y):
+    return (y/y.neg().add(1.)).log()
+
+
+def _regression(self, lr=0.1):
+
+    if not hasattr(self, '_noise'):
+        self._noise = {}
+
+    #
+    numbers = torch.tensor([x.number for x in self.X])
+    zset = numbers.unique().tolist()
+    scale = {}
+    for z in zset:
+        if z not in self._noise:
+            self._noise[z] = to_inf_inf(torch.tensor(0.01))
+        scale[z] = self.M.diag()[numbers == z].mean()
+
+    #
+    L, ridge = jitcholesky(self.M)
+    self.ridge = torch.as_tensor(ridge)
+    self.choli = L.inverse().contiguous()
+    y = self.gp.Y(self.data)
+    Y = torch.cat((y, torch.zeros(L.size(0))))
+
+    #
+    params = self._noise.values()
+    for par in params:
+        par.requires_grad = True
+    opt = torch.optim.Adam(params, lr=lr)
+
+    #
+    def step():
+        opt.zero_grad()
+        sigma = 0
+        for z in zset:
+            sigma_z = to_0_1(self._noise[z])*scale[z]
+            sigma = sigma + (numbers == z).float()*sigma_z
+        A = torch.cat((self.K, sigma.view(-1, 1)*L.t()))
+        Q, R = torch.qr(A)
+        self.mu = (R.inverse()@Q.t()@Y).contiguous()
+        diff = self.K@self.mu-y
+        loss = diff.pow(2).sum()
+        loss.backward()
+        opt.step()
+        return loss
+
+    #
+    _loss = step()
+    for _ in range(100):
+        loss = step()
+        if abs(loss-_loss) < 0.01*abs(loss):
+            break
+        _loss = loss
+
+    #
+    for par in params:
+        par.requires_grad = False
+    opt.zero_grad()
+
+
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
     from theforce.descriptor.atoms import AtomsData
     from theforce.util.caching import strip_uid
