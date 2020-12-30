@@ -431,7 +431,7 @@ class ActiveCalculator(Calculator):
         m = self.update_inducing() if inducing else 0
         n = self.update_data(try_fake=not self.blind) if m > 0 and data else 0
         if m > 0 or n > 0:
-            self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}'.format(
+            self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
                 *(float(v) for v in self.model._stats)))
         # tunning noise is unstable!
         # if n > 0 and not self.model.is_well():
@@ -542,7 +542,7 @@ def parse_logfile(file='active.log', window=(None, None)):
             errors += [(step, [float(v) for v in split[4:8:2]])]
 
         if 'fit' in line:
-            fit += [(step, [float(split[k]) for k in [-5, -4, -2, -1]])]
+            fit += [(step, [float(split[k]) for k in [-7, -6, -4, -3]])]
     return energies, exact_energies, temperatures, covloss, meta, indu, fit, elapsed, settings
 
 
