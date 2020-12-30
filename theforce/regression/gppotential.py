@@ -384,7 +384,7 @@ class PosteriorPotential(Module):
     def K(self):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
-    def make_munu(self, algo=1, noisegrad=False):
+    def make_munu(self, algo=2, noisegrad=False):
         if self.M.numel() == 0 or self.K.numel() == 0:
             return
         parallel = torch.distributed.is_initialized()
@@ -397,7 +397,7 @@ class PosteriorPotential(Module):
                 # allocates too much memory
                 self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
                     self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
-            else:
+            elif algo == 1:
                 L, ridge = jitcholesky(self.M)
                 self.ridge = torch.as_tensor(ridge)
                 #sigma = self.gp.diagonal_ridge(self.data).sqrt()
@@ -412,6 +412,8 @@ class PosteriorPotential(Module):
                 self.mu = (R.inverse()@Q.t()@Y).contiguous()
                 # self.nu = None # is not needed anymore
                 self.choli = L.inverse().contiguous()
+            elif algo == 2:
+                _regression(self)
         else:
             self.ridge = torch.zeros([])
             self.mu = torch.zeros_like(self.M[0])
@@ -892,7 +894,8 @@ def _regression(self, lr=0.1):
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
         diff = self.K@self.mu-y
         loss = diff.pow(2).sum()
-        loss.backward()
+        if loss.grad_fn:
+            loss.backward()
         opt.step()
         return loss
 
