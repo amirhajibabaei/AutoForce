@@ -4,6 +4,7 @@ from torch.nn import Module
 from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
 from theforce.regression.kernel import White
 from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_D
+from theforce.regression.scores import coeff_of_determination
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
@@ -428,11 +429,16 @@ class PosteriorPotential(Module):
         self.make_stats()
 
     def make_stats(self):
-        diff = self.K@self.mu-self.gp.Y(self.data)
-        self._ediff = diff[:len(self.data)]/torch.tensor(self.data.natoms)
-        self._fdiff = diff[len(self.data):]
+        n = len(self.data)
+        y = self.gp.Y(self.data)
+        yy = self.K@self.mu
+        diff = yy - y
+        self._ediff = diff[:n]/torch.tensor(self.data.natoms)
+        self._fdiff = diff[n:]
+        self._force_r2 = coeff_of_determination(yy[n:], y[n:])
         self._stats = [self._ediff.mean(), self._ediff.var().sqrt(),
-                       self._fdiff.mean(), self._fdiff.var().sqrt()]
+                       self._fdiff.mean(), self._fdiff.var().sqrt(),
+                       self._force_r2]
         # needed for special cases
         self.indu_counts = Counter()
         self.kern_diag_mean = Counter()
