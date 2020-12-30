@@ -542,7 +542,7 @@ def parse_logfile(file='active.log', window=(None, None)):
             errors += [(step, [float(v) for v in split[4:8:2]])]
 
         if 'fit' in line:
-            fit += [(step, [float(split[k]) for k in [-7, -6, -4, -3]])]
+            fit += [(step, [float(split[k]) for k in [-7, -6, -4, -3, -1]])]
     return energies, exact_energies, temperatures, covloss, meta, indu, fit, elapsed, settings
 
 
@@ -596,6 +596,11 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
         axes[3].grid()
         axes[3].legend()
         axes[3].set_ylabel('Errors')
+        # R2
+        if q.shape[1] > 4:
+            R2 = axes[3].twinx()
+            R2.plot(p, 1-q[:, 4], ':', color='grey')
+            R2.set_ylabel(r'$1-R^2$')
     fig.tight_layout()
     return fig
 
