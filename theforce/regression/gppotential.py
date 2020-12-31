@@ -414,7 +414,7 @@ class PosteriorPotential(Module):
                 # self.nu = None # is not needed anymore
                 self.choli = L.inverse().contiguous()
             elif algo == 2:
-                _regression(self)
+                _regression(self, optimize=False)
             elif algo == 3:
                 _regression(self, optimize=True)
         else:
@@ -429,6 +429,9 @@ class PosteriorPotential(Module):
             warnings.warn('mu or choli requires grad!')
         self.Mi = self.choli.t()@self.choli
         self.make_stats()
+
+    def optimize_model_parameters(self):
+        pass
 
     def make_stats(self):
         n = len(self.data)
@@ -661,7 +664,7 @@ class PosteriorPotential(Module):
                 r = self.add_1atoms(self.as_(b, group=group),
                                     ediff=par['ediff'], fdiff=par['fdiff'])
                 if r[0]:
-                    self.make_munu(algo=3)
+                    self.optimize_model_parameters()
             elif a == 'local':
                 r = self.add_1inducing(self.as_(b, group=group),
                                        ediff=par['ediff'])
@@ -876,7 +879,7 @@ def _regression(self, optimize=False, lr=0.1):
     scale = {}
     for z in zset:
         if z not in self._noise:
-            self._noise[z] = to_inf_inf(torch.tensor(0.01))
+            self._noise[z] = to_inf_inf(self.gp.noise.signal.detach())
         scale[z] = self.M.diag()[numbers == z].mean()
 
     #
