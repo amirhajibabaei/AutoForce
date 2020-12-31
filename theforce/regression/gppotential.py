@@ -896,6 +896,7 @@ def _regression(self, optimize=False, lr=0.1):
         A = torch.cat((self.K, sigma.view(-1, 1)*L.t()))
         Q, R = torch.qr(A)
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
+        self._sigma = sigma
 
     if not optimize:
         make()
@@ -907,12 +908,20 @@ def _regression(self, optimize=False, lr=0.1):
         par.requires_grad = True
     opt = torch.optim.Adam(params, lr=lr)
 
+    def rmse():
+        diff = self.K@self.mu-y
+        loss = diff[ndat:].pow(2).sum()
+        return loss
+
+    def l2():
+        a = self._sigma.view(-1)*self.mu.view(-1)
+        return a.pow(2).sum()
+
     #
     def step():
         opt.zero_grad()
         make()
-        diff = self.K@self.mu-y
-        loss = diff[ndat:].pow(2).sum()
+        loss = rmse() + l2()
         if loss.grad_fn:
             loss.backward()
         opt.step()
@@ -930,6 +939,8 @@ def _regression(self, optimize=False, lr=0.1):
     for par in params:
         par.requires_grad = False
     opt.zero_grad()
+    self.mu = self.mu.detach()
+    self.scaled_noise = {a: to_0_1(b) for a, b in self._noise.items()}
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
