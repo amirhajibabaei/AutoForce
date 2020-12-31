@@ -385,7 +385,7 @@ class PosteriorPotential(Module):
     def K(self):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
-    def make_munu(self, algo=2, noisegrad=False):
+    def make_munu(self, algo=1, noisegrad=False):
         if self.M.numel() == 0 or self.K.numel() == 0:
             return
         parallel = torch.distributed.is_initialized()
