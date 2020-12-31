@@ -881,6 +881,7 @@ def _regression(self, lr=0.1):
     self.choli = L.inverse().contiguous()
     y = self.gp.Y(self.data)
     Y = torch.cat((y, torch.zeros(L.size(0))))
+    ndat = len(self.data)
 
     #
     params = self._noise.values()
@@ -899,7 +900,7 @@ def _regression(self, lr=0.1):
         Q, R = torch.qr(A)
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
         diff = self.K@self.mu-y
-        loss = diff.pow(2).sum()
+        loss = diff[ndat:].pow(2).sum()
         if loss.grad_fn:
             loss.backward()
         opt.step()
