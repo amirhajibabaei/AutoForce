@@ -385,7 +385,7 @@ class PosteriorPotential(Module):
     def K(self):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
-    def make_munu(self, algo=1, noisegrad=False):
+    def make_munu(self, algo=2, noisegrad=False):
         if self.M.numel() == 0 or self.K.numel() == 0:
             return
         parallel = torch.distributed.is_initialized()
@@ -415,6 +415,8 @@ class PosteriorPotential(Module):
                 self.choli = L.inverse().contiguous()
             elif algo == 2:
                 _regression(self)
+            elif algo == 3:
+                _regression(self, optimize=True)
         else:
             self.ridge = torch.zeros([])
             self.mu = torch.zeros_like(self.M[0])
@@ -658,6 +660,8 @@ class PosteriorPotential(Module):
             elif a == 'atoms':
                 r = self.add_1atoms(self.as_(b, group=group),
                                     ediff=par['ediff'], fdiff=par['fdiff'])
+                if r[0]:
+                    self.make_munu(algo=3)
             elif a == 'local':
                 r = self.add_1inducing(self.as_(b, group=group),
                                        ediff=par['ediff'])
@@ -861,7 +865,7 @@ def to_inf_inf(y):
     return (y/y.neg().add(1.)).log()
 
 
-def _regression(self, lr=0.1):
+def _regression(self, optimize=False, lr=0.1):
 
     if not hasattr(self, '_noise'):
         self._noise = {}
@@ -884,6 +888,20 @@ def _regression(self, lr=0.1):
     ndat = len(self.data)
 
     #
+    def make():
+        sigma = 0
+        for z in zset:
+            sigma_z = to_0_1(self._noise[z])*scale[z]
+            sigma = sigma + (numbers == z).float()*sigma_z
+        A = torch.cat((self.K, sigma.view(-1, 1)*L.t()))
+        Q, R = torch.qr(A)
+        self.mu = (R.inverse()@Q.t()@Y).contiguous()
+
+    if not optimize:
+        make()
+        return
+
+    #
     params = self._noise.values()
     for par in params:
         par.requires_grad = True
@@ -892,13 +910,7 @@ def _regression(self, lr=0.1):
     #
     def step():
         opt.zero_grad()
-        sigma = 0
-        for z in zset:
-            sigma_z = to_0_1(self._noise[z])*scale[z]
-            sigma = sigma + (numbers == z).float()*sigma_z
-        A = torch.cat((self.K, sigma.view(-1, 1)*L.t()))
-        Q, R = torch.qr(A)
-        self.mu = (R.inverse()@Q.t()@Y).contiguous()
+        make()
         diff = self.K@self.mu-y
         loss = diff[ndat:].pow(2).sum()
         if loss.grad_fn:
