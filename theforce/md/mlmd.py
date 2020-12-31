@@ -13,7 +13,7 @@ import os
 def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
          bulk_modulus=None, stress=0., mask=None, group=None, tape='model.sgpr',
          trajectory='md.traj', loginterval=1, append=False, rattle=0.05, 
-         coveps=1e-4, noise=None):
+         ediff=0.041, fdiff=0.1, coveps=1e-4):
     """
     atoms:        ASE atoms
     covariance:   kernel or model
@@ -30,8 +30,9 @@ def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
     loginterval:  for traj file
     append:       append to traj file
     rattle:       rattle atoms at initial step (recommended ~0.05)
+    ediff:        energy sensitivity
+    fdiff:        force sensitivity
     coveps:       skips ML update if covloss < coveps
-    noise:        0.01~0.05, 0.01 if None. larger noise can increase stability
     """
     # set calculator
     if calc_script is not None:
@@ -39,10 +40,8 @@ def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
     calc = ActiveCalculator(covariance=covariance,
                             calculator=calc_script,
                             process_group=group or mpi_init(),
-                            tape=tape, coveps=coveps
+                            tape=tape, fdiff=fdiff, ediff=ediff, coveps=coveps
                             )
-    if noise is not None:
-        calc.model.noise = noise
 
     # process atoms
     if type(atoms) == str:
