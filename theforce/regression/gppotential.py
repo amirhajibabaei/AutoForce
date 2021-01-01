@@ -385,7 +385,7 @@ class PosteriorPotential(Module):
     def K(self):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
-    def make_munu(self, algo=2, noisegrad=False):
+    def make_munu(self, algo=2, noisegrad=False, **kw):
         if self.M.numel() == 0 or self.K.numel() == 0:
             return
         parallel = torch.distributed.is_initialized()
@@ -416,7 +416,7 @@ class PosteriorPotential(Module):
             elif algo == 2:
                 _regression(self, optimize=False)
             elif algo == 3:
-                _regression(self, optimize=True)
+                _regression(self, optimize=True, **kw)
         else:
             self.ridge = torch.zeros([])
             self.mu = torch.zeros_like(self.M[0])
@@ -430,8 +430,8 @@ class PosteriorPotential(Module):
         self.Mi = self.choli.t()@self.choli
         self.make_stats()
 
-    def optimize_model_parameters(self):
-        pass
+    def optimize_model_parameters(self, **kw):
+        self.make_munu(algo=3, **kw)
 
     def make_stats(self):
         n = len(self.data)
@@ -664,7 +664,7 @@ class PosteriorPotential(Module):
                 r = self.add_1atoms(self.as_(b, group=group),
                                     ediff=par['ediff'], fdiff=par['fdiff'])
                 if r[0]:
-                    self.optimize_model_parameters()
+                    self.optimize_model_parameters(**par)
             elif a == 'local':
                 r = self.add_1inducing(self.as_(b, group=group),
                                        ediff=par['ediff'])
@@ -868,7 +868,7 @@ def to_inf_inf(y):
     return (y/y.neg().add(1.)).log()
 
 
-def _regression(self, optimize=False, lr=0.1):
+def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
 
     if not hasattr(self, '_noise'):
         self._noise = {}
@@ -900,6 +900,9 @@ def _regression(self, optimize=False, lr=0.1):
         Q, R = torch.qr(A)
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
         self._sigma = sigma
+        diff = self.K@self.mu - y
+        self._ediff = diff[:ndat]
+        self._fdiff = diff[ndat:]
 
     if not optimize:
         make()
@@ -911,20 +914,17 @@ def _regression(self, optimize=False, lr=0.1):
         par.requires_grad = True
     opt = torch.optim.Adam(params, lr=lr)
 
-    def rmse():
-        diff = self.K@self.mu-y
-        loss = diff[ndat:].pow(2).sum()
-        return loss
+    target_error_dist = torch.distributions.normal.Normal(0., fdiff)
 
-    def l2():
-        a = self._sigma.view(-1)*self.mu.view(-1)
-        return a.pow(2).sum()
+    def log_prob():
+        losses = -target_error_dist.log_prob(self._ediff)
+        return losses.sum()
 
     #
     def step():
         opt.zero_grad()
         make()
-        loss = rmse() + l2()
+        loss = log_prob()
         if loss.grad_fn:
             loss.backward()
         opt.step()
