@@ -2,7 +2,7 @@
 from theforce.io.sgprio import SgprIO
 
 
-def truncate_sgpr(infile, outfile, ndat, ncle):
+def truncate_sgpr(infile, outfile, ndat, nlce):
     m = SgprIO(infile)
     mm = SgprIO(outfile)
     c_ndat = 0
@@ -16,7 +16,7 @@ def truncate_sgpr(infile, outfile, ndat, ncle):
         elif a == 'local':
             mm.write(b)
             c_nlce += 1
-        if c_ndat == ndat and c_ncle == ncle:
+        if c_ndat == ndat and c_nlce == nlce:
             break
 
 
@@ -24,6 +24,6 @@ if __name__ == '__main__':
     import sys
     infile = sys.argv[1]
     outfile = sys.argv[2]
-    ndat = sys.argv[3]
-    ncle = sys.argv[4]
-    truncate_sgpr(infile, outfile, ndat, ncle)
+    ndat = int(sys.argv[3])
+    nlce = int(sys.argv[4])
+    truncate_sgpr(infile, outfile, ndat, nlce)
