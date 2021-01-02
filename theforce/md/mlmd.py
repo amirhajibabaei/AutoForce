@@ -13,7 +13,7 @@ import os
 def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
          bulk_modulus=None, stress=0., mask=None, group=None, tape='model.sgpr',
          trajectory='md.traj', loginterval=1, append=False, rattle=0.05, 
-         ediff=0.041, fdiff=0.1, coveps=1e-4):
+         ediff=0.041, fdiff=0.1, coveps=1e-4, random_seed=None):
     """
     atoms:        ASE atoms
     covariance:   kernel or model
@@ -42,6 +42,9 @@ def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
                             process_group=group or mpi_init(),
                             tape=tape, fdiff=fdiff, ediff=ediff, coveps=coveps
                             )
+
+    if random_seed:
+        np.random.seed(random_seed)
 
     # process atoms
     if type(atoms) == str:
