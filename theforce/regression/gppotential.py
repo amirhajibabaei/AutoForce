@@ -918,7 +918,7 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
     target_error_dist = torch.distributions.normal.Normal(0., fdiff)
 
     def log_prob():
-        losses = -target_error_dist.log_prob(self._ediff)
+        losses = -target_error_dist.log_prob(self._fdiff)
         return losses.sum()
 
     #
