@@ -23,7 +23,7 @@ class SeSoapKernel(UniversalSoapKernel):
         return f'{self._args}, radii={self.descriptor.radii}, normalize={self.descriptor.normalize}'
 
     def call_descriptor(self, loc, grad):
-        return self.descriptor(loc._r, loc._b, central=loc.number, grad=grad)
+        return self.descriptor(loc._r, loc._b, grad=grad)
 
 
 class SubSeSoapKernel(HeterogeneousSoapKernel):
@@ -42,7 +42,7 @@ class SubSeSoapKernel(HeterogeneousSoapKernel):
         return f'{self._args}, radii={self.descriptor.radii}, normalize={self.descriptor.normalize}'
 
     def call_descriptor(self, loc, grad):
-        return self.descriptor(loc._r, loc._b, central=loc.number, grad=grad)
+        return self.descriptor(loc._r, loc._b, grad=grad)
 
 
 def test_SeSoapKernel():

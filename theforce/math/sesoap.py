@@ -131,7 +131,7 @@ class SeSoap(Module):
     def __repr__(self):
         return self.state
 
-    def forward(self, coo, numbers, central=None, grad=False, normalize=None, sparse_tensor=True):
+    def forward(self, coo, numbers, grad=False, normalize=None, sparse_tensor=True):
         units = self.radii(numbers)
         species = torch.unique(numbers, sorted=True)
         dim0 = len(species)**2
@@ -158,8 +158,6 @@ class SeSoap(Module):
         c = []
         for num in species:
             t = torch.index_select(ff, -1, i[numbers == num]).sum(dim=-1)
-            if num == central:
-                t[0, 0, 0] += Y00
             c += [t]
         c = torch.stack(c)
         nnp = c[None, :, None, ]*c[:, None, :, None]
@@ -251,7 +249,7 @@ class SubSeSoap(Module):
     def __repr__(self):
         return self.state
 
-    def forward(self, coo, numbers, central=None, grad=False, normalize=None):
+    def forward(self, coo, numbers, grad=False, normalize=None):
         units = self.radii(numbers)
         xyz = coo/units.view(-1, 1)
         d = xyz.pow(2).sum(dim=-1).sqrt()
@@ -274,8 +272,6 @@ class SubSeSoap(Module):
         c = []
         for num in self.numbers:
             t = torch.index_select(ff, -1, i[numbers == num]).sum(dim=-1)
-            if num == central:
-                t[0, 0, 0] += Y00
             c += [t]
         c = torch.stack(c)
         nnp = c[None, :, None, ]*c[:, None, :, None]
