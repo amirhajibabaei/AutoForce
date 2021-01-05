@@ -939,14 +939,18 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
     _kldiv = torch.nn.KLDivLoss()
 
     def kldiv():
-        loss = _kldiv(self._y, y)
+        loss = _kldiv(self._y[ndat:], y[ndat:])
         return loss
+
+    def simple_loss():
+        mae = self._fdiff.abs().mean()
+        return (mae - fdiff).pow(2)
 
     #
     def step():
         opt.zero_grad()
         make()
-        loss = kldiv()
+        loss = simple_loss()
         if loss.grad_fn:
             loss.backward()
         opt.step()
@@ -965,7 +969,7 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
         par.requires_grad = False
     opt.zero_grad()
     self.mu = self.mu.detach()
-    self.scaled_noise = {a: to_0_1(b) for a, b in self._noise.items()}
+    self.scaled_noise = {a: float(to_0_1(b)) for a, b in self._noise.items()}
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
