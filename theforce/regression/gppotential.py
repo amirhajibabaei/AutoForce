@@ -617,7 +617,7 @@ class PosteriorPotential(Module):
             _df = (f2-f1).abs()
             df = _df.mean()
             df_max = _df.max()
-            if df_max > 3*fdiff: # TODO: 3
+            if df_max > 10*fdiff: # TODO: 10
                 df = df_max
         else:
             df = 0
