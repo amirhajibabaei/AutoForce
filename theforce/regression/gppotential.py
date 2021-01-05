@@ -614,7 +614,11 @@ class PosteriorPotential(Module):
         if fdiff < float('inf'):
             f2 = self([atoms], 'forces',
                       all_reduce=atoms.is_distributed, **kwargs)
-            df = (f2-f1).abs().max()
+            _df = (f2-f1).abs()
+            df = _df.mean()
+            df_max = _df.max()
+            if df_max > 3*fdiff: # TODO: 3
+                df = df_max
         else:
             df = 0
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
