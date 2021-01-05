@@ -901,8 +901,8 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
         A = torch.cat((self.K, sigma@L.t()))
         Q, R = torch.qr(A)
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
-        self._sigma = sigma
-        diff = self.K@self.mu - y
+        self._y = self.K@self.mu
+        diff = self._y - y
         self._ediff = diff[:ndat]
         self._fdiff = diff[ndat:]
 
@@ -932,11 +932,17 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
         losses = -target_error_dist.log_prob(self._fdiff)
         return losses.sum()
 
+    _kldiv = torch.nn.KLDivLoss()
+
+    def kldiv():
+        loss = _kldiv(self._y[ndat:], y[ndat:])
+        return loss
+
     #
     def step():
         opt.zero_grad()
         make()
-        loss = rmse_e() #+ rmse_f()
+        loss = kldiv()
         if loss.grad_fn:
             loss.backward()
         opt.step()
