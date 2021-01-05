@@ -896,8 +896,9 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
         sigma = 0
         for z in zset:
             sigma_z = to_0_1(self._noise[z])*scale[z]
-            sigma = sigma + (numbers == z).float()*sigma_z
-        A = torch.cat((self.K, sigma.view(-1, 1)*L.t()))
+            sigma = sigma + (numbers == z).type(L.type())*sigma_z
+        sigma = sigma.diag()
+        A = torch.cat((self.K, sigma@L.t()))
         Q, R = torch.qr(A)
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
         self._sigma = sigma

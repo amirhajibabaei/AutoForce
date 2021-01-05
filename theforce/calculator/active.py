@@ -430,7 +430,7 @@ class ActiveCalculator(Calculator):
     def update(self, inducing=True, data=True):
         m = self.update_inducing() if inducing else 0
         n = self.update_data(try_fake=not self.blind) if m > 0 and data else 0
-        if n > 0:
+        if n > 0 or not data:
             self.model.optimize_model_parameters(ediff=self.ediff, fdiff=self.fdiff)
         if m > 0 or n > 0:
             self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
