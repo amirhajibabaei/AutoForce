@@ -939,7 +939,7 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
     _kldiv = torch.nn.KLDivLoss()
 
     def kldiv():
-        loss = _kldiv(self._y[ndat:], y[ndat:])
+        loss = _kldiv(self._y, y)
         return loss
 
     #
