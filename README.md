@@ -29,11 +29,10 @@ pip install .
 ### Commandline
 For machine learning accelerated molecular dynamics
 (using VASP) from the commandline see 
-[this](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/md).
+[theforce/md/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/md).
 
 ### Python usage
 It wraps ASE calculators:
-
 ```python
 from theforce.calculator.active import ActiveCalculator
 
@@ -41,35 +40,12 @@ from theforce.calculator.active import ActiveCalculator
 # main_calc = see ASE calculators
 # kernel = see the proceeding
 
-calc = ActiveCalculator(kernel, calculator=main_calc)
+calc = ActiveCalculator(calculator=main_calc)
 atoms.set_calculator(calc)
 
 # proceed with the desired calculations
 # ...
-
-# save and load models
-calc.model.to_folder('model')
-calc = ActiveCalculator('model', calculator=main_calc)
 ```
-
-### Kernels
-
-Kernels can be imported from `theforce.similarity`.
-Currently the kernels in the `sesoap` module are preferred:
-```python
-from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
-
-lmax, nmax, exponent, cutoff = 3, 3, 4, 6.
-kernel = SeSoapKernel(lmax, nmax, exponent, cutoff)
-```
-Using `SeSoapKernel` we don't need to worry about atomic types
-but it maybe slow in some cases. 
-Another option is `SubSeSoapKernel` which explicitly depends on the atomic species.
-By fixing the atomic species, it can be ~10 times faster, but it uses more memory.
-As an example
-```python
-a = SubSeSoapKernel(lmax, nmax, exponent, cutoff, 1, (1, 8))
-b = SubSeSoapKernel(lmax, nmax, exponent, cutoff, 8, (1, 8))
-kernel = [a, b]
-```
+For detailed information see 
+[theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/calculator).
 <!-- #endregion -->

@@ -93,6 +93,9 @@ as the starting potential for the NPT simulation.
 NPT simulations are more vulnerable to sudden ML updates.
 If the model is mature, this is not an issue.
 
+For the remaining parameters (`ediff, fdiff, coveps`) see
+[theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/calculator).
+
 #### Run
 Lets assume that 20 cores are available.
 We split these cores to 12 for VASP and 8 for ML.

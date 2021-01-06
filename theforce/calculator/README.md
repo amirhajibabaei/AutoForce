@@ -31,16 +31,16 @@ Running examples can be found
 ### Parameters
 The following parameters can be passed to `ActiveCalculator`
 ```
-   covariance:      either a kernel or path to a saved/pickled model
-   calculator:      any ASE calculator or SocketCalculator
-   process_group:   None or the value of mpi_init()
-   ediff:           energy sensitivity for sampling LCEs
-   fdiff:           forces sensitivity for sampling DFT data
-   coveps:          for skipping ML update
-   covdiff:         usefull only in special cases
-   meta:            meta energy calculator for metadynamics
-   logfile:         file name for logging
-   tape:            for checkpointing the ML model
+covariance:      either a kernel or path to a saved/pickled model
+calculator:      any ASE calculator or SocketCalculator
+process_group:   None or the value of mpi_init()
+ediff:           energy sensitivity for sampling LCEs
+fdiff:           forces sensitivity for sampling DFT data
+coveps:          for skipping ML update
+covdiff:         usefull only in special cases
+meta:            meta energy calculator for metadynamics
+logfile:         file name for logging
+tape:            for checkpointing the ML model
 ```
 #### covariance
 This parameter can be used for passing a kernel
@@ -179,7 +179,7 @@ sleep 1 # waits for the server to be up
 mpirun -np 6 python md.py # B
 ```
 The two processes `A` and `B` communicate 
-through ip `localhost` and port `6666` by default.
+through the ip `localhost` and the port `6666` by default.
 ip and port can be set as optional args in command `A`
 and as kwargs in `SocketCalculator`.
 
