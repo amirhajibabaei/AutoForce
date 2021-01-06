@@ -920,37 +920,16 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
         par.requires_grad = True
     opt = torch.optim.Adam(params, lr=lr)
 
-    def rmse_e():
-        return self._ediff.pow(2).sum() 
-
-    def rmse_f():
-        return self._fdiff.pow(2).sum() 
-
-    def log_prob_e():
-        target_error_dist = torch.distributions.normal.Normal(0., ediff)
-        losses = -target_error_dist.log_prob(self._ediff)
-        return losses.sum()
-
-    def log_prob_f():
-        target_error_dist = torch.distributions.normal.Normal(0., fdiff)
-        losses = -target_error_dist.log_prob(self._fdiff)
-        return losses.sum()
-
-    _kldiv = torch.nn.KLDivLoss()
-
-    def kldiv():
-        loss = _kldiv(self._y[ndat:], y[ndat:])
+    def loss_fn():
+        delta = self._fdiff.pow(2).mean().sqrt()
+        loss = (delta - fdiff).pow(2)
         return loss
-
-    def simple_loss():
-        mae = self._fdiff.abs().mean()
-        return (mae - fdiff).pow(2)
 
     #
     def step():
         opt.zero_grad()
         make()
-        loss = simple_loss()
+        loss = loss_fn()
         if loss.grad_fn:
             loss.backward()
         opt.step()
