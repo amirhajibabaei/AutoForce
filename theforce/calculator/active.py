@@ -57,7 +57,7 @@ class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
     def __init__(self, covariance=None, calculator=None, process_group=None,
-                 ediff=0.01, fdiff=0.05, coveps=1e-4, covdiff=1e-2, meta=None,
+                 ediff=0.041, fdiff=0.082, coveps=1e-4, covdiff=1e-2, meta=None,
                  logfile='active.log', tape='model.sgpr', **kwargs):
         """
         covariance:      None | similarity kernel(s) | path to a saved model | model

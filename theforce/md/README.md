@@ -48,7 +48,10 @@ tape:         checkpoint for the ML potential (default='model.sgpr')
 trajectory:   traj file name (default='md.traj')
 loginterval:  for traj file (default=1)
 append:       append to traj file (default=False)
-rattle:       rattle atoms at the initial step (default=0.05)
+rattle:       rattle atoms at the initial step (default=0.0)
+
+other:
+ediff, fdiff, coveps: see theforce/calculator notes
 ```
 All of the above tags have default values which will be overridden
 with the settings in `MD`. 
@@ -64,7 +67,7 @@ Although this is not a issue in most cases,
 sometimes the active learning algorithm may fail.
 For this, we have introduced the `rattle` tag 
 which disturbs the atoms at the initial state.
-The default value is `rattle=0.05`.
+The default value is `rattle=0.0`.
 
 The default timestep is `dt=1.` femtosecond 
 (`dt=0.25` if hydrogen is present) which is 
