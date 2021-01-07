@@ -920,9 +920,21 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
         par.requires_grad = True
     opt = torch.optim.Adam(params, lr=lr)
 
-    def loss_fn():
+    def _loss_fn():
         delta = self._fdiff.pow(2).mean().sqrt()
         loss = (delta - fdiff).pow(2)
+        return loss
+
+    dat_num = torch.cat([atoms.tnumbers for atoms in self.data])
+    dat_num = dat_num.view(-1, 1).repeat(1, 3).view(-1)
+
+    def loss_fn():
+        loss = 0.
+        for z in zset:
+            delta = self._fdiff[dat_num == z]
+            mean = delta.mean()
+            std = delta.pow(2).mean().sqrt()
+            loss = loss + mean**2 + (std - fdiff)**2
         return loss
 
     #
