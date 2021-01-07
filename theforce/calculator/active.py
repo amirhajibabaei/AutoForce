@@ -430,7 +430,7 @@ class ActiveCalculator(Calculator):
     def update(self, inducing=True, data=True):
         m = self.update_inducing() if inducing else 0
         n = self.update_data(try_fake=not self.blind) if m > 0 and data else 0
-        if n > 0 or not data:
+        if n > 0 or m > 0 or not data:
             self.model.optimize_model_parameters(ediff=self.ediff, fdiff=self.fdiff)
             if self.rank == 0:
                 self.log(f'noise: {self.model.scaled_noise}')
