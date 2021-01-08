@@ -615,11 +615,14 @@ class PosteriorPotential(Module):
             f2 = self([atoms], 'forces',
                       all_reduce=atoms.is_distributed, **kwargs)
             # TODO: better algorithm!
-            _df = (f2-f1).abs().max()
+            df = (f2-f1).abs().max()
+            R2 = coeff_of_determination(f2.view(-1), f1.view(-1))
         else:
             df = 0
+            R2 = 1.
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
-        if de < ediff and df < fdiff and not blind:
+        #if de < ediff and df < fdiff and not blind:
+        if (df < fdiff or R2 > 0.97) and df < 3*fdiff and not blind:
             self.pop_1data(clear_cached=True)
             added = 0
         else:
@@ -664,14 +667,14 @@ class PosteriorPotential(Module):
             elif a == 'atoms':
                 r = self.add_1atoms(self.as_(b, group=group),
                                     ediff=par['ediff'], fdiff=par['fdiff'])
-                if r[0]:
-                    self.optimize_model_parameters(**par)
             elif a == 'local':
                 r = self.add_1inducing(self.as_(b, group=group),
                                        ediff=par['ediff'])
             if a != 'params':
                 call[a] += 1
                 cadd[a] += r[0]
+                if r[0]:
+                    self.optimize_model_parameters(**par)
         return call, cadd
 
     def add_ninducing(self, _locs, ediff, detach=True, descending=True, leaks=None):

@@ -284,6 +284,7 @@ class ActiveCalculator(Calculator):
         details = [(j, self.atoms.numbers[j]) for j in i]
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
+        self.optimize()
 
     def _exact(self, copy):
         tmp = copy.as_ase() if self.to_ase else copy
@@ -388,6 +389,7 @@ class ActiveCalculator(Calculator):
                     added_indices.append(k)
                     added_covloss = beta[k]
                     self.blind = True
+                    self.optimize()
                 else:
                     _ediff = (self.ediff if len(self.model.X) > 1
                               else torch.finfo().eps)
@@ -401,6 +403,7 @@ class ActiveCalculator(Calculator):
                         self.cov = torch.cat([self.cov, x], dim=1)
                         added_indices.append(k)
                         added_covloss = beta[k]
+                        self.optimize()
                     else:
                         break
         added = added_beta + added_diff
@@ -425,18 +428,20 @@ class ActiveCalculator(Calculator):
                 self.head()
             self.log('added data: {} -> size: {} {}'.format(
                 added, *self.size))
+            self.optimize()
         return added
+
+    def optimize(self):
+        self.model.optimize_model_parameters(ediff=self.ediff, fdiff=self.fdiff)
 
     def update(self, inducing=True, data=True):
         m = self.update_inducing() if inducing else 0
         n = self.update_data(try_fake=not self.blind) if m > 0 and data else 0
-        if n > 0 or m > 0 or not data:
-            self.model.optimize_model_parameters(ediff=self.ediff, fdiff=self.fdiff)
-            if self.rank == 0:
-                self.log(f'noise: {self.model.scaled_noise}')
         if m > 0 or n > 0:
             self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
                 *(float(v) for v in self.model._stats)))
+            if self.rank == 0:
+                self.log(f'noise: {self.model.scaled_noise}')
         # tunning noise is unstable!
         # if n > 0 and not self.model.is_well():
         #    self.log(f'tuning noise: {self.model.gp.noise.signal} ->')
