@@ -2,7 +2,7 @@
 import torch
 
 
-__version__ = 'v2020.12'
+__version__ = 'v2021.01'
 
 
 torch.set_default_tensor_type(torch.DoubleTensor)

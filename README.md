@@ -16,6 +16,10 @@ In principle, all the calculators supported by the atomic simulation environment
 * <ins>Recommended</ins>: message passing interface (MPI enabled pytorch) for distributed computation.
 * <ins>Optional</ins>: pymatgen, spglib, mendeleev, matplotlib, nglview
 
+For enabling distributed computation with MPI, 
+pytorch needs to be installed from source
+(see [this](https://github.com/pytorch/pytorch)).
+
 ### Installation
 Clone the source code by
 ```shell
@@ -26,12 +30,12 @@ Go to the source code directory and install by
 pip install .
 ```
 
-### Commandline
+### Command line
 For machine learning accelerated molecular dynamics
-(using VASP) from the commandline see 
+(using VASP) from the command line see 
 [theforce/md/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/md).
 
-### Python usage
+### Python API
 It wraps ASE calculators:
 ```python
 from theforce.calculator.active import ActiveCalculator
