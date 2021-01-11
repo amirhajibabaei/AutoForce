@@ -364,6 +364,23 @@ class ActiveCalculator(Calculator):
         beta = self.gather(beta)
         return beta
 
+    def update_lce(self, loc, beta=None):
+        added = 0
+        m = self.model.indu_counts[loc.number]
+        if loc.number in self.model.gp.species:
+            if beta and beta > self.covdiff and m < 2:
+                self.model.add_inducing(loc)
+                added = -1
+            else:
+                ediff = (self.ediff if m > 1
+                          else torch.finfo().eps)
+                added, delta = self.model.add_1inducing(
+                    loc, ediff, detach=False)
+        if added != 0:
+            self.tape.write(loc)
+            self.optimize()
+        return added
+ 
     def update_inducing(self):
         added_beta = 0
         added_diff = 0
@@ -383,36 +400,23 @@ class ActiveCalculator(Calculator):
             if beta[k].isclose(torch.ones([])):
                 self.blind = True
             loc = self.atoms.local(k, detach=True)
-            if loc.number in self.model.gp.species:
-                if beta[k] > self.covdiff and self.model.indu_counts[loc.number] < 2:
-                    self.model.add_inducing(loc)
-                    self.tape.write(loc)
-                    added_beta += 1
-                    x = self.model.gp.kern(self.atoms, loc)
-                    self.cov = torch.cat([self.cov, x], dim=1)
-                    added_indices.append(k)
-                    added_covloss = beta[k]
+            added = self.update_lce(loc, beta=beta[k])
+            if added == 0:
+                break
+            else:
+                if added == -1:
                     self.blind = True
-                    self.optimize()
-                else:
-                    _ediff = (self.ediff if len(self.model.X) > 1
-                              else torch.finfo().eps)
-                    added, delta = self.model.add_1inducing(
-                        loc, _ediff, detach=False)
-                    self.log_cov(beta[k], delta)
-                    if added:
-                        self.tape.write(loc)
-                        added_diff += 1
-                        x = self.model.gp.kern(self.atoms, loc)
-                        self.cov = torch.cat([self.cov, x], dim=1)
-                        added_indices.append(k)
-                        added_covloss = beta[k]
-                        self.optimize()
-                    else:
-                        break
+                    added_beta += 1
+                elif added == 1:
+                    added_diff += 1
+                x = self.model.gp.kern(self.atoms, loc)
+                self.cov = torch.cat([self.cov, x], dim=1)
+                added_indices.append(k)
+                added_covloss = beta[k]
         added = added_beta + added_diff
         if added > 0:
-            details = [(k, self.atoms.numbers[k]) for k in added_indices]
+            # details = [(k, self.atoms.numbers[k]) for k in added_indices]
+            details = ''
             self.log('added indu: {} ({},{}) -> size: {} {} details: {:.2g} {}'.format(
                 added, added_beta, added_diff, *self.size, added_covloss, details))
             if not self.normalized:
