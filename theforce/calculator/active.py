@@ -58,7 +58,7 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance=None, calculator=None, process_group=None,
                  ediff=0.041, fdiff=0.082, coveps=1e-4, covdiff=1e-2, meta=None,
-                 logfile='active.log', tape='model.sgpr', **kwargs):
+                 logfile='active.log', pckl='model.pckl', tape='model.sgpr', **kwargs):
         """
         covariance:      None | similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
@@ -69,6 +69,7 @@ class ActiveCalculator(Calculator):
         covdiff:         covariance-loss sensitivity heuristic
         meta:            meta energy calculator
         logfile:         string | None
+        pckl:            string | None, folder for saving/pickling the model after updates
         tape:            string (with suffix .sgpr), the file used to save/load updates
         kwargs:          ASE's calculator kwargs
 
@@ -95,6 +96,8 @@ class ActiveCalculator(Calculator):
             e.g. calc.model.to_folder('model/')
         An existing model is loaded with:
             e.g. ActiveCalculator('model/', ...)
+        By default, the model will be automatically saved after every update
+        unless pckl=None.
 
         In case one wishes to use an existing model without further updates, 
         then pass "calculator=None".
@@ -113,7 +116,7 @@ class ActiveCalculator(Calculator):
         If the model is volatile, one can set coveps=0 for robustness.
 
         The tape arg is the name of the file used for saving the 
-        updates (the added data and inducing). 
+        updates (the added data and inducing LCEs). 
         The model can be regenarated using this file.
         "tape" files are never overwritten (allways appended).
         This file can also be used to import other tapes by a line 
@@ -135,6 +138,7 @@ class ActiveCalculator(Calculator):
         self.log('active calculator says Hello!', mode='w')
         self.log_settings()
         self.log('model size: {} {}'.format(*self.size))
+        self.pckl = pckl
         self.tape = SgprIO(tape)
         read_tape = not (type(covariance) == str and not self.active)
         if os.path.isfile(tape) and read_tape:
@@ -432,7 +436,8 @@ class ActiveCalculator(Calculator):
         return added
 
     def optimize(self):
-        self.model.optimize_model_parameters(ediff=self.ediff, fdiff=self.fdiff)
+        self.model.optimize_model_parameters(
+            ediff=self.ediff, fdiff=self.fdiff)
 
     def update(self, inducing=True, data=True):
         m = self.update_inducing() if inducing else 0
@@ -442,11 +447,8 @@ class ActiveCalculator(Calculator):
                 *(float(v) for v in self.model._stats)))
             if self.rank == 0:
                 self.log(f'noise: {self.model.scaled_noise}')
-        # tunning noise is unstable!
-        # if n > 0 and not self.model.is_well():
-        #    self.log(f'tuning noise: {self.model.gp.noise.signal} ->')
-        #    self.model.tune_noise(min_steps=10, verbose=self.logfile)
-        #    self.log(f'noise: {self.model.gp.noise.signal}')
+            if self.pckl:
+                self.model.to_folder(self.pckl)
         return m, n
 
     @property
