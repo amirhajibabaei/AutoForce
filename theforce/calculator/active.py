@@ -462,6 +462,20 @@ class ActiveCalculator(Calculator):
             atoms.get_potential_energy()
         self._calc = _calc
 
+    def include_tape(self, tape):
+        if type(tape) == str:
+            tape = SgprIO(tape)
+        _calc = self._calc
+        for cls, obj in tape.read():
+            if cls == 'atoms':
+                self._calc = obj.calc
+                obj.set_calculator(self)
+                obj.get_potential_energy()
+            elif cls == 'local':
+                obj.stage(self.model.descriptors)
+                # TODO: include
+        self._calc = _calc
+
     @property
     def rank(self):
         if torch.distributed.is_initialized():
