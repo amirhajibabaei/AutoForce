@@ -441,7 +441,8 @@ class ActiveCalculator(Calculator):
 
     def update(self, inducing=True, data=True):
         m = self.update_inducing() if inducing else 0
-        n = self.update_data(try_fake=not self.blind) if m > 0 and data else 0
+        try_real = self.blind or type(self._calc) == SinglePointCalculator
+        n = self.update_data(try_fake=not try_real) if m > 0 and data else 0
         if m > 0 or n > 0:
             self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
                 *(float(v) for v in self.model._stats)))
@@ -450,6 +451,16 @@ class ActiveCalculator(Calculator):
             if self.pckl:
                 self.model.to_folder(self.pckl)
         return m, n
+
+    def include_data(self, data):
+        if type(data) == str:
+            data = ase.io.read(data, '::')
+        _calc = self._calc
+        for atoms in data:
+            self._calc = atoms.calc
+            atoms.set_calculator(self)
+            atoms.get_potential_energy()
+        self._calc = _calc
 
     @property
     def rank(self):
