@@ -318,6 +318,7 @@ class PosteriorPotential(Module):
             self.attach_process_group(group)
         else:
             self.is_distributed = False
+        self.ignore_forces = False
         if data is not None:
             self.set_data(data, inducing=inducing, **setting)
         else:
@@ -622,7 +623,7 @@ class PosteriorPotential(Module):
             R2 = 1.
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         #if de < ediff and df < fdiff and not blind:
-        if (df < fdiff or R2 > 0.97) and df < 3*fdiff and not blind:
+        if de < ediff and (df < fdiff or R2 > 0.97) and df < 3*fdiff and not blind:
             self.pop_1data(clear_cached=True)
             added = 0
         else:
@@ -892,8 +893,9 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
     self.ridge = torch.as_tensor(ridge)
     self.choli = L.inverse().contiguous()
     y = self.gp.Y(self.data)
-    Y = torch.cat((y, torch.zeros(L.size(0))))
     ndat = len(self.data)
+    select = ndat if self.ignore_forces else None
+    Y = torch.cat((y[:select], torch.zeros(L.size(0))))
 
     #
     def make():
@@ -902,7 +904,7 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
             sigma_z = to_0_1(self._noise[z])*scale[z]
             sigma = sigma + (numbers == z).type(L.type())*sigma_z
         sigma = sigma.diag()
-        A = torch.cat((self.K, sigma@L.t()))
+        A = torch.cat((self.K[:select], sigma@L.t()))
         Q, R = torch.qr(A)
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
         self._y = self.K@self.mu
@@ -936,6 +938,9 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
             std = delta.pow(2).mean().sqrt()
             loss = loss + mean**2 + (std - fdiff)**2
         return loss
+
+    if self.ignore_forces:
+        loss_fn = lambda: self._ediff.pow(2).sum()
 
     #
     def step():
