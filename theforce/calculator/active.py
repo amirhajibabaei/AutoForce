@@ -147,6 +147,7 @@ class ActiveCalculator(Calculator):
         if self.active:
             self.tape.write_params(ediff=self.ediff, fdiff=self.fdiff)
         self.normalized = None
+        self._update_args = {}
 
     @property
     def active(self):
@@ -183,11 +184,10 @@ class ActiveCalculator(Calculator):
                           forced=True, dont_save_grads=True, **uargs)
 
         # build a model
-        data = True
         if self.step == 0:
             if self.active and self.model.ndata == 0:
                 self.initiate_model()
-                data = False
+                self._update_args = dict(data=False)
 
         # kernel
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
@@ -207,7 +207,7 @@ class ActiveCalculator(Calculator):
         self.deltas = None
         self.covlog = ''
         if self.active:
-            m, n = self.update(data=data)
+            m, n = self.update(**self._update_args)
             if n > 0 or m > 0:  # update results
                 pre = self.results.copy()
                 energies = self.cov@self.model.mu
@@ -446,7 +446,8 @@ class ActiveCalculator(Calculator):
     def update(self, inducing=True, data=True):
         m = self.update_inducing() if inducing else 0
         try_real = self.blind or type(self._calc) == SinglePointCalculator
-        n = self.update_data(try_fake=not try_real) if m > 0 and data else 0
+        update_data = (m > 0 and data) or not inducing
+        n = self.update_data(try_fake=not try_real) if update_data else 0
         if m > 0 or n > 0:
             self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
                 *(float(v) for v in self.model._stats)))
@@ -454,6 +455,7 @@ class ActiveCalculator(Calculator):
                 self.log(f'noise: {self.model.scaled_noise}')
             if self.pckl:
                 self.model.to_folder(self.pckl)
+        self._update_args = {}
         return m, n
 
     def include_data(self, data):
@@ -470,14 +472,22 @@ class ActiveCalculator(Calculator):
         if type(tape) == str:
             tape = SgprIO(tape)
         _calc = self._calc
+        added_lce = [0, 0]
         for cls, obj in tape.read():
             if cls == 'atoms':
+                if added_lce[0] > 0:
+                    self.log('added lone indus: {}/{} -> size: {} {}'.format(
+                        *added_lce, *self.size))
+                self._update_args = dict(inducing=False)
                 self._calc = obj.calc
                 obj.set_calculator(self)
                 obj.get_potential_energy()
+                added_lce = [0, 0]
             elif cls == 'local':
                 obj.stage(self.model.descriptors)
-                # TODO: include
+                added = self.update_lce(obj)
+                added_lce[0] += added
+                added_lce[1] += 1
         self._calc = _calc
 
     @property
