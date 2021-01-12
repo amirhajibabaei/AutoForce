@@ -12,7 +12,7 @@ import os
 
 def mlmd(atoms, covariance=None, calc_script=None, dt=None, tem=300., picos=100,
          bulk_modulus=None, stress=0., mask=None, group=None, tape='model.sgpr',
-         trajectory='md.traj', loginterval=1, append=False, rattle=0.0, 
+         trajectory='md.traj', loginterval=1, append=False, rattle=0.0,
          ediff=0.041, fdiff=0.082, coveps=1e-4, random_seed=None):
     """
     atoms:        ASE atoms

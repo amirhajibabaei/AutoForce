@@ -28,6 +28,12 @@ see the section **Parallelism** in the following.
 Running examples can be found 
 [here](https://github.com/amirhajibabaei/AutoForce/tree/master/templates).
 
+With `ML_calc`, the ML model will be generated 
+automatically on-the-fly with our arbitrary
+ab-initio simulations.
+For training with existing data see the section
+**Training with existing data** in proceeding.
+
 ### Parameters
 The following parameters can be passed to `ActiveCalculator`
 ```
@@ -40,7 +46,8 @@ coveps:          for skipping ML update
 covdiff:         usefull only in special cases
 meta:            meta energy calculator for metadynamics
 logfile:         file name for logging
-tape:            for checkpointing the ML model
+pckl:            folder-name for pickling the ML model
+tape:            for saving all of the model updates
 ```
 #### covariance
 This parameter can be used for passing a kernel
@@ -64,10 +71,14 @@ in the next run
 ```python
 ML_calc = ActiveCalculator(covariance='model/', ...)
 ```
+As of version `v2021.01`, the model is automatically
+saved after every update step in a folder given by 
+`pckl` which defaults to `'model.pckl'`.
+For disabling this feature pass `pckl=None`.
 
 #### calculator
 The main DFT calculator can which be any ASE 
-calculator or a `SocketCalculator`.
+calculator or a `SocketCalculator` (see **Parallelism**).
 For using an existing ML model without further 
 training pass `calculator=None`.
 
@@ -101,14 +112,26 @@ calculation will be triggered.
 #### meta
 This part is for metadynamics and it is still under development.
 
-#### logfile, tape
+#### logfile, pckl, tape
 `logfile` is used for logging.
-The default name is `active.log`.
+The default name is `'active.log'`.
 It can be visualized by
 ```python
 from theforce.calculator.active import log_to_figure
 
 fig = log_to_figure('active.log')
+```
+
+`pckl` is the folder-name for saving the pickled
+model after every update step.
+The default is `pckl='model.pckl'`.
+For disabling this feature and manual saving
+pass `pckl=None`.
+For resuming the training from a saved model
+we pass the folder-name instead of a kernel
+as `covariance`
+```python
+ML_calc = ActiveCalculator(covariance='model.pckl')
 ```
 
 `tape` is used for saving the most essential 
@@ -118,14 +141,22 @@ Unlike pickled models, it occupies very little memory
 and can be used for rebuilding the model from scratch.
 The default name is `tape='model.sgpr'`.
 By design these files are never overwritten. 
-Thus if it exists in the working directory it will 
-be loaded automatically and the new updates will be
-appended to it.
-A pickled model can be created from an existing `tape` by
+These files can be used for retraining the model
+with different parameters or combining several
+trainig trajectories.
+For instance
 ```python
-ML_calc = ActiveCalculator(tape='model.sgpr', ...)
-ML_calc.model.to_folder('model/')
+ML_calc.include_sgpr('model.sgpr')
 ```
+
+### Training with existing data
+If some DFT data already exists, one can train a 
+model simply by
+```python
+ML_calc.include_data(data)
+```
+where `data` is either a list of `Atoms` objects
+or path to a (`.traj`) file.
 
 ### Parallelism
 The main issue for ML parallelism is that `mpirun` 
@@ -167,9 +198,9 @@ from theforce.util.parallel import mpi_init
 
 DFT_calc = SocketCalculator(script='calc.py')
 
-calc = ActiveCalculator(calculator=DFT_calc,     # main (DFT) calc
-                        process_group=mpi_init() # for mpi parallelism
-                        )
+ML_calc = ActiveCalculator(calculator=DFT_calc,     # main (DFT) calc
+                           process_group=mpi_init() # for mpi parallelism
+                           )
 # ... atoms and md code
 ```
 Then, the simulation can be started by

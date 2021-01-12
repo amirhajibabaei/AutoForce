@@ -33,7 +33,7 @@ pip install .
 ### Command line
 For machine learning accelerated molecular dynamics
 (using VASP) from the command line see 
-[theforce/md/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/md).
+[theforce/cl/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl).
 
 ### Python API
 It wraps ASE calculators:

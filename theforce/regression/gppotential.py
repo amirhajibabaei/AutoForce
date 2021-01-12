@@ -622,7 +622,7 @@ class PosteriorPotential(Module):
             df = 0
             R2 = 1.
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
-        #if de < ediff and df < fdiff and not blind:
+        # if de < ediff and df < fdiff and not blind:
         if de < ediff and (df < fdiff or R2 > 0.97) and df < 3*fdiff and not blind:
             self.pop_1data(clear_cached=True)
             added = 0
@@ -940,7 +940,8 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
         return loss
 
     if self.ignore_forces:
-        loss_fn = lambda: self._ediff.pow(2).sum()
+        def loss_fn():
+            return self._ediff.pow(2).sum()
 
     #
     def step():
