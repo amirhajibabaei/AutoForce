@@ -58,7 +58,7 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance=None, calculator=None, process_group=None,
                  ediff=0.041, fdiff=0.082, coveps=1e-4, covdiff=1e-2, meta=None,
-                 logfile='active.log', pckl='model.pckl', tape='model.sgpr', **kwargs):
+                 logfile='active.log', pckl='model.pckl', tape='model.sgpr'):
         """
         covariance:      None | similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
@@ -69,17 +69,22 @@ class ActiveCalculator(Calculator):
         covdiff:         covariance-loss sensitivity heuristic
         meta:            meta energy calculator
         logfile:         string | None
-        pckl:            string | None, folder for saving/pickling the model after updates
-        tape:            string (with suffix .sgpr), the file used to save/load updates
-        kwargs:          ASE's calculator kwargs
-
-        *** important ***
-        All of the updates are recorded in the tape.
-        If the tape already exists, it will be loaded.
+        pckl:            string | None, folder for pickling the model
+        tape:            string (with suffix .sgpr), the file used for saving updates
 
         *** important ***
         You may wants to wrap atoms with FilterDeltas if you intend to 
         carry out molecular dynamics simulations. 
+
+        *** important ***
+        For training the model with existing data use the following
+            calc.include_data(data)
+        where data can be a list of atoms with energy and forces already available
+        or the path to a traj file.
+
+        *** important ***
+        For training a model with an existing sgpr file use
+            calc.include_sgpr(tape)
 
         *** important ***
         You can use log_to_figure function in this module for visualization.
@@ -88,42 +93,58 @@ class ActiveCalculator(Calculator):
         --------------------------------------------------------------------------------------
         Notes:
 
-        If covariance is None, the default kernel will be used.
-        At the beginning, covariance is often a list of similarity kernels:
-            e.g. theforce.similarity.sesoap.SeSoapKernel(...)
-        Later we can use an existing model.
-        A trained model can be saved with:
-            e.g. calc.model.to_folder('model/')
-        An existing model is loaded with:
-            e.g. ActiveCalculator('model/', ...)
-        By default, the model will be automatically saved after every update
-        unless pckl=None.
+        covariance:
+            At the beginning, covariance is often a list of similarity kernels:
+                e.g. theforce.similarity.sesoap.SeSoapKernel(...)
+            If covariance is None, the default kernel will be used.
+            Later we can use an existing model. A trained model can be saved with:
+                e.g. calc.model.to_folder('model/')
+            An existing model is loaded with:
+                e.g. ActiveCalculator('model/', ...)
+            By default, the model will be automatically saved after every update
+            unless pckl=None.
 
-        In case one wishes to use an existing model without further updates, 
-        then pass "calculator=None".
+        calculator:
+            The ab initio calculator which the model intends to learn.
+            In case one wishes to use an existing model without further updates, 
+            then pass "calculator=None".
 
-        For parallelism, import "mpi_init" from theforce.util.parallel,
-        then set 
-            process_group = mpi_init()
-        as kwarg when creating the ActiveCalculator.
+        process_group:
+            For parallelism, import "mpi_init" from theforce.util.parallel,
+            then set 
+                process_group = mpi_init()
+            as kwarg when creating the ActiveCalculator.
 
-        Setting a finite covdiff (0.01~0.1) may be necessary if the training
-        starts with an empty model and a state with zero initial forces.
-        If covariance-loss < coveps, the update trial will be skipped.
-        Depending on the problem at hand, coveps can be chosen as high as
-        1e-2 which can speed up the calculator by potentially a few orders
-        of magnitude.
-        If the model is volatile, one can set coveps=0 for robustness.
+        ediff, fdiff, coveps, covdiff:
+            ediff mainly controls LCE sampling rate.
+            fdiff is the main parameter which should correlate with the accuracy
+            of the model for force predictions. ediff should be set accordingly.
+            If covariance-loss < coveps, the update trial will be skipped.
+            Depending on the problem at hand, coveps can be chosen as high as
+            1e-2 which can speed up the calculator by potentially a few orders
+            of magnitude.
+            If the model is volatile, one can set coveps=0 for robustness.
+            Setting a finite covdiff (0.01~0.1) may be necessary if the training
+            starts with an empty model and a state with zero initial forces.
 
-        The tape arg is the name of the file used for saving the 
-        updates (the added data and inducing LCEs). 
-        The model can be regenarated using this file.
-        "tape" files are never overwritten (allways appended).
-        This file can also be used to import other tapes by a line 
-        containing 
-            include: path-to-another-tape
+        pckl:
+            The model will be pickled after every update in this folder
+            which can be loaded in the future simulations simply by
+                calc = ActiveCalculator(pckl)
+            This way, there is no overhead for rebuilding the model from 
+            scratch.
+
+        tape:
+            The tape arg is the name of the file used for saving the 
+            updates (the added data and inducing LCEs). 
+            "tape" files are never overwritten (allways appended).
+            These files can be used for rebuilding the model with different
+            parameters, combining models, and in general post processing.
+            A tape can be viewed as the important information along the
+            trajectory. A tape can be used for training a model by
+                calc.include_tape(file)
         """
-        Calculator.__init__(self, **kwargs)
+        Calculator.__init__(self)
         self._calc = calculator
         self.process_group = process_group
         self.get_model(covariance or default_kernel())
@@ -140,10 +161,6 @@ class ActiveCalculator(Calculator):
         self.log('model size: {} {}'.format(*self.size))
         self.pckl = pckl
         self.tape = SgprIO(tape)
-        read_tape = not (type(covariance) == str and not self.active)
-        if os.path.isfile(tape) and read_tape:
-            call, cadd = self.model.include(self.tape)
-            self.log(f'{tape}: {call} -> {cadd}')
         if self.active:
             self.tape.write_params(ediff=self.ediff, fdiff=self.fdiff)
         self.normalized = None
@@ -373,14 +390,14 @@ class ActiveCalculator(Calculator):
                 added = -1
             else:
                 ediff = (self.ediff if m > 1
-                          else torch.finfo().eps)
+                         else torch.finfo().eps)
                 added, delta = self.model.add_1inducing(
                     loc, ediff, detach=False)
         if added != 0:
             self.tape.write(loc)
             self.optimize()
         return added
- 
+
     def update_inducing(self):
         added_beta = 0
         added_diff = 0
