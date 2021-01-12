@@ -2,11 +2,12 @@
 import torch.distributed as dist
 from theforce.util.parallel import mpi_init
 from theforce.md.mlmd import mlmd, read_md
+from theforce.md import ARGS
 from ase.io import read
 import os
 
 
-group = mpi_init()
+group = ARGS['process_group']
 os.environ['CORES_FOR_ML'] = str(dist.get_world_size())
 try:
     from theforce.calculator import vasp
