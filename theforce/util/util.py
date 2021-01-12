@@ -3,6 +3,7 @@ import re
 import datetime
 import os
 import psutil
+import inspect
 
 
 def iterable(a, ignore=None):
@@ -81,6 +82,15 @@ def class_of_method(method):
         else:
             classes = list(c.__bases__) + classes
     return None
+
+
+def get_default_args(func):
+    signature = inspect.signature(func)
+    return {
+        k: v.default
+        for k, v in signature.parameters.items()
+        if v.default is not inspect.Parameter.empty
+    }
 
 
 def rounded(_p, s=2):
