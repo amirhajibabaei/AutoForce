@@ -41,6 +41,6 @@ if os.path.isfile('ARGS'):
              open('ARGS').readlines()]
     lines = ','.join(filter(''.__ne__, lines))
     ARGS = eval(f'dict({lines})')
-    if ARGS['calculator'] is not None:
+    if 'calculator' in ARGS:
         calc_script = _calc(ARGS['calculator'])
         ARGS['calculator'] = SocketCalculator(script=calc_script)
