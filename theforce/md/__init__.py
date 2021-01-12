@@ -20,13 +20,18 @@ def _calc(name):
     return calc_script
 
 
+def update_args(kwargs, source=None):
+    if source is None:
+        source = ARGS
+    for kw in kwargs:
+        if kw in source:
+            kwargs[kw] = source[kw]
+
+
 def gen_active_calc(**over):
     kwargs = get_default_args(ActiveCalculator.__init__)
-    for kw in kwargs:
-        if kw in ARGS:
-            kwargs[kw] = ARGS[kw]
-        if kw in over:
-            kwargs[kw] = over[kw]
+    update_args(kwargs)
+    update_args(kwargs, source=over)
     return ActiveCalculator(**kwargs)
 
 
