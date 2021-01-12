@@ -1,8 +1,8 @@
 # +
 import torch.distributed as dist
 from theforce.util.parallel import mpi_init
-from theforce.md.mlmd import mlmd, read_md
-from theforce.md import ARGS
+from theforce.cl.mlmd import mlmd, read_md
+from theforce.cl import ARGS
 from ase.io import read
 import os
 

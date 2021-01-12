@@ -1,5 +1,5 @@
 # +
-import theforce.md as cline
+import theforce.cl as cline
 from theforce.calculator.active import FilterDeltas
 from theforce.util.aseutil import init_velocities, make_cell_upper_triangular
 from ase.md.npt import NPT
