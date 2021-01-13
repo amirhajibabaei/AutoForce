@@ -619,14 +619,13 @@ class PosteriorPotential(Module):
             f2 = self([atoms], 'forces',
                       all_reduce=atoms.is_distributed, **kwargs)
             # TODO: better algorithm!
-            df = (f2-f1).abs().max()
-            R2 = coeff_of_determination(f2.view(-1), f1.view(-1))
+            df = (f2-f1).abs().mean()
+            df_max = (f2-f1).abs().max()
         else:
             df = 0
-            R2 = 1.
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         # if de < ediff and df < fdiff and not blind:
-        if de < ediff and (df < fdiff or R2 > 0.97) and df < 3*fdiff and not blind:
+        if df < fdiff and df_max < 3*fdiff and not blind:  # TODO: de?
             self.pop_1data(clear_cached=True)
             added = 0
         else:
