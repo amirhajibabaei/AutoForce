@@ -171,13 +171,20 @@ class ActiveCalculator(Calculator):
         return self._calc is not None
 
     def get_model(self, model):
+        self._ready = True
         if type(model) == str:
             self.model = PosteriorPotentialFromFolder(
                 model, load_data=True, update_data=self.active, group=self.process_group)
+            self._ready = False
         elif type(model) == PosteriorPotential:
             self.model = model
         else:
             self.model = PosteriorPotential(model)
+
+    def get_ready(self):
+        if not self._ready:
+            self.model.data.update(cutoff=self.model.cutoff,
+                                   descriptors=self.model.descriptors)
 
     @property
     def size(self):
@@ -403,7 +410,6 @@ class ActiveCalculator(Calculator):
         added_diff = 0
         added_indices = []
         added_covloss = None
-        self.blind = False
         while True:
             if len(added_indices) == self.atoms.natoms:
                 break
@@ -461,6 +467,8 @@ class ActiveCalculator(Calculator):
             ediff=self.ediff, fdiff=self.fdiff)
 
     def update(self, inducing=True, data=True):
+        self.get_ready()
+        self.blind = False
         m = self.update_inducing() if inducing else 0
         try_real = self.blind or type(self._calc) == SinglePointCalculator
         update_data = (m > 0 and data) or not inducing
