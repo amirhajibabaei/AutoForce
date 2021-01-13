@@ -40,7 +40,7 @@ if os.path.isfile('ARGS'):
     lines = [strip(line) for line in
              open('ARGS').readlines()]
     lines = ','.join(filter(''.__ne__, lines))
-    ARGS = eval(f'dict({lines})')
+    ARGS.update(eval(f'dict({lines})'))
     if 'calculator' in ARGS:
         calc_script = _calc(ARGS['calculator'])
         ARGS['calculator'] = SocketCalculator(script=calc_script)
