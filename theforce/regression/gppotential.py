@@ -445,6 +445,9 @@ class PosteriorPotential(Module):
         self._stats = [self._ediff.mean(), self._ediff.var().sqrt(),
                        self._fdiff.mean(), self._fdiff.var().sqrt(),
                        self._force_r2]
+        # forces info
+        self._f_max = y[n:].abs().max()
+        self._f_std = y[n:].var().sqrt()
         # needed for special cases
         self.indu_counts = Counter()
         self.kern_diag_mean = Counter()
