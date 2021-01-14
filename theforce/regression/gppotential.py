@@ -456,6 +456,15 @@ class PosteriorPotential(Module):
             self.kern_diag_mean[x.number] += float(self.M[i, i])
         for num in self.kern_diag_mean.keys():
             self.kern_diag_mean[num] /= self.indu_counts[num]
+        #
+        # predictive variance for x
+        # _vscale *[ k(x,x) - k(x,m)k(m,m)^{-1}k(m,x) ]
+        self.indu_numbers = torch.tensor([x.number for x in self.X])
+        self._vscale = {}
+        mu = self.mu*(self.M@self.mu)
+        for z in self.indu_counts.keys():
+            I = self.indu_numbers == z
+            self._vscale[z] = mu[I].sum()/I.sum()
 
     @property
     def sigma_e(self):
