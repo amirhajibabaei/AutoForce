@@ -221,15 +221,7 @@ class ActiveCalculator(Calculator):
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
 
         # energy/forces
-        energies = self.cov@self.model.mu
-        retain_graph = self.active or (self.meta is not None)
-        energy = self.reduce(energies, retain_graph=retain_graph)
-
-        # ... or
-        # self.allcov = self.gather(self.cov)
-        # energies = self.allcov@self.model.mu
-        # retain_graph = self.active or (self.meta is not None)
-        # energy = self.reduce(energies, retain_graph=retain_graph, reduced=True)
+        energy = self.update_results(self.active or (self.meta is not None))
 
         # active learning
         self.deltas = None
@@ -238,9 +230,7 @@ class ActiveCalculator(Calculator):
             m, n = self.update(**self._update_args)
             if n > 0 or m > 0:  # update results
                 pre = self.results.copy()
-                energies = self.cov@self.model.mu
-                retain_graph = self.meta is not None
-                energy = self.reduce(energies, retain_graph=retain_graph)
+                energy = self.update_results(self.meta is not None)
                 self.deltas = {}
                 for quant in ['energy', 'forces', 'stress']:
                     self.deltas[quant] = self.results[quant] - pre[quant]
@@ -260,6 +250,16 @@ class ActiveCalculator(Calculator):
 
         # needed for self.calculate_numerical_stress
         self.results['free_energy'] = self.results['energy']
+
+    def update_results(self, retain_graph=False):
+        energies = self.cov@self.model.mu
+        energy = self.reduce(energies, retain_graph=retain_graph)
+        # ... or
+        # self.allcov = self.gather(self.cov)
+        # energies = self.allcov@self.model.mu
+        # retain_graph = self.active or (self.meta is not None)
+        # energy = self.reduce(energies, retain_graph=retain_graph, reduced=True)
+        return energy
 
     def reduce(self, local_energies, op='=', retain_graph=False, reduced=False):
         energy = local_energies.sum()
