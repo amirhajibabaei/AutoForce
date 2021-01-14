@@ -35,12 +35,13 @@ def gen_active_calc(**over):
     return ActiveCalculator(**kwargs)
 
 
-ARGS = {'process_group': mpi_init()}
 if os.path.isfile('ARGS'):
     lines = [strip(line) for line in
              open('ARGS').readlines()]
     lines = ','.join(filter(''.__ne__, lines))
-    ARGS.update(eval(f'dict({lines})'))
-    if 'calculator' in ARGS:
+    ARGS = eval(f'dict({lines})')
+    if 'calculator' in ARGS and ARGS['calculator'] is not None:
         calc_script = _calc(ARGS['calculator'])
         ARGS['calculator'] = SocketCalculator(script=calc_script)
+seed = ARGS['seed'] if 'seed' in ARGS else None
+ARGS['process_group'] = mpi_init(seed=seed)

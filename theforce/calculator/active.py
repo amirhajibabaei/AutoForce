@@ -185,12 +185,16 @@ class ActiveCalculator(Calculator):
         if not self._ready:
             self.model.data.update(cutoff=self.model.cutoff,
                                    descriptors=self.model.descriptors)
+            self._ready = True
 
     @property
     def size(self):
         return self.model.ndata, len(self.model.X)
 
     def calculate(self, _atoms=None, properties=['energy'], system_changes=all_changes):
+
+        if self.size[1] == 0 and not self.active:
+            raise RuntimeError('you forgot to assign a DFT calculator!')
 
         if type(_atoms) == ase.atoms.Atoms:
             atoms = TorchAtoms(ase_atoms=_atoms)

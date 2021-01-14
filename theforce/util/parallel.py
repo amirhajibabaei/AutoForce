@@ -12,7 +12,8 @@ def mpi_init(unify_randomness=True, seed=None):
     dist.init_process_group('mpi')
     if unify_randomness:
         if seed is None:
-            seed = torch.tensor(np.random.randint(2**32))
+            seed = np.random.randint(2**32)
+        seed = torch.tensor(seed)
         dist.broadcast(seed, 0)
         np.random.seed(seed.numpy())
     return dist.group.WORLD
