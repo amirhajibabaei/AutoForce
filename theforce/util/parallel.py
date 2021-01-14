@@ -7,11 +7,12 @@ import functools
 import warnings
 
 
-def mpi_init(unify_randomness=True):
+def mpi_init(unify_randomness=True, seed=None):
     """returns mpi WORLD"""
     dist.init_process_group('mpi')
     if unify_randomness:
-        seed = torch.tensor(np.random.randint(2**32))
+        if seed is None:
+            seed = torch.tensor(np.random.randint(2**32))
         dist.broadcast(seed, 0)
         np.random.seed(seed.numpy())
     return dist.group.WORLD
