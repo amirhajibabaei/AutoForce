@@ -18,7 +18,8 @@ calc = ActiveCalculator(covariance=kern,          # kern, if None the default is
                         calculator=main_calc,     # main (DFT) calc
                         ediff=0.01,  fdiff=0.05, coveps=1e-4,   # control params
                         process_group=mpi_init(), # for mpi parallelism
-                        tape='Au.sgpr'            # for saving the training path
+                        tape='Au.sgpr',           # for saving the training path
+                        test = 100,               # test 100 steps after last dft (None for no test)
                         )
 # note that, all of the above have default values.
 # for a minimal  example, you only need to set

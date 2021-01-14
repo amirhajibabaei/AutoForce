@@ -58,7 +58,7 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance=None, calculator=None, process_group=None,
                  ediff=0.041, fdiff=0.082, coveps=1e-4, covdiff=1e-2, meta=None,
-                 logfile='active.log', pckl='model.pckl', tape='model.sgpr'):
+                 logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None):
         """
         covariance:      None | similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
@@ -71,6 +71,7 @@ class ActiveCalculator(Calculator):
         logfile:         string | None
         pckl:            string | None, folder for pickling the model
         tape:            string (with suffix .sgpr), the file used for saving updates
+        test:            None | integer for intervals
 
         *** important ***
         You may wants to wrap atoms with FilterDeltas if you intend to 
@@ -163,6 +164,9 @@ class ActiveCalculator(Calculator):
         self.tape = SgprIO(tape)
         if self.active:
             self.tape.write_params(ediff=self.ediff, fdiff=self.fdiff)
+        self.test = test
+        self._last_test = 0
+        self._ktest = 0
         self.normalized = None
         self._update_args = {}
 
@@ -235,6 +239,10 @@ class ActiveCalculator(Calculator):
                 for quant in ['energy', 'forces', 'stress']:
                     self.deltas[quant] = self.results[quant] - pre[quant]
         energy = self.results['energy']
+
+        # test
+        if self.test and self.step - self._last_test > self.test:
+            self._test()
 
         # meta terms
         meta = ''
@@ -318,6 +326,24 @@ class ActiveCalculator(Calculator):
             *self.size, details))
         self.optimize()
 
+    def _test(self):
+        tmp = self.atoms.as_ase() if self.to_ase else self.atoms
+        tmp.set_calculator(self._calc)
+        energy = tmp.get_potential_energy()
+        forces = tmp.get_forces()
+        # write
+        self._ktest += 1
+        mode = 'a' if self._ktest > 1 else 'w'
+        ase.io.Trajectory('active_pred.traj', mode).write(self.atoms)
+        ase.io.Trajectory('active_test.traj', mode).write(tmp)
+        # log
+        self.log('testing energy: {}'.format(energy))
+        dE = self.results['energy'] - energy
+        df = abs(self.results['forces'] - forces)
+        self.log('errors (test):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}'.format(
+            dE, df.max(), df.mean()))
+        self._last_test = self.step
+
     def _exact(self, copy):
         tmp = copy.as_ase() if self.to_ase else copy
         tmp.set_calculator(self._calc)
@@ -331,6 +357,7 @@ class ActiveCalculator(Calculator):
             df = abs(self.results['forces'] - forces)
             self.log('errors (pre):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}'.format(
                 dE, df.max(), df.mean()))
+        self._last_test = self.step
         return energy, forces
 
     def snapshot(self, fake=False, copy=None):
@@ -579,8 +606,10 @@ def parse_logfile(file='active.log', window=(None, None)):
     temperatures = []
     covloss = []
     exact_energies = []
+    test_energies = []
     indu = []
     errors = []
+    test_errors = []
     fit = []
     meta = []
     for line in open(file):
@@ -617,21 +646,27 @@ def parse_logfile(file='active.log', window=(None, None)):
         if 'exact energy' in line:
             exact_energies += [(step, float(split[3]))]
 
+        if 'testing energy' in line:
+            test_energies += [(step, float(split[3]))]
+
         if 'added indu' in line:
             sf = float(split[split.index('details:') + 1])
             indu += [(step, sf)]
 
-        if 'errors' in line:
+        if 'errors (pre)' in line:
             errors += [(step, [float(v) for v in split[4:8:2]])]
+
+        if 'errors (test)' in line:
+            test_errors += [(step, [float(v) for v in split[4:8:2]])]
 
         if 'fit' in line:
             fit += [(step, [float(split[k]) for k in [-7, -6, -4, -3, -1]])]
-    return energies, exact_energies, temperatures, covloss, meta, indu, fit, elapsed, settings
+    return energies, exact_energies, test_energies, temperatures, covloss, meta, indu, fit, elapsed, settings
 
 
 def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
     import pylab as plt
-    ml, fp, tem, covloss, meta, indu, fit, elapsed, settings = parse_logfile(
+    ml, fp, test, tem, covloss, meta, indu, fit, elapsed, settings = parse_logfile(
         file, window=window)
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
@@ -641,6 +676,9 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
     if len(fp) > 0:
         r, s = zip(*fp)
         axes[0].scatter(r, s, color='r', label='ab initio', zorder=2)
+    if len(test) > 0:
+        r, s = zip(*test)
+        axes[0].scatter(r, s, color='g', label='test', zorder=2)
     axes[0].set_ylabel('potential')
     axes[0].legend()
     if len(meta) > 0 and meta_ax:
