@@ -221,19 +221,20 @@ class ActiveCalculator(Calculator):
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
 
         # energy/forces
-        energy = self.update_results(self.active or (self.meta is not None))
+        self.update_results(self.active or (self.meta is not None))
 
         # active learning
         self.deltas = None
         self.covlog = ''
         if self.active:
+            pre = self.results.copy()
             m, n = self.update(**self._update_args)
-            if n > 0 or m > 0:  # update results
-                pre = self.results.copy()
-                energy = self.update_results(self.meta is not None)
+            if n > 0 or m > 0:
+                self.update_results(self.meta is not None)
                 self.deltas = {}
                 for quant in ['energy', 'forces', 'stress']:
                     self.deltas[quant] = self.results[quant] - pre[quant]
+        energy = self.results['energy']
 
         # meta terms
         meta = ''
@@ -259,7 +260,6 @@ class ActiveCalculator(Calculator):
         # energies = self.allcov@self.model.mu
         # retain_graph = self.active or (self.meta is not None)
         # energy = self.reduce(energies, retain_graph=retain_graph, reduced=True)
-        return energy
 
     def reduce(self, local_energies, op='=', retain_graph=False, reduced=False):
         energy = local_energies.sum()
