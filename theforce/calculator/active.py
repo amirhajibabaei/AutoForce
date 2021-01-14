@@ -456,7 +456,9 @@ class ActiveCalculator(Calculator):
     def update_data(self, try_fake=True):
         n = self.model.ndata
         new = self.snapshot(fake=try_fake)
-        self.model.add_1atoms(new, self.ediff, self.fdiff)
+        #self.model.add_1atoms(new, self.ediff, self.fdiff)
+        self.model.add_1atoms_fast(new, self.ediff, self.fdiff, self.atoms.xyz,
+                                   self.cov, self.atoms.is_distributed)
         added = self.model.ndata - n
         if added > 0:
             if try_fake:

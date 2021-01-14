@@ -632,6 +632,46 @@ class PosteriorPotential(Module):
             added = 1
         return added, de, df
 
+    def add_1atoms_fast(self, atoms, ediff, fdiff, xyz, cov, is_distributed):
+        if not atoms.includes_species(self.gp.species):
+            return 0, 0, 0
+        kwargs = {'use_caching': True}
+        #
+        if len(self.data) == 0:
+            if len(self.X) > 0:
+                self.add_data([atoms], **kwargs)
+            else:
+                self.data.append(atoms)
+            return 1, float('inf'), float('inf')
+
+        #
+        mu1 = self.mu
+        e1 = (cov@mu1).sum()
+        f1 = -torch.autograd.grad(e1, xyz, retain_graph=True)[0]
+        if is_distributed:
+            torch.distributed.all_reduce(e1)
+            torch.distributed.all_reduce(f1)
+        self.add_data([atoms], **kwargs)
+        mu2 = self.mu
+        e2 = (cov@mu2).sum()
+        f2 = -torch.autograd.grad(e2, xyz, retain_graph=True)[0]
+        if is_distributed:
+            torch.distributed.all_reduce(e2)
+            torch.distributed.all_reduce(f2)
+        de = abs(e2 - e1)
+        df = (f2-f1).abs().mean()
+        df_max = (f2-f1).abs().max()
+        #
+
+        blind = torch.stack([e1, e2]).allclose(torch.zeros(1))
+        # if de < ediff and df < fdiff and not blind:
+        if df < fdiff and df_max < 3*fdiff and not blind:  # TODO: de?
+            self.pop_1data(clear_cached=True)
+            added = 0
+        else:
+            added = 1
+        return added, de, df
+
     def add_1inducing(self, _loc, ediff, detach=True):
         if _loc.number not in self.gp.species:
             return 0, 0.
