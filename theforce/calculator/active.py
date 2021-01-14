@@ -390,7 +390,9 @@ class ActiveCalculator(Calculator):
         else:
             beta = c
         beta = self.gather(beta)
-        return beta
+        vscale = torch.tensor([self.model._vscale[z]
+                               for z in self.atoms.numbers])
+        return beta*vscale
 
     def update_lce(self, loc, beta=None):
         added = 0
