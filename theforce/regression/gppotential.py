@@ -643,18 +643,23 @@ class PosteriorPotential(Module):
             else:
                 self.data.append(atoms)
             return 1, float('inf'), float('inf')
-
         #
         mu1 = self.mu
         e1 = (cov@mu1).sum()
-        f1 = -torch.autograd.grad(e1, xyz, retain_graph=True)[0]
+        if e1.grad_fn:
+            f1 = -torch.autograd.grad(e1, xyz, retain_graph=True)[0]
+        else:
+            f1 = torch.zeros_like(xyz)
         if is_distributed:
             torch.distributed.all_reduce(e1)
             torch.distributed.all_reduce(f1)
         self.add_data([atoms], **kwargs)
         mu2 = self.mu
         e2 = (cov@mu2).sum()
-        f2 = -torch.autograd.grad(e2, xyz, retain_graph=True)[0]
+        if e2.grad_fn:
+            f2 = -torch.autograd.grad(e2, xyz, retain_graph=True)[0]
+        else:
+            f2 = torch.zeros_like(xyz)
         if is_distributed:
             torch.distributed.all_reduce(e2)
             torch.distributed.all_reduce(f2)
@@ -662,7 +667,6 @@ class PosteriorPotential(Module):
         df = (f2-f1).abs().mean()
         df_max = (f2-f1).abs().max()
         #
-
         blind = torch.stack([e1, e2]).allclose(torch.zeros(1))
         # if de < ediff and df < fdiff and not blind:
         if df < fdiff and df_max < 3*fdiff and not blind:  # TODO: de?
