@@ -334,8 +334,9 @@ class ActiveCalculator(Calculator):
         # write
         self._ktest += 1
         mode = 'a' if self._ktest > 1 else 'w'
-        ase.io.Trajectory('active_pred.traj', mode).write(self.atoms)
-        ase.io.Trajectory('active_test.traj', mode).write(tmp)
+        if self.rank == 0:
+            ase.io.Trajectory('active_pred.traj', mode).write(self.atoms)
+            ase.io.Trajectory('active_test.traj', mode).write(tmp)
         # log
         self.log('testing energy: {}'.format(energy))
         dE = self.results['energy'] - energy
@@ -418,7 +419,7 @@ class ActiveCalculator(Calculator):
             beta = c
         beta = self.gather(beta)
         vscale = torch.tensor([self.model._vscale[z]
-                               for z in self.atoms.numbers])
+                               for z in self.atoms.numbers]).sqrt()
         return beta*vscale
 
     def update_lce(self, loc, beta=None):
