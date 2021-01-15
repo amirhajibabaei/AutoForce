@@ -64,7 +64,7 @@ class ActiveCalculator(Calculator):
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=kcal_mol, ediff_ub=4*kcal_mol,
                  ediff_tot=5*kcal_mol, fdiff=2*kcal_mol,
-                 noise_e=None, noise_f=2*kcal_mol):
+                 noise_e=None, noise_f=2*kcal_mol, ignore_forces=False):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -86,6 +86,7 @@ class ActiveCalculator(Calculator):
             fdiff:           forces sensitivity (eV/A) | inf is allowed
             noise_e:         bias for total energy error | 0 and None are allowed
             noise_f:         bias for forces error | 0 and None are allowed
+            ignore_forces:   ignores forces data
 
         callables:
             include_data     for modeling the existing data
@@ -202,6 +203,9 @@ class ActiveCalculator(Calculator):
         self._ktest = 0
         self.normalized = None
         self._update_args = {}
+        self.ignore_forces = ignore_forces
+        if self.size[1] > 0:
+            self.optimize()
 
     @property
     def active(self):
