@@ -633,6 +633,12 @@ class PosteriorPotential(Module):
             df_max = (f2-f1).abs().max()
         else:
             df = 0
+            df_max = 0
+        #
+        if self.ignore_forces:
+            df = 0
+            df_max = 0
+        #
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         if de < ediff and df < fdiff and df_max < 3*fdiff and not blind:
             self.pop_1data(clear_cached=True)
@@ -676,6 +682,10 @@ class PosteriorPotential(Module):
         de = abs(e2 - e1)
         df = (f2-f1).abs().mean()
         df_max = (f2-f1).abs().max()
+        #
+        if self.ignore_forces:
+            df = 0
+            df_max = 0
         #
         blind = torch.stack([e1, e2]).allclose(torch.zeros(1))
         if de < ediff and df < fdiff and df_max < 3*fdiff and not blind:
