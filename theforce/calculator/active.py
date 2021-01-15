@@ -57,16 +57,16 @@ class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
     def __init__(self, covariance=None, calculator=None, process_group=None,
-                 ediff=0.041, fdiff=0.082, coveps=1e-4, covdiff=1e-2, meta=None,
+                 ediff=0.082, fdiff=0.082, coveps=0.041, covdiff=0.164, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None):
         """
         covariance:      None | similarity kernel(s) | path to a saved model | model
         calculator:      None | any ASE calculator
         process_group:   None | group
-        ediff:           energy sensitivity
-        fdiff:           forces sensitivity
-        coveps:          covariance-loss ~ 0 if less than this value
-        covdiff:         covariance-loss sensitivity heuristic
+        ediff:           energy sensitivity (eV)
+        fdiff:           forces sensitivity (eV/A)
+        coveps:          lower-bound for predicted error of LCE-energies (eV)
+        covdiff:         upper-bound for predicted error of LCE-energies (eV)
         meta:            meta energy calculator
         logfile:         string | None
         pckl:            string | None, folder for pickling the model
@@ -117,16 +117,15 @@ class ActiveCalculator(Calculator):
             as kwarg when creating the ActiveCalculator.
 
         ediff, fdiff, coveps, covdiff:
-            ediff mainly controls LCE sampling rate.
+            ediff mainly controls the LCE sampling rate.
             fdiff is the main parameter which should correlate with the accuracy
             of the model for force predictions. ediff should be set accordingly.
-            If covariance-loss < coveps, the update trial will be skipped.
-            Depending on the problem at hand, coveps can be chosen as high as
-            1e-2 which can speed up the calculator by potentially a few orders
-            of magnitude.
-            If the model is volatile, one can set coveps=0 for robustness.
-            Setting a finite covdiff (0.01~0.1) may be necessary if the training
-            starts with an empty model and a state with zero initial forces.
+            If the predicted error for the energy of an LEC is less than coveps,
+            the update trial will be skipped. This parameter is specially important 
+            in the initial steps where the model doen't have many references. 
+            Do not make coveps too small otherwise it will over-sample.
+            covdiff is the upper-bound for error, but currently it is only 
+            influential in the initial steps.
 
         pckl:
             The model will be pickled after every update in this folder
@@ -429,6 +428,8 @@ class ActiveCalculator(Calculator):
             if beta and beta > self.covdiff and m < 2:
                 self.model.add_inducing(loc)
                 added = -1
+            elif beta and beta < self.coveps:
+                pass
             else:
                 ediff = (self.ediff if m > 1
                          else torch.finfo().eps)
@@ -449,8 +450,6 @@ class ActiveCalculator(Calculator):
                 break
             beta = self.get_covloss()
             q = torch.argsort(beta, descending=True)
-            if beta[q[0]] < self.coveps:
-                break
             for k in q.tolist():
                 if k not in added_indices:
                     break
@@ -545,9 +544,9 @@ class ActiveCalculator(Calculator):
                 obj.get_potential_energy()
                 added_lce = [0, 0]
             elif cls == 'local':
-                obj.stage(self.model.descriptors)
+                obj.stage(self.model.descriptors, True)
                 added = self.update_lce(obj)
-                added_lce[0] += added
+                added_lce[0] += abs(added)
                 added_lce[1] += 1
         self._calc = _calc
 
@@ -691,9 +690,7 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
     axes[1].set_ylabel('temperature')
     # 2
     axes[2].plot(*zip(*covloss), label='max', zorder=1)
-    axes[2].set_ylabel('cov-loss')
-    axes[2].set_ylim(1e-5, 1e-1)
-    axes[2].set_yscale('log')
+    axes[2].set_ylabel('LCE error')
     if len(indu) > 0:
         axes[2].scatter(*zip(*indu), color='lime', label='added', zorder=2)
     axes[2].legend()
