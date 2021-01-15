@@ -1,3 +1,4 @@
+# +
 import numpy as np
 import torch
 
@@ -54,6 +55,8 @@ if __name__ == '__main__':
     t_e, t_f = get_energy_and_forces(targets)
     quant = len(data)
     assert len(targets) == quant
+    print(f'predictions:       {sys.argv[1]}')
+    print(f'targets:           {sys.argv[2]}')
     print(f'number of samples: {quant}')
     for n, d, t in [('energy', d_e, t_e), ('forces', d_f, t_f)]:
         print(f'{n}:')

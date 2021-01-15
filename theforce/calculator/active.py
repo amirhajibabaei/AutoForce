@@ -334,8 +334,9 @@ class ActiveCalculator(Calculator):
         self._ktest += 1
         mode = 'a' if self._ktest > 1 else 'w'
         if self.rank == 0:
-            ase.io.Trajectory('active_pred.traj', mode).write(self.atoms)
             ase.io.Trajectory('active_test.traj', mode).write(tmp)
+            tmp.set_calculator(SinglePointCalculator(tmp, **self.results))
+            ase.io.Trajectory('active_pred.traj', mode).write(tmp)
         # log
         self.log('testing energy: {}'.format(energy))
         dE = self.results['energy'] - energy
