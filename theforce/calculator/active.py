@@ -53,25 +53,43 @@ class FilterDeltas(Filter):
         return getattr(self.atoms, attr)
 
 
+kcal_mol = 0.043
+inf = float('inf')
+
+
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
-    def __init__(self, covariance=None, calculator=None, process_group=None,
-                 ediff=0.082, fdiff=0.082, coveps=0.041, covdiff=0.164, meta=None,
-                 logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None):
+    def __init__(self, covariance=None, calculator=None, process_group=None, meta=None,
+                 logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
+                 ediff=2*kcal_mol, ediff_lb=kcal_mol, ediff_ub=4*kcal_mol,
+                 ediff_tot=5*kcal_mol, fdiff=2*kcal_mol,
+                 noise_e=None, noise_f=2*kcal_mol):
         """
-        covariance:      None | similarity kernel(s) | path to a saved model | model
-        calculator:      None | any ASE calculator
-        process_group:   None | group
-        ediff:           energy sensitivity (eV)
-        fdiff:           forces sensitivity (eV/A)
-        coveps:          lower-bound for predicted error of LCE-energies (eV)
-        covdiff:         upper-bound for predicted error of LCE-energies (eV)
-        meta:            meta energy calculator
-        logfile:         string | None
-        pckl:            string | None, folder for pickling the model
-        tape:            string (with suffix .sgpr), the file used for saving updates
-        test:            None | integer for intervals
+        inputs:
+            covariance:      None | similarity kernel(s) | path to a pickled model | model
+            calculator:      None | any ASE calculator
+            process_group:   None | group
+            meta:            meta energy calculator
+
+        outputs:
+            logfile:         string | None
+            pckl:            string | None, folder for pickling the model
+            tape:            string (with suffix .sgpr), the file used for saving updates
+            test:            None | integer for independent testing intervals
+
+        optimization and sampling:
+            ediff:           local energy sensitivity (eV)
+            ediff_lb:        lower-bound for ediff
+            ediff_ub:        upper-bound for ediff
+            ediff_tot:       total energy sensitivity (eV) | inf is allowed
+            fdiff:           forces sensitivity (eV/A) | inf is allowed
+            noise_e:         bias for total energy error | 0 and None are allowed
+            noise_f:         bias for forces error | 0 and None are allowed
+
+        callables:
+            include_data     for modeling the existing data
+            include_tape     for training from a sgpr tape
 
         *** important ***
         You may wants to wrap atoms with FilterDeltas if you intend to 
@@ -85,7 +103,7 @@ class ActiveCalculator(Calculator):
 
         *** important ***
         For training a model with an existing sgpr file use
-            calc.include_sgpr(tape)
+            calc.include_tape(tape)
 
         *** important ***
         You can use log_to_figure function in this module for visualization.
@@ -98,11 +116,11 @@ class ActiveCalculator(Calculator):
             At the beginning, covariance is often a list of similarity kernels:
                 e.g. theforce.similarity.sesoap.SeSoapKernel(...)
             If covariance is None, the default kernel will be used.
-            Later we can use an existing model. A trained model can be saved with:
+            Later we can use an existing model. A trained model can be pickled with:
                 e.g. calc.model.to_folder('model/')
-            An existing model is loaded with:
+            A pickled model is loaded with:
                 e.g. ActiveCalculator('model/', ...)
-            By default, the model will be automatically saved after every update
+            By default, the model will be automatically pickled after every update
             unless pckl=None.
 
         calculator:
@@ -115,17 +133,6 @@ class ActiveCalculator(Calculator):
             then set 
                 process_group = mpi_init()
             as kwarg when creating the ActiveCalculator.
-
-        ediff, fdiff, coveps, covdiff:
-            ediff mainly controls the LCE sampling rate.
-            fdiff is the main parameter which should correlate with the accuracy
-            of the model for force predictions. ediff should be set accordingly.
-            If the predicted error for the energy of an LEC is less than coveps,
-            the update trial will be skipped. This parameter is specially important 
-            in the initial steps where the model doen't have many references. 
-            Do not make coveps too small otherwise it will over-sample.
-            covdiff is the upper-bound for error, but currently it is only 
-            influential in the initial steps.
 
         pckl:
             The model will be pickled after every update in this folder
@@ -143,15 +150,42 @@ class ActiveCalculator(Calculator):
             A tape can be viewed as the important information along the
             trajectory. A tape can be used for training a model by
                 calc.include_tape(file)
+
+        ediff, ediff_lb, ediff_ub: -> for sampling the LCEs for sparse representation
+            ediff controls the LCE sampling rate. If the predicted error for the 
+            energy of an LEC is less than ediff_lb, the update trial will be skipped. 
+            This parameter is specially important in the initial steps where the model 
+            doen't have any references. Do not make ediff_lb too small otherwise it 
+            will over-sample.
+            ediff_ub is the upper-bound for error, but currently it is only 
+            influential in the initial steps.
+
+        ediff_tot, fdiff: -> for samplig the ab initio data
+            These are the thresholds for accepting sample for ab initio calculations.
+            If one of them is inf, it will be ignored. Thus you can set ediff_tot=inf
+            for focusing on forces or vice versa.
+
+        noise_e, noise_f:
+            Often the samplig algorithm can benefit from some synthetic noise.
+            In optimization of hyper-parameters, the errors are minimized towards
+            these values. They can be set to 0 if such behaviour is not desired.
+            If noise_e=None, the energies are eliminated from the loss function.
+            One can set noise_f=None and set a finite value for noise_e for better 
+            fitting of the energies instead of forces. Alternatively both of them
+            can have finite values.
         """
+
         Calculator.__init__(self)
         self._calc = calculator
         self.process_group = process_group
         self.get_model(covariance or default_kernel())
         self.ediff = ediff
+        self.ediff_lb = ediff_lb
+        self.ediff_ub = ediff_ub
+        self.ediff_tot = ediff_tot
         self.fdiff = fdiff
-        self.coveps = coveps
-        self.covdiff = covdiff
+        self.noise_e = noise_e
+        self.noise_f = noise_f
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
@@ -426,10 +460,10 @@ class ActiveCalculator(Calculator):
         added = 0
         m = self.model.indu_counts[loc.number]
         if loc.number in self.model.gp.species:
-            if beta and beta > self.covdiff and m < 2:
+            if beta and beta > self.ediff_ub and m < 2:
                 self.model.add_inducing(loc)
                 added = -1
-            elif beta and beta < self.coveps:
+            elif beta and beta < self.ediff_lb:
                 pass
             else:
                 ediff = (self.ediff if m > 1
@@ -486,8 +520,8 @@ class ActiveCalculator(Calculator):
     def update_data(self, try_fake=True):
         n = self.model.ndata
         new = self.snapshot(fake=try_fake)
-        #self.model.add_1atoms(new, self.ediff, self.fdiff)
-        self.model.add_1atoms_fast(new, self.ediff, self.fdiff, self.atoms.xyz,
+        #self.model.add_1atoms(new, self.ediff_tot, self.fdiff)
+        self.model.add_1atoms_fast(new, self.ediff_tot, self.fdiff, self.atoms.xyz,
                                    self.cov, self.atoms.is_distributed)
         added = self.model.ndata - n
         if added > 0:
@@ -500,7 +534,7 @@ class ActiveCalculator(Calculator):
 
     def optimize(self):
         self.model.optimize_model_parameters(
-            ediff=self.ediff, fdiff=self.fdiff)
+            noise_e=self.noise_e, noise_f=self.noise_f)
 
     def update(self, inducing=True, data=True):
         self.get_ready()
@@ -575,7 +609,7 @@ class ActiveCalculator(Calculator):
                 f.write(' '.join([str(float(arg)) for arg in args])+'\n')
 
     def log_settings(self):
-        settings = ['ediff', 'fdiff', 'coveps', 'covdiff']
+        settings = ['ediff', 'fdiff', 'ediff_lb', 'ediff_ub']
         s = ''.join([f' {s}: {getattr(self, s)} ' for s in settings])
         self.log(f'settings: {s}')
 
@@ -698,8 +732,8 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
     wall = axes[2].twinx()
     wall.plot(*zip(*elapsed), color='cyan', alpha=0.5)
     wall.set_ylabel('minutes')
-    axes[2].axhline(y=settings['coveps:'], ls='--', color='k')
-    axes[2].axhline(y=settings['covdiff:'], ls='--', color='k', alpha=0.3)
+    axes[2].axhline(y=settings['ediff_lb:'], ls='--', color='k')
+    axes[2].axhline(y=settings['ediff_ub:'], ls='--', color='k', alpha=0.3)
     axes[2].grid()
     # 3
     if len(fit) > 0:

@@ -2,7 +2,7 @@
 from theforce.util.util import get_default_args
 from theforce.util.parallel import mpi_init
 from theforce.calculator.socketcalc import SocketCalculator
-from theforce.calculator.active import ActiveCalculator
+from theforce.calculator.active import ActiveCalculator, kcal_mol, inf
 import os
 
 

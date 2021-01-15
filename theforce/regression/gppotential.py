@@ -606,6 +606,7 @@ class PosteriorPotential(Module):
             self.make_munu()
 
     def add_1atoms(self, atoms, ediff, fdiff):
+        """ ediff here is ediff_tot """
         if not atoms.includes_species(self.gp.species):
             return 0, 0, 0
         kwargs = {'use_caching': True}
@@ -633,8 +634,7 @@ class PosteriorPotential(Module):
         else:
             df = 0
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
-        # if de < ediff and df < fdiff and not blind:
-        if df < fdiff and df_max < 3*fdiff and not blind:  # TODO: de?
+        if de < ediff and df < fdiff and df_max < 3*fdiff and not blind:
             self.pop_1data(clear_cached=True)
             added = 0
         else:
@@ -642,6 +642,7 @@ class PosteriorPotential(Module):
         return added, de, df
 
     def add_1atoms_fast(self, atoms, ediff, fdiff, xyz, cov, is_distributed):
+        """ ediff here is ediff_tot """
         if not atoms.includes_species(self.gp.species):
             return 0, 0, 0
         kwargs = {'use_caching': True}
@@ -677,8 +678,7 @@ class PosteriorPotential(Module):
         df_max = (f2-f1).abs().max()
         #
         blind = torch.stack([e1, e2]).allclose(torch.zeros(1))
-        # if de < ediff and df < fdiff and not blind:
-        if df < fdiff and df_max < 3*fdiff and not blind:  # TODO: de?
+        if de < ediff and df < fdiff and df_max < 3*fdiff and not blind:
             self.pop_1data(clear_cached=True)
             added = 0
         else:
@@ -713,25 +713,6 @@ class PosteriorPotential(Module):
         else:
             added = 1
         return added, de
-
-    def include(self, file, params=None, group=None):
-        call = Counter()
-        cadd = Counter()
-        for a, b in file.read():
-            if a == 'params':
-                par = params or b
-            elif a == 'atoms':
-                r = self.add_1atoms(self.as_(b, group=group),
-                                    ediff=par['ediff'], fdiff=par['fdiff'])
-            elif a == 'local':
-                r = self.add_1inducing(self.as_(b, group=group),
-                                       ediff=par['ediff'])
-            if a != 'params':
-                call[a] += 1
-                cadd[a] += r[0]
-                if r[0]:
-                    self.optimize_model_parameters(**par)
-        return call, cadd
 
     def add_ninducing(self, _locs, ediff, detach=True, descending=True, leaks=None):
         selected = torch.as_tensor([i for i, loc in enumerate(_locs)
@@ -929,7 +910,7 @@ def to_inf_inf(y):
     return (y/y.neg().add(1.)).log()
 
 
-def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
+def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
 
     if not hasattr(self, '_noise'):
         self._noise = {}
@@ -976,33 +957,33 @@ def _regression(self, optimize=False, ediff=0.05, fdiff=0.05, lr=0.1):
     for par in params:
         par.requires_grad = True
     opt = torch.optim.Adam(params, lr=lr)
-
-    def _loss_fn():
-        delta = self._fdiff.pow(2).mean().sqrt()
-        loss = (delta - fdiff).pow(2)
-        return loss
-
     dat_num = torch.cat([atoms.tnumbers for atoms in self.data])
     dat_num = dat_num.view(-1, 1).repeat(1, 3).view(-1)
 
-    def loss_fn():
+    def loss_fn_e():
+        if noise_e is None:
+            return 0.
+        mean = self._ediff.mean()
+        std = self._ediff.pow(2).mean().sqrt()
+        loss = mean**2 + (std - noise_e)**2
+        return loss
+
+    def loss_fn_f():
+        if noise_f is None:
+            return 0.
         loss = 0.
         for z in zset:
             delta = self._fdiff[dat_num == z]
             mean = delta.mean()
             std = delta.pow(2).mean().sqrt()
-            loss = loss + mean**2 + (std - fdiff)**2
+            loss = loss + mean**2 + (std - noise_f)**2
         return loss
-
-    if self.ignore_forces:
-        def loss_fn():
-            return self._ediff.pow(2).sum()
 
     #
     def step():
         opt.zero_grad()
         make()
-        loss = loss_fn()
+        loss = loss_fn_e() + loss_fn_f()
         if loss.grad_fn:
             loss.backward()
         opt.step()
