@@ -158,8 +158,8 @@ class ActiveCalculator(Calculator):
             This parameter is specially important in the initial steps where the model 
             doen't have any references. Do not make ediff_lb too small otherwise it 
             will over-sample.
-            ediff_ub is the upper-bound for error, but currently it is only 
-            influential in the initial steps.
+            ediff_ub is the upper-bound for error. In the error fon an LCE exceeds
+            this value, ab initio calculation is triggered.
 
         ediff_tot, fdiff: -> for samplig the ab initio data
             These are the thresholds for accepting sample for ab initio calculations.
@@ -197,15 +197,15 @@ class ActiveCalculator(Calculator):
         self.pckl = pckl
         self.tape = SgprIO(tape)
         if self.active:
-            self.tape.write_params(ediff=self.ediff, fdiff=self.fdiff)
+            self.tape.write_params(ediff=self.ediff, ediff_lb=self.ediff_lb,
+                    ediff_ub=self.ediff_ub, ediff_tot=self.ediff_tot,
+                    fdiff=self.fdiff, noise_e=self.noise_e, noise_f=self.noise_f)
         self.test = test
         self._last_test = 0
         self._ktest = 0
         self.normalized = None
         self._update_args = {}
         self.ignore_forces = ignore_forces
-        if self.size[1] > 0:
-            self.optimize()
 
     @property
     def active(self):
@@ -464,7 +464,7 @@ class ActiveCalculator(Calculator):
         added = 0
         m = self.model.indu_counts[loc.number]
         if loc.number in self.model.gp.species:
-            if beta and beta > self.ediff_ub and m < 2:
+            if beta and beta > self.ediff_ub: #  and m < 2:
                 self.model.add_inducing(loc)
                 added = -1
             elif beta and beta < self.ediff_lb:
@@ -613,7 +613,7 @@ class ActiveCalculator(Calculator):
                 f.write(' '.join([str(float(arg)) for arg in args])+'\n')
 
     def log_settings(self):
-        settings = ['ediff', 'fdiff', 'ediff_lb', 'ediff_ub']
+        settings = ['ediff', 'ediff_lb', 'ediff_ub', 'ediff_tot', 'fdiff', 'noise_e', 'noise_f']
         s = ''.join([f' {s}: {getattr(self, s)} ' for s in settings])
         self.log(f'settings: {s}')
 
@@ -660,7 +660,7 @@ def parse_logfile(file='active.log', window=(None, None)):
         split = s[2:]
 
         if split[1] == 'settings:':
-            settings = {a: float(b) for a, b in zip(split[2::2], split[3::2])}
+            settings = {a: eval(b) for a, b in zip(split[2::2], split[3::2])}
 
         try:
             step = int(split[0])
