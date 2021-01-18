@@ -554,6 +554,8 @@ class ActiveCalculator(Calculator):
                 self.log(f'noise: {self.model.scaled_noise}')
             if self.pckl:
                 self.model.to_folder(self.pckl)
+        if n == 0 and type(self._calc) == SinglePointCalculator:
+            self._test()
         self._update_args = {}
         return m, n
 
