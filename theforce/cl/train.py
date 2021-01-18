@@ -23,7 +23,7 @@ if __name__ == '__main__':
         description='Train ML potential using data')
     parser.add_argument('-i', '--input', nargs='*', type=str,
                         help='.traj or .sgpr')
-    parser.add_argument('-r', '--read', type=str, default=None,
+    parser.add_argument('-r', '--read', type=str, default='::',
                         help='index or [start]:[stop]:[step] e.g. 0 or -1 or ::10')
     args = parser.parse_args()
     train(*args.input, r=args.read)
