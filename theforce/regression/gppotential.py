@@ -928,6 +928,17 @@ def to_inf_inf(y):
     return (y/y.neg().add(1.)).log()
 
 
+def kldiv_normal(y, sigma, nbins=101):
+    width = float(max(y.abs().max(), 3*sigma))
+    x = torch.linspace(-width, width, nbins)
+    delta = x[1]-x[0]
+    p = (y.view(-1)-x.view(-1, 1)).div(delta).pow(2).mul(-0.5).exp().sum(dim=1)
+    p = p/y.numel()
+    q = torch.distributions.Normal(0., sigma)
+    loss = -(p*q.log_prob(x)).sum()
+    return loss
+
+
 def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
 
     if not hasattr(self, '_noise'):
@@ -989,12 +1000,13 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
     def loss_fn_f():
         if noise_f is None:
             return 0.
-        loss = 0.
-        for z in zset:
-            delta = self._fdiff[dat_num == z]
-            mean = delta.mean()
-            std = delta.pow(2).mean().sqrt()
-            loss = loss + mean**2 + (std - noise_f)**2
+        #loss = 0.
+        # for z in zset:
+        #    delta = self._fdiff[dat_num == z]
+        #    mean = delta.mean()
+        #    std = delta.pow(2).mean().sqrt()
+        #    loss = loss + mean**2 + (std - noise_f)**2
+        loss = kldiv_normal(self._fdiff, noise_f)
         return loss
 
     #
