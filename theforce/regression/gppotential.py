@@ -1001,7 +1001,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
         if noise_f is None:
             return 0.
         loss = 0.
-         for z in zset:
+        for z in zset:
             delta = self._fdiff[dat_num == z]
             mean = delta.mean()
             std = delta.pow(2).mean().sqrt()
