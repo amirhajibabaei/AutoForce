@@ -665,7 +665,8 @@ class PosteriorPotential(Module):
             return 1, float('inf'), float('inf')
         #
         use_forces = fdiff < float('inf') and not self.ignore_forces
-        f1 = f2 = torch.zeros_like(xyz)
+        f1 = torch.zeros_like(xyz)
+        f2 = torch.zeros_like(xyz)
         #
         e1 = (cov@self.mu).sum().view(1)
         if e1.grad_fn and use_forces:
