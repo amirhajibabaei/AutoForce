@@ -5,9 +5,9 @@ import warnings
 
 
 def test(*args, r=None, o='test.traj'):
-    if cline.ARGS['calculator'] is not None:
+    if 'calculator' in cline.ARGS and cline.ARGS['calculator'] is not None:
         raise RuntimeError('set calculator = None in ARGS!')
-    if cline.ARGS['covariance'] is None:
+    if 'covariance' not in cline.ARGS or cline.ARGS['covariance'] is None:
         raise RuntimeError('set covariance = path to pckl in ARGS!')
     traj = Trajectory(o, 'w')
     calc = cline.gen_active_calc()
