@@ -62,9 +62,10 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance=None, calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
-                 ediff=2*kcal_mol, ediff_lb=kcal_mol, ediff_ub=4*kcal_mol,
+                 ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=5*kcal_mol, fdiff=2*kcal_mol,
-                 noise_e=None, noise_f=2*kcal_mol, ignore_forces=False):
+                 noise_e=None, noise_f=2*kcal_mol,
+                 ignore_forces=False):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -181,8 +182,8 @@ class ActiveCalculator(Calculator):
         self.process_group = process_group
         self.get_model(covariance or default_kernel())
         self.ediff = ediff
-        self.ediff_lb = ediff_lb
-        self.ediff_ub = ediff_ub
+        self.ediff_lb = ediff_lb or self.ediff
+        self.ediff_ub = ediff_ub or self.ediff
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
         self.noise_e = noise_e
@@ -197,9 +198,9 @@ class ActiveCalculator(Calculator):
         self.pckl = pckl
         self.tape = SgprIO(tape)
         if self.active:
-            self.tape.write_params(ediff=self.ediff, ediff_lb=self.ediff_lb,
-                    ediff_ub=self.ediff_ub, ediff_tot=self.ediff_tot,
-                    fdiff=self.fdiff, noise_e=self.noise_e, noise_f=self.noise_f)
+            self.tape.write_params(ediff=self.ediff, ediff_lb=self.ediff_lb, ediff_ub=self.ediff_ub,
+                                   ediff_tot=self.ediff_tot, fdiff=self.fdiff,
+                                   noise_e=self.noise_e, noise_f=self.noise_f)
         self.test = test
         self._last_test = 0
         self._ktest = 0
@@ -464,9 +465,9 @@ class ActiveCalculator(Calculator):
         added = 0
         m = self.model.indu_counts[loc.number]
         if loc.number in self.model.gp.species:
-            if beta and beta > self.ediff_ub: #  and m < 2:
+            if beta and beta >= self.ediff_ub:
                 self.model.add_inducing(loc)
-                added = -1
+                added = -1 if m < 2 else 1
             elif beta and beta < self.ediff_lb:
                 pass
             else:
@@ -615,7 +616,9 @@ class ActiveCalculator(Calculator):
                 f.write(' '.join([str(float(arg)) for arg in args])+'\n')
 
     def log_settings(self):
-        settings = ['ediff', 'ediff_lb', 'ediff_ub', 'ediff_tot', 'fdiff', 'noise_e', 'noise_f']
+        settings = ['ediff', 'ediff_lb', 'ediff_ub',
+                    'ediff_tot', 'fdiff',
+                    'noise_e', 'noise_f']
         s = ''.join([f' {s}: {getattr(self, s)} ' for s in settings])
         self.log(f'settings: {s}')
 
