@@ -618,29 +618,31 @@ class PosteriorPotential(Module):
                 self.data.append(atoms)
             return 1, float('inf'), float('inf')
         #
+        use_forces = fdiff < float('inf') and not self.ignore_forces
+        #
         e1 = self([atoms], all_reduce=atoms.is_distributed, **kwargs)
-        if fdiff < float('inf'):
+        if use_forces:
             f1 = self([atoms], 'forces',
                       all_reduce=atoms.is_distributed, **kwargs)
         self.add_data([atoms], **kwargs)
         e2 = self([atoms], all_reduce=atoms.is_distributed, **kwargs)
-        de = abs(e1-e2)
-        if fdiff < float('inf'):
+        if use_forces:
             f2 = self([atoms], 'forces',
                       all_reduce=atoms.is_distributed, **kwargs)
-            # TODO: better algorithm!
-            df = (f2-f1).abs().mean()
-            df_max = (f2-f1).abs().max()
-        else:
-            df = 0
-            df_max = 0
         #
-        if self.ignore_forces:
-            df = 0
-            df_max = 0
+        de = abs(e1-e2)
+        df = 0.
+        if not use_forces:
+            reject = de < ediff
+        else:
+            # TODO: better algorithm!
+            d = (f2-f1).view(-1)
+            df = d.abs().mean()
+            df_max = d.abs().max()
+            reject = de < ediff and df < fdiff and df_max < 3*fdiff
         #
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
-        if de < ediff and df < fdiff and df_max < 3*fdiff and not blind:
+        if reject and not blind:
             self.pop_1data(clear_cached=True)
             added = 0
         else:
@@ -660,35 +662,36 @@ class PosteriorPotential(Module):
                 self.data.append(atoms)
             return 1, float('inf'), float('inf')
         #
-        mu1 = self.mu
-        e1 = (cov@mu1).sum()
-        if e1.grad_fn:
+        use_forces = fdiff < float('inf') and not self.ignore_forces
+        f1 = f2 = torch.zeros_like(xyz)
+        #
+        e1 = (cov@self.mu).sum().view(1)
+        if e1.grad_fn and use_forces:
             f1 = -torch.autograd.grad(e1, xyz, retain_graph=True)[0]
-        else:
-            f1 = torch.zeros_like(xyz)
+        self.add_data([atoms], **kwargs)
+        e2 = (cov@self.mu).sum().view(1)
+        if e2.grad_fn and use_forces:
+            f2 = -torch.autograd.grad(e2, xyz, retain_graph=True)[0]
         if is_distributed:
             torch.distributed.all_reduce(e1)
-            torch.distributed.all_reduce(f1)
-        self.add_data([atoms], **kwargs)
-        mu2 = self.mu
-        e2 = (cov@mu2).sum()
-        if e2.grad_fn:
-            f2 = -torch.autograd.grad(e2, xyz, retain_graph=True)[0]
-        else:
-            f2 = torch.zeros_like(xyz)
-        if is_distributed:
             torch.distributed.all_reduce(e2)
-            torch.distributed.all_reduce(f2)
-        de = abs(e2 - e1)
-        df = (f2-f1).abs().mean()
-        df_max = (f2-f1).abs().max()
+            if use_forces:
+                torch.distributed.all_reduce(f1)
+                torch.distributed.all_reduce(f2)
         #
-        if self.ignore_forces:
-            df = 0
-            df_max = 0
+        de = abs(e1-e2)
+        df = 0.
+        if not use_forces:
+            reject = de < ediff
+        else:
+            # TODO: better algorithm!
+            d = (f2-f1).view(-1)
+            df = d.abs().mean()
+            df_max = d.abs().max()
+            reject = de < ediff and df < fdiff and df_max < 3*fdiff
         #
-        blind = torch.stack([e1, e2]).allclose(torch.zeros(1))
-        if de < ediff and df < fdiff and df_max < 3*fdiff and not blind:
+        blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
+        if reject and not blind:
             self.pop_1data(clear_cached=True)
             added = 0
         else:
