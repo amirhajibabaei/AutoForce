@@ -639,7 +639,9 @@ class PosteriorPotential(Module):
             d = (f2-f1).view(-1)
             df = d.abs().mean()
             df_max = d.abs().max()
-            reject = de < ediff and df < fdiff and df_max < 3*fdiff
+            #reject = de < ediff and df < fdiff and df_max < 3*fdiff
+            N = torch.distributions.Normal(0., fdiff)
+            reject = de < ediff and N.log_prob(d).mean() > N.log_prob(fdiff)
         #
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         if reject and not blind:
@@ -688,7 +690,9 @@ class PosteriorPotential(Module):
             d = (f2-f1).view(-1)
             df = d.abs().mean()
             df_max = d.abs().max()
-            reject = de < ediff and df < fdiff and df_max < 3*fdiff
+            #reject = de < ediff and df < fdiff and df_max < 3*fdiff
+            N = torch.distributions.Normal(0., fdiff)
+            reject = de < ediff and N.log_prob(d).mean() > N.log_prob(fdiff)
         #
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         if reject and not blind:
