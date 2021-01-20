@@ -66,10 +66,13 @@ if __name__ == '__main__':
     assert len(targets) == quant
 
     def _print(d, t):
-        print(f'\tmaxe: {maxe(d, t)}')
-        print(f'\tmae:  {mae(d, t)}')
-        print(f'\trmse: {rmse(d, t)}')
-        print(f'\tcd:   {cd(d, t)}')
+        s_d = float(np.sqrt(d.var()))
+        s_t = float(np.sqrt(t.var()))
+        print(f'\tstdev:  {s_d} (p), {s_t} (t)')
+        print(f'\tmaxe:   {maxe(d, t)}')
+        print(f'\tmae:    {mae(d, t)}')
+        print(f'\trmse:   {rmse(d, t)}')
+        print(f'\tcd:     {cd(d, t)}')
 
     print(f'predictions:       {sys.argv[1]}')
     print(f'targets:           {sys.argv[2]}')
