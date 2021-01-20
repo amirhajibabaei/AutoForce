@@ -64,7 +64,7 @@ class ActiveCalculator(Calculator):
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=5*kcal_mol, fdiff=2*kcal_mol,
-                 noise_e=None, noise_f=2*kcal_mol,
+                 noise_e=-1, noise_f=None,
                  ignore_forces=False):
         """
         inputs:
@@ -81,17 +81,21 @@ class ActiveCalculator(Calculator):
 
         optimization and sampling:
             ediff:           local energy sensitivity (eV)
-            ediff_lb:        lower-bound for ediff
-            ediff_ub:        upper-bound for ediff
+            ediff_lb:        lower-bound for ediff | None -> ediff
+            ediff_ub:        upper-bound for ediff | None -> ediff
             ediff_tot:       total energy sensitivity (eV) | inf is allowed
             fdiff:           forces sensitivity (eV/A) | inf is allowed
-            noise_e:         bias for total energy error | 0 and None are allowed
-            noise_f:         bias for forces error | 0 and None are allowed
+            noise_e:         bias for total energy error | -1, 0, and None are allowed | None -> ediff_tot
+            noise_f:         bias for forces error | -1, 0, and None are allowed | None -> fdiff
             ignore_forces:   ignores forces data
 
         callables:
             include_data     for modeling the existing data
             include_tape     for training from a sgpr tape
+
+        *** important ***
+        The default parameters are chosen for the most common uses such as 
+        MD where the accuracy of forces is important rather than energy.
 
         *** important ***
         You may wants to wrap atoms with FilterDeltas if you intend to 
@@ -154,27 +158,33 @@ class ActiveCalculator(Calculator):
                 calc.include_tape(file)
 
         ediff, ediff_lb, ediff_ub: -> for sampling the LCEs for sparse representation
-            ediff controls the LCE sampling rate. If the predicted error for the 
-            energy of an LEC is less than ediff_lb, the update trial will be skipped. 
-            This parameter is specially important in the initial steps where the model 
-            doen't have any references. Do not make ediff_lb too small otherwise it 
-            will over-sample.
-            ediff_ub is the upper-bound for error. In the error fon an LCE exceeds
-            this value, ab initio calculation is triggered.
+            ediff controls the LCE sampling rate. You decrease ediff for higher accuracy
+            or increase ediff for higher speed.
+            The other two parameters are only experimental and have no effect if they
+            are equal to ediff; which is currently the default.
 
         ediff_tot, fdiff: -> for samplig the ab initio data
-            These are the thresholds for accepting sample for ab initio calculations.
+            These are the thresholds for accepting a sample for ab initio calculations.
             If one of them is inf, it will be ignored. Thus you can set ediff_tot=inf
             for focusing on forces or vice versa.
 
-        noise_e, noise_f:
+        noise_e, noise_f: -> used for optimizing the hyper-parameters
             Often the samplig algorithm can benefit from some synthetic noise.
             In optimization of hyper-parameters, the errors are minimized towards
-            these values. They can be set to 0 if such behaviour is not desired.
-            If noise_e=None, the energies are eliminated from the loss function.
-            One can set noise_f=None and set a finite value for noise_e for better 
-            fitting of the energies instead of forces. Alternatively both of them
-            can have finite values.
+            these values. They can be set to 0 for simple minimization of RMSE;
+            but there is a chance for overfittiong. The value of 0 maybe used
+            for fitting a limitted data with a high accuracy, but in MD simulation 
+            of sensitive systems it is recommended to set noise_f to a finite number 
+            (~kcal/mol) and ignore energies by noise_e = -1; which is the default setting.
+
+            If noise_e = None -> noise_e = ediff_tot
+            If noise_e < 0 -> RMSE of energies is omitted from the loss function.
+
+            If noise_f = None -> noise_f = fdiff
+            If noise_f < 0 -> RMSE of forces is omitted from the loss function.
+
+        ignore_forces:
+            This eliminates the forces from regression.
         """
 
         Calculator.__init__(self)
@@ -186,8 +196,8 @@ class ActiveCalculator(Calculator):
         self.ediff_ub = ediff_ub or self.ediff
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
-        self.noise_e = noise_e
-        self.noise_f = noise_f
+        self.noise_e = noise_e or ediff_tot
+        self.noise_f = noise_f or fdiff
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
@@ -764,6 +774,8 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
             R2 = axes[3].twinx()
             R2.plot(p, 1-q[:, 4], ':', color='grey')
             R2.set_ylabel(r'$1-R^2$')
+        axes[3].axhline(y=settings['noise_f:'], ls='--', color='k', alpha=0.5)
+        axes[3].axhline(y=-settings['noise_f:'], ls='--', color='k', alpha=0.5)
     fig.tight_layout()
     return fig
 

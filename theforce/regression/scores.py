@@ -53,9 +53,12 @@ def get_energy_and_forces(data):
 if __name__ == '__main__':
     import sys
     from ase.io import read
-
-    data = read(sys.argv[1], '::')
-    targets = read(sys.argv[2], '::')
+    try:
+        r = sys.argv[3]
+    except IndexError:
+        r = '::'
+    data = read(sys.argv[1], r)
+    targets = read(sys.argv[2], r)
     d_e, d_f, d_n = get_energy_and_forces(data)
     t_e, t_f, t_n = get_energy_and_forces(targets)
     assert (d_n == t_n).all()

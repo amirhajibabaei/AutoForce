@@ -10,6 +10,7 @@ from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
 from theforce.optimize.optimizers import ClampedSGD
 from collections import Counter
+from math import pi
 import copy
 import os
 import functools
@@ -928,14 +929,21 @@ def to_inf_inf(y):
     return (y/y.neg().add(1.)).log()
 
 
-def kldiv_normal(y, sigma, nbins=101):
-    width = float(max(y.abs().max(), 3*sigma))
-    x = torch.linspace(-width, width, nbins)
-    delta = x[1]-x[0]
+def kldiv_normal(y, sigma):
+    """
+    may be unstable because of often small length of y
+    compared to the number of bins.
+    """
+    delta = sigma/10
+    width = 10*sigma 
+    x = torch.arange(0, width, delta)
+    x = torch.cat([-x.flip(0)[:-1], x])
     p = (y.view(-1)-x.view(-1, 1)).div(delta).pow(2).mul(-0.5).exp().sum(dim=1)
-    p = p/y.numel()
+    nrm = torch.tensor(2*pi).sqrt()*delta
+    p = (p/(y.numel()*nrm)).clamp(min=1e-8)
     q = torch.distributions.Normal(0., sigma)
-    loss = -(p*q.log_prob(x)).sum()
+    #loss = -(p*q.log_prob(x)).sum()
+    loss = (p.log()-q.log_prob(x)).mul(p).sum()*delta
     return loss
 
 
@@ -977,7 +985,9 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
         self._ediff = diff[:ndat]
         self._fdiff = diff[ndat:]
 
-    if not optimize:
+    opt_e = noise_e is not None and noise_e >= 0.
+    opt_f = noise_f is not None and noise_f >= 0.
+    if not optimize or (not opt_e and not opt_f):
         make()
         return
 
@@ -990,7 +1000,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
     dat_num = dat_num.view(-1, 1).repeat(1, 3).view(-1)
 
     def loss_fn_e():
-        if noise_e is None:
+        if not opt_e:
             return 0.
         mean = self._ediff.mean()
         std = self._ediff.pow(2).mean().sqrt()
@@ -998,7 +1008,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
         return loss
 
     def loss_fn_f():
-        if noise_f is None:
+        if not opt_f:
             return 0.
         loss = 0.
         for z in zset:
