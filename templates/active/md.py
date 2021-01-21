@@ -16,17 +16,23 @@ lmax, nmax, exponent, cutoff = 3, 3, 4, 6.
 kern = SeSoapKernel(lmax, nmax, exponent, cutoff)
 calc = ActiveCalculator(covariance=kern,          # kern, if None the default is used
                         calculator=main_calc,     # main (DFT) calc
-                        ediff=0.01,  fdiff=0.05, coveps=1e-4,   # control params
+                        ediff=0.01, fdiff=0.05,   # control params for accuracy/speed tradeoff
                         process_group=mpi_init(), # for mpi parallelism
-                        tape='Au.sgpr',           # for saving the training path
+                        pckl='model.pckl/',       # for continuous pickling (saving) the model
+                        tape='Au.sgpr',           # for saving the training data step by step
                         test = 100,               # test 100 steps after last dft (None for no test)
                         )
 # note that, all of the above have default values.
 # for a minimal  example, you only need to set
 # main_calc and process_group.
+# the model will be saved on-the-fly in a folder
+# given by the pckl argument which can be used for
+# resuming the training by covariance='model.pckl/'.
+# if pckl=None, the model is not saved on the fly.
+# one can manually save the model after training by
+#    calc.model.to_folder('model.pckl/')
 # in restarting, if main_calc=None, the model
-# will be loaded from the saved tape (or a pickled model
-# which is described below) but it will not be updated.
+# will be loaded but it will not be updated.
 
 # C. define the system and set its calculator
 atoms = bulk('Au', cubic=True).repeat(3*[3])
@@ -70,18 +76,22 @@ dyn = NPT(filtered, dt*units.fs, tem*units.kB, stress*units.GPa,
 # F. run md
 dyn.run(1000)
 
-# G. save model
-calc.model.to_folder('model')
+# G. save model manually (necessary only if pckl=None above)
+# calc.model.to_folder('model.pckl')
 
 # H. restart
-# the training/md can be resumed only using the recorded tape,
-# but restarting from the tape requires recalculating all of
-# the descriptors and the covariance matrices.
-# calc.model.to_folder, saves the pickled model ready-to-use
-# along with some info in a folder.
-# if you want to use the model without further training,
-# just use the pickled model: 
-#    calc = ActiveCalculator('model').
-# otherwise, if you want to resume training, it is recommended
-# to restart from the tape: i
-#    calc = ActiveCalculator(tape='Au.pes.sgpr', ...)
+#    calc = ActiveCalculator(covariance='model.pckl/', ...)
+
+# I. using thr saved tapes (.sgpr files)
+# these files can be used for faster retraining the model e. g.
+# with different parameters, etc.
+#    calc.include_tape('model.sgpr')
+# this mechanism can also be used for high level parallelism.
+# one can train independent models at different domains and
+# combine them by including their respective tapes.
+
+# J. training with existing data:
+#    calc.include_data(data)
+# where data is either a list of atoms objects or 
+# path to a traj file e. g. 'data.traj'.
+

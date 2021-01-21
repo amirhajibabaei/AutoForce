@@ -37,18 +37,29 @@ For training with existing data see the section
 ### Parameters
 The following parameters can be passed to `ActiveCalculator`
 ```
+# inputs
 covariance:      either a kernel or path to a saved/pickled model
 calculator:      any ASE calculator or SocketCalculator
 process_group:   None or the value of mpi_init()
-ediff:           energy sensitivity for sampling LCEs
-fdiff:           forces sensitivity for sampling DFT data
-coveps:          for skipping ML update
-covdiff:         usefull only in special cases
 meta:            meta energy calculator for metadynamics
+
+# outputs
 logfile:         file name for logging
 pckl:            folder-name for pickling the ML model
 tape:            for saving all of the model updates
+test:            intervals for single point tests during MD
+
+# sampling and optimization
+ediff:           energy sensitivity for sampling LCEs
+ediff_tot:       total energy sensitivity for sampling DFT data
+fdiff:           forces sensitivity for sampling DFT data
+noise_e:         bias noise for total energies
+noise_f:         bias noise for forces
+
+#
+ignore_forces:   dumps forces data from the regression
 ```
+
 #### covariance
 This parameter can be used for passing a kernel
 or a saved/pickled model to the calculator
@@ -59,60 +70,34 @@ lmax, nmax, exponent, cutoff = 3, 3, 4, 6.
 kernel = SeSoapKernel(lmax, nmax, exponent, cutoff)
 ML_calc = ActiveCalculator(covariance=kernel, ...)
 ```
-If not given, the default kernel will be used.
+If not given, the default kernel will be used (see *Kernels*).
 
-After the training is finished, one can save a pickled
-model by
+The model will be pickled (saved) after every update
+in the folder given by `tape` (default=`'model.pckl/'`).
+Alternatively one can pass `tape=None` and manually
+save the model model by
 ```python
-ML_calc.model.to_folder('model/')
+ML_calc.model.to_folder('model.pckl/')
 ```
 which can be directly passed as `covariance`
 in the next run
 ```python
-ML_calc = ActiveCalculator(covariance='model/', ...)
+ML_calc = ActiveCalculator(covariance='model.pckl/', ...)
 ```
-As of version `v2021.01`, the model is automatically
-saved after every update step in a folder given by 
-`pckl` which defaults to `'model.pckl'`.
-For disabling this feature pass `pckl=None`.
 
 #### calculator
 The main DFT calculator can which be any ASE 
-calculator or a `SocketCalculator` (see **Parallelism**).
+calculator or a `SocketCalculator` (see *Parallelism*).
 For using an existing ML model without further 
 training pass `calculator=None`.
 
-#### ediff, fdiff, coveps, covdiff
-These parameters control the sampling.
-The most important parameter is `fdiff` which 
-ideally should determine the accuracy (stdev) of
-the resulting model for force predictions.
-`ediff` is mainly used for sampling of the LCEs
-as the inducing data for sparse representation.
-`ediff` should be set according to `fdiff`:
-first we set the desired `fdiff` and if 
-the model is unable to fit the data with 
-this accuracy we can lower `ediff` for
-denser sampling of LCEs.
-Smaller values for these parameters should
-increase the accuracy but also increases the
-computational cost.
-
-`coveps` can be used for skipping ML updates
-and speed up.
-If `covloss < coveps` the ML update is skipped.
-`covloss` is monitored in the `logfile`.
-`covdiff` is used in the initial stages of 
-training where the model has less than two
-reference LCEs.
-In this case if `covloss > covdiff`, it will
-be assumed that the model is blind and DFT 
-calculation will be triggered.
+#### process_group
+see *Parallelism*.
 
 #### meta
 This part is for metadynamics and it is still under development.
 
-#### logfile, pckl, tape
+#### logfile, pckl, tape, test
 `logfile` is used for logging.
 The default name is `'active.log'`.
 It can be visualized by
@@ -137,7 +122,7 @@ ML_calc = ActiveCalculator(covariance='model.pckl')
 `tape` is used for saving the most essential 
 information during training (i.e. the sampled data) 
 in a simple text format.
-Unlike pickled models, it occupies very little memory
+Unlike pickled models, it occupies much less memory
 and can be used for rebuilding the model from scratch.
 The default name is `tape='model.sgpr'`.
 By design these files are never overwritten. 
@@ -148,6 +133,50 @@ For instance
 ```python
 ML_calc.include_sgpr('model.sgpr')
 ```
+
+`test` can be used for exact single point
+calculations during MD for on-the-fly assessment
+of the ML accuracy.
+The exact calculation will be saved in `'active_FP.traj'`
+and the ML predictions will be saved in `'active_ML.traj'`.
+A single point calculation is triggered if `test` 
+steps have passed from the last one.
+
+#### ediff, ediff_tot, fdiff
+These parameters control the sampling.
+`ediff` is mainly used for sampling of the LCEs
+as the inducing data for the sparse representation.
+`ediff_tot` and `fdiff` control the sampling
+of DFT data.
+The default parameters should be appropriate for 
+starting the simulation.
+One can set `fdiff` equal to the desired accuracy
+for force predictions and if the model was unable 
+to reach this accuracy, `ediff` can be gradually 
+decreased.
+For global exploration, we recommend increasing the
+accuracy gradually/iteratively rather than choosing 
+small values for these parameters from the beginning.
+
+If `ediff_tot=float('inf')`, this parameter becomes 
+irrelevent, which might be the desired behaviour in 
+certain applications (similar for `fdiff`).
+
+#### noise_e, noise_f
+In optimization of hyper-parameters, the errors 
+(e.g. RMSE) are minimized towards these values. 
+They can be set to 0 for simple minimization of 
+RMSE but there is a chance for overfitting. 
+For instance choosing smaller `noise_f` may
+cause more sampling of DFT data without a
+meaningful increase of the models accuracy.
+The value of 0 maybe used for fitting a static 
+data set with a high accuracy.
+For more control see the following options
+* If noise_e = None -> noise_e = ediff_tot (<- default)
+* If noise_e < 0 -> RMSE of energies is omitted from the loss function.
+* If noise_f = None -> noise_f = fdiff (<- default)
+* If noise_f < 0 -> RMSE of forces is omitted from the loss function.
 
 ### Training with existing data
 If some DFT data already exists, one can train a 

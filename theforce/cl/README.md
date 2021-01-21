@@ -40,36 +40,49 @@ This group of parameters are used for setting up the machine
 learning calculator and are the same for most ML tasks.
 The following tags are available
 ```
+# inputs
 covariance:      None, a kernal, folder-name for loading a pickled model (default=None)
 calculator:      None or 'VASP' (default=None)
-ediff:           energy sensitivity for sampling LCEs (default=0.041)
-fdiff:           forces sensitivity for sampling DFT data (default=0.082)
-coveps:          for skipping ML update (default=1e-4)
-covdiff:         usefull only in special cases (default=0.01)
+
+# outputs
 logfile:         file name for logging (default='active.log')
 pckl:            folder-name for pickling the ML model (default='model.pckl')
 tape:            for saving all of the model updates (default='model.sgpr')
+test:            single-point testing intervals (default=None)
+
+# sampling and optimization
+ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
+ediff_tot: (eV)  total energy sensitivity for sampling DFT data (default ~ 5 kcal/mol)
+fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 2 kcal/mol)
+noise_e:   (ev)  bias noise for total energies (default=ediff_tot)
+noise_f:  (ev/A) bias noise for forces (default=fdiff)
 ```
 These parameters are explained in detail in
 [theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/calculator).
-The only difference is that here we specify the calculator
-by its name (e.g. `calculator='VASP'`).
+The only difference is that here we specify the 
+calculator by its name (e.g. `calculator='VASP'`).
+For a brief recap read the following.
+
 By default the ML model will be saved in a folder
 specified by `pckl` after every update.
 For loading the saved model in next simulations
-put the following line in `ARGS` after the first simulation
-has ended
+put the following line in `ARGS` after the first 
+simulation has ended
 ```
-covariance = 'folder-name'
+covariance = 'model.pckl'
 ```
+Thus `covariance` is the input model and `pckl`
+is the output model.
+
 After sufficient training, one might want to use
 the result ML potential for fast simulations 
 without further training.
-For this, all you need is to not specify any `calculator`
-in `ARGS` or set `calculator=None`.
+For this, all you need to do is to not specify any 
+`calculator` in `ARGS` or set `calculator=None`.
 
-The main parameter is `fdiff` (eV/A) which controls
-the accuracy of the model for force predictions.
+The other paramteres which control the sampling
+and accuracy should be gradually tuned to get the
+desired accuracy.
 
 #### Parameters for MD (file=`ARGS`)
 The parameters for MD are also set in the `ARGS` file.
@@ -107,7 +120,7 @@ If the ML model is mature, larger `dt` can be used
 If `bulk_modulus` is given, NPT simulation
 will be performed (with cell fluctuations).
 It is recommended to first perform a NVT
-simulation and then use the result `tape`
+simulation and then use the result `pckl`
 as the starting potential for the NPT simulation.
 NPT simulations are more vulnerable to sudden ML updates.
 If the model is mature, this is not an issue.
@@ -132,8 +145,14 @@ the following script
 ```sh
 python -m theforce.calculator.calc_server &
 sleep 1 # waits 1 sec for the server to be set
-mpirun -n 8 theforce.cl.md
+mpirun -n 8 python -m theforce.cl.md
 ```
+This will try to read the initial coordinates
+from `POSCAR` and will write the final coordinates
+in `CONTCAR` for convenience.
+Optionally other file names can be passed as input
+and ouput using `-i input-name` and `-o output-name`
+command line arguments.
 
 #### Outputs
 The trajectory is saved in `trajectory='md.traj'` by default.
@@ -156,7 +175,7 @@ parameters, etc.
 After the training is finished, we can perform MD
 using only the ML potential (without further updates) simply by
 ```sh
-mpirun -n 20 theforce.cl.md
+mpirun -n 20 python -m theforce.cl.md
 ```
 provided that `ARGS` has the following entries
 ```
@@ -165,4 +184,25 @@ calculator = None         # not necessary because this is the default
 ```
 This time all 20 cores are used for ML and we can simulate
 much bigger systems.
+
+### Training with existing data
+A utility command is provided for training with existing DFT data.
+For this, set the appropriate parameters for ML in `ARGS`.
+Then refer to the following patterns.
+```sh
+mpirun -n 20 python -m theforce.cl.train -i data.traj           # read all data
+mpirun -n 20 python -m theforce.cl.train -i data.traj -r 0:10:2 # read only 0, 2, ..., 10
+mpirun -n 20 python -m theforce.cl.train -i OUTCAR              # read all data
+mpirun -n 20 python -m theforce.cl.train -i OUTCAR -r :-1:      # read only the last one
+mpirun -n 20 python -m theforce.cl.train -i OUTCAR-1 OUTCAR-2   # read two OUTCAR files
+mpirun -n 20 python -m theforce.cl.train -i */OUTCAR            # all OUTCAR files in subfolders
+mpirun -n 20 python -m theforce.cl.train -i model.sgpr          # use the tape from another training
+```
+Make sure to track the input and output models using the
+`covariance` and `pckl` tags in the `ARGS` file.
+Similarly, for testing
+```sh
+mpirun -n 20 python -m theforce.cl.test -i dft.traj -o ml.traj # optionally -r ::
+python -m theforce.regression.scores ml.traj dft.traj          # prints a description of errors   
+```
 <!-- #endregion -->

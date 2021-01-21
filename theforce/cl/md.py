@@ -57,8 +57,11 @@ if __name__ == '__main__':
         description='Machine Learning Molecular Dynamics (MLMD)')
     parser.add_argument('-i', '--input', default='POSCAR', type=str,
                         help='the initial coordinates of atoms, POSCAR, xyz, cif, etc.')
+    parser.add_argument('-o', '--output', default='CONTCAR', type=str,
+                        help='the final coordinates of atoms')
     args = parser.parse_args()
     atoms = read(args.input)
     kwargs = cline.get_default_args(md)
     cline.update_args(kwargs)
     md(atoms, **kwargs)
+    atoms.write(args.ouput)

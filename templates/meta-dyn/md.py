@@ -25,7 +25,7 @@ main_calc = SocketCalculator(script='calc_emt.py')
 calc = ActiveCalculator(calculator=main_calc,
                         meta=meta,  # <------------- notice here
                         process_group=mpi_init(),
-                        tape='Au.pes.sgpr')
+                        tape='Au.sgpr')
 atoms = bulk('Au', cubic=True).repeat(3*[3])
 atoms.set_calculator(calc)
 atoms.rattle(0.1)
