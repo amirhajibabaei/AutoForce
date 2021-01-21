@@ -83,6 +83,25 @@ class SpecialRadii(Radii):
         return f'{dct}, {self.others}'
 
 
+class DefaultRadii(Radii):
+
+    def __init__(self, default=1., special={1: 0.5}):
+        self.default = default
+        self.special = special
+
+    def get(self, number):
+        try:
+            return self.special[number]
+        except KeyError:
+            return self.default
+
+    @property
+    def state_args(self):
+        default = float(self.default)
+        special = {z: float(r) for z, r in self.special.items()}
+        return f'{default}, {special}'
+
+
 class SeSoap(Module):
 
     def __init__(self, lmax, nmax, radial, radii=1., flatten=True, normalize=True):

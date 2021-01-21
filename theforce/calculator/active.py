@@ -2,7 +2,7 @@
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
 from theforce.similarity.sesoap import SeSoapKernel
-from theforce.math.sesoap import SpecialRadii
+from theforce.math.sesoap import DefaultRadii
 from theforce.util.tensors import padded
 from theforce.util.util import date, timestamp
 from theforce.io.sgprio import SgprIO
@@ -18,7 +18,7 @@ import os
 
 
 def default_kernel(cutoff=6.):
-    return SeSoapKernel(3, 3, 4, cutoff, radii=SpecialRadii({1: 0.5}))
+    return SeSoapKernel(3, 3, 4, cutoff, radii=DefaultRadii())
 
 
 class FilterDeltas(Filter):
@@ -215,6 +215,7 @@ class ActiveCalculator(Calculator):
         self.stdout = True
         self.step = 0
         self.log('active calculator says Hello!', mode='w')
+        self.log(f'kernel: {self.model.descriptors}')
         self.log_settings()
         self.log('model size: {} {}'.format(*self.size))
         self.pckl = pckl
