@@ -8,7 +8,7 @@ def train(*args, r=None):
     calc = cline.gen_active_calc()
     for arg in args:
         if arg.endswith('.sgpr'):
-            if r is not None:
+            if r is not None and r != '::':
                 w = f'-r {r} option is ignored for {arg}'
                 warnings.warn(w)
             calc.include_tape(arg)

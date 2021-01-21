@@ -157,6 +157,18 @@ class ActiveCalculator(Calculator):
             trajectory. A tape can be used for training a model by
                 calc.include_tape(file)
 
+        test:
+            For instance, if test=100 and 100 steps have passed since the last
+            exact calculation, an exact calculation will be performed. 
+            This can be used for monitoring the on-the-fly ML accuracy and 
+            has no effect on training. The exact calculation (FP) will be saved
+            in 'active_FP.traj' while the models predictions (ML) will be saved
+            in 'active_ML.traj'. These files will be overwritten in the next 
+            simulation. The following command can be used for a quick description 
+            of ML errors
+
+                python -m theforce.regression.scores active_ML.traj active_FP.traj
+
         ediff, ediff_lb, ediff_ub: -> for sampling the LCEs for sparse representation
             ediff controls the LCE sampling rate. You decrease ediff for higher accuracy
             or increase ediff for higher speed.
@@ -383,9 +395,9 @@ class ActiveCalculator(Calculator):
         self._ktest += 1
         mode = 'a' if self._ktest > 1 else 'w'
         if self.rank == 0:
-            ase.io.Trajectory('active_test.traj', mode).write(tmp)
+            ase.io.Trajectory('active_FP.traj', mode).write(tmp)
             tmp.set_calculator(SinglePointCalculator(tmp, **self.results))
-            ase.io.Trajectory('active_pred.traj', mode).write(tmp)
+            ase.io.Trajectory('active_ML.traj', mode).write(tmp)
         # log
         self.log('testing energy: {}'.format(energy))
         dE = self.results['energy'] - energy
@@ -472,13 +484,18 @@ class ActiveCalculator(Calculator):
         return beta*vscale
 
     def update_lce(self, loc, beta=None):
+        if beta is None:
+            k = self.model.gp.kern(loc, self.model.X)
+            b = self.model.choli@k.detach().t()
+            c = (b*b).sum()  # /self.model.gp.kern(loc, loc)
+            beta = ((1-c)*self.model._vscale[loc.number]).clamp(min=0.).sqrt()
         added = 0
         m = self.model.indu_counts[loc.number]
         if loc.number in self.model.gp.species:
-            if beta and beta >= self.ediff_ub:
+            if beta >= self.ediff_ub:
                 self.model.add_inducing(loc)
                 added = -1 if m < 2 else 1
-            elif beta and beta < self.ediff_lb:
+            elif beta < self.ediff_lb:
                 pass
             else:
                 ediff = (self.ediff if m > 1
@@ -557,6 +574,8 @@ class ActiveCalculator(Calculator):
         m = self.update_inducing() if inducing else 0
         try_real = self.blind or type(self._calc) == SinglePointCalculator
         update_data = (m > 0 and data) or not inducing
+        if update_data and not inducing:  # for include_tape
+            update_data = self.get_covloss().max() > self.ediff
         n = self.update_data(try_fake=not try_real) if update_data else 0
         if m > 0 or n > 0:
             self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
@@ -565,8 +584,6 @@ class ActiveCalculator(Calculator):
                 self.log(f'noise: {self.model.scaled_noise}')
             if self.pckl:
                 self.model.to_folder(self.pckl)
-        if n == 0 and type(self._calc) == SinglePointCalculator:
-            self._test()
         self._update_args = {}
         return m, n
 
@@ -578,6 +595,7 @@ class ActiveCalculator(Calculator):
             self._calc = atoms.calc
             atoms.set_calculator(self)
             atoms.get_potential_energy()
+            atoms.set_calculator(self._calc)
         self._calc = _calc
 
     def include_tape(self, tape):
@@ -594,6 +612,7 @@ class ActiveCalculator(Calculator):
                 self._calc = obj.calc
                 obj.set_calculator(self)
                 obj.get_potential_energy()
+                obj.set_calculator(self._calc)
                 added_lce = [0, 0]
             elif cls == 'local':
                 obj.stage(self.model.descriptors, True)

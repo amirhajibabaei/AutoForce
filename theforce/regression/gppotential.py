@@ -935,7 +935,7 @@ def kldiv_normal(y, sigma):
     compared to the number of bins.
     """
     delta = sigma/10
-    width = 10*sigma 
+    width = 10*sigma
     x = torch.arange(0, width, delta)
     x = torch.cat([-x.flip(0)[:-1], x])
     p = (y.view(-1)-x.view(-1, 1)).div(delta).pow(2).mul(-0.5).exp().sum(dim=1)
