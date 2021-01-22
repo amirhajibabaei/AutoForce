@@ -63,7 +63,7 @@ class ActiveCalculator(Calculator):
     def __init__(self, covariance=None, calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
-                 ediff_tot=5*kcal_mol, fdiff=2*kcal_mol,
+                 ediff_tot=4*kcal_mol, fdiff=2*kcal_mol,
                  noise_e=-1, noise_f=None,
                  ignore_forces=False):
         """
@@ -646,7 +646,7 @@ class ActiveCalculator(Calculator):
                 f.write(' '.join([str(float(arg)) for arg in args])+'\n')
 
     def log_settings(self):
-        settings = ['ediff', 'ediff_lb', 'ediff_ub',
+        settings = ['ediff',  # 'ediff_lb', 'ediff_ub',
                     'ediff_tot', 'fdiff',
                     'noise_e', 'noise_f']
         s = ''.join([f' {s}: {getattr(self, s)} ' for s in settings])
