@@ -9,7 +9,7 @@ import numpy as np
 import os
 
 
-def relax(atoms, fmax=0.01, cell=False, mask=None, trajectory='relax.traj', rattle=0.0):
+def relax(atoms, fmax=0.01, cell=False, mask=None, trajectory='relax.traj', rattle=0.0, confirm=False):
     """
     atoms:        ASE atoms
     fmax:         maximum forces
@@ -17,6 +17,7 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, trajectory='relax.traj', ratt
     mask:         stress components for relaxation
     trajectory:   traj file name
     rattle:       rattle atoms at initial step (recommended ~0.05)
+    confirm:      if True, test DFT for the final state
     """
 
     calc = cline.gen_active_calc()
@@ -24,11 +25,16 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, trajectory='relax.traj', ratt
     atoms.set_calculator(calc)
 
     # define and run relaxation dynamics
-    filtered = FilterDeltas(atoms)
     if cell:
         filtered = ExpCellFilter(filtered, mask=mask)
+    else:
+        filtered = atoms
     dyn = LBFGS(filtered, trajectory=trajectory)
     dyn.run(fmax)
+
+    # confirm:
+    if confirm:
+        calc._test()
 
 
 if __name__ == '__main__':

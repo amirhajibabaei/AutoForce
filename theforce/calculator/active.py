@@ -771,8 +771,9 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
     wall = axes[2].twinx()
     wall.plot(*zip(*elapsed), color='cyan', alpha=0.5)
     wall.set_ylabel('minutes')
-    axes[2].axhline(y=settings['ediff_lb:'], ls='--', color='k')
-    axes[2].axhline(y=settings['ediff_ub:'], ls='--', color='k', alpha=0.3)
+    axes[2].axhline(y=settings['ediff:'], ls='--', color='k')
+    #axes[2].axhline(y=settings['ediff_lb:'], ls='--', color='k')
+    #axes[2].axhline(y=settings['ediff_ub:'], ls='--', color='k', alpha=0.3)
     axes[2].grid()
     # 3
     if len(fit) > 0:
