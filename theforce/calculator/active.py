@@ -208,8 +208,8 @@ class ActiveCalculator(Calculator):
         self.ediff_ub = ediff_ub or self.ediff
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
-        self.noise_e = noise_e or ediff_tot
-        self.noise_f = noise_f or fdiff
+        self.noise_e = ediff_tot if noise_e is None else noise_e
+        self.noise_f = fdiff if noise_f is None else noise_f
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
