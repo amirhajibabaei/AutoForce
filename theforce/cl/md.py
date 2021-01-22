@@ -64,4 +64,4 @@ if __name__ == '__main__':
     kwargs = cline.get_default_args(md)
     cline.update_args(kwargs)
     md(atoms, **kwargs)
-    atoms.write(args.ouput)
+    atoms.write(args.output)
