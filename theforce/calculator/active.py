@@ -62,7 +62,7 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance=None, calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
-                 ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
+                 ediff=kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=2*kcal_mol,
                  noise_e=-1, noise_f=None,
                  ignore_forces=False):
@@ -228,6 +228,7 @@ class ActiveCalculator(Calculator):
         self._last_test = 0
         self._ktest = 0
         self.normalized = None
+        self.updated = False
         self._update_args = {}
         self.ignore_forces = ignore_forces
 
@@ -406,6 +407,7 @@ class ActiveCalculator(Calculator):
         self.log('errors (test):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}'.format(
             dE, df.max(), df.mean()))
         self._last_test = self.step
+        return energy, forces
 
     def _exact(self, copy):
         tmp = copy.as_ase() if self.to_ase else copy
@@ -570,6 +572,7 @@ class ActiveCalculator(Calculator):
             noise_e=self.noise_e, noise_f=self.noise_f)
 
     def update(self, inducing=True, data=True):
+        self.updated = False
         self.get_ready()
         self.blind = False
         m = self.update_inducing() if inducing else 0
@@ -585,6 +588,7 @@ class ActiveCalculator(Calculator):
                 self.log(f'noise: {self.model.scaled_noise}')
             if self.pckl:
                 self.model.to_folder(self.pckl)
+            self.updated = True
         self._update_args = {}
         return m, n
 
