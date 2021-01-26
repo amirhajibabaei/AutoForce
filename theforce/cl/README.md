@@ -181,7 +181,7 @@ command line arguments.
 
 #### Outputs
 The trajectory is saved in `trajectory='md.traj'` for MD
-and `relax.py` for relaxation by default.
+and `'relax.traj'` for relaxation by default.
 This file can be processed using the `ase.io` module.
 The final coordinates of atoms are also written
 to `CONTCAR` for convenience.
