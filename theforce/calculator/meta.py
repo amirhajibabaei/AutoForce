@@ -12,7 +12,7 @@ class Meta:
         w: the height of the Gaussians
         ---------------------------------------------
         example for colvar:
-        def colvar(numbers, xyz, cell, pbc):
+        def colvar(numbers, xyz, cell, pbc, nl):
             return (xyz[1]-xyz[0]).norm()
         """
         self.colvar = colvar
@@ -26,7 +26,8 @@ class Meta:
             cv = self.colvar(calc.atoms.numbers,
                              calc.atoms.xyz,
                              calc.atoms.lll,
-                             calc.atoms.pbc)
+                             calc.atoms.pbc,
+                             calc.atoms.nl)
             energy = self.energy(cv)
             self._cv = cv.detach()
         else:

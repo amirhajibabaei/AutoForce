@@ -10,12 +10,18 @@ from ase import units
 
 
 # define a metadynamics potential
-def colvar(numbers, xyz, cell, pbc):
+def colvar(numbers, xyz, cell, pbc, nl):
     """
     collective variables should be generated here.
     the return value should be a 1d vector.
+
+    nl is the neighbor list: 
+    nei_i, off = nl.get_neighbors(i) # off is the ofsets due to pbc
+    off = torch.from_numpy(off).type(xyz.type())
+    off = (off[..., None]*cell).sum(dim=1)
+    r_ij = xyz[nei_i] - xyz[i] + off
     """
-    return xyz[1]-xyz[0] # a dummy variable
+    return xyz[1]-xyz[0]  # a dummy variable
 
 
 meta = Meta(colvar, sigma=0.1, w=0.01)
@@ -26,9 +32,9 @@ calc = ActiveCalculator(calculator=main_calc,
                         meta=meta,  # <------------- notice here
                         process_group=mpi_init(),
                         tape='Au.sgpr')
-atoms = bulk('Au', cubic=True).repeat(3*[3])
+atoms = bulk('Au', cubic=True).repeat(3*[2])
 atoms.set_calculator(calc)
-atoms.rattle(0.1)
+atoms.rattle(0.2)
 
 # md
 npt = False
