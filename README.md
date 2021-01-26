@@ -31,8 +31,8 @@ pip install .
 ```
 
 ### Command line
-For machine learning accelerated molecular dynamics
-(using VASP) from the command line see 
+For machine learning accelerated molecular dynamics,
+structure relaxation, etc (using VASP) from the command line see 
 [theforce/cl/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl).
 
 ### Python API

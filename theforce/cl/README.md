@@ -51,13 +51,15 @@ tape:            for saving all of the model updates (default='model.sgpr')
 test:            single-point testing intervals (default=None)
 
 # sampling and optimization
-ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
-ediff_tot: (eV)  total energy sensitivity for sampling DFT data (default ~ 5 kcal/mol)
+ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 1 kcal/mol)
+ediff_tot: (eV)  total energy sensitivity for sampling DFT data (default ~ 4 kcal/mol)
 fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 2 kcal/mol)
 noise_e:   (ev)  bias noise for total energies (default=ediff_tot)
 noise_f:  (ev/A) bias noise for forces (default=fdiff)
 ```
-These parameters are explained in detail in
+Note that these parameters are not related to VASP
+despite possible name similarities.
+They are explained in detail in
 [theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/calculator).
 The only difference is that here we specify the 
 calculator by its name (e.g. `calculator='VASP'`).
@@ -133,6 +135,29 @@ For this, we have introduced the `rattle` tag
 which disturbs the atoms at the initial state.
 The default value is `rattle=0.0`.
 
+#### Parameters for structure relaxation (file=`ARGS`)
+The parameters for structure relaxation (minimization of forces) 
+are also set in the `ARGS` file. The following tags are available
+```
+fmax:         maximum forces (default=0.01)
+cell:         if True, minimize stress too (default=False)
+mask:         stress components for relaxation (default=None)
+algo:         algo from ase.optimize (default='LBFGS')
+trajectory:   traj file name (default='relax.traj')
+rattle:       rattle atoms at initial step (default=0.02)
+confirm:      if True, test DFT for the final state (default=True)
+```
+
+Other possible entries for `algo` are: `'BFGS', 'GPMin', 'FIRE', 'MDMin'`
+(see [this](https://wiki.fysik.dtu.dk/ase/ase/optimize.html)).
+
+`rattle` is the stdev for random displacement of atoms
+at the initial step.
+This is extremely beneficial for ML if the initial
+structure is ordered and the local environments of 
+many atoms are identical.
+`rattle` causes some disorder/variance in these environments.
+
 #### Run
 Lets assume that 20 cores are available.
 We split these cores to 12 for VASP and 8 for ML.
@@ -145,7 +170,7 @@ the following script
 ```sh
 python -m theforce.calculator.calc_server &
 sleep 1 # waits 1 sec for the server to be set
-mpirun -n 8 python -m theforce.cl.md
+mpirun -n 8 python -m theforce.cl.md  # or theforce.cl.relax for relaxation
 ```
 This will try to read the initial coordinates
 from `POSCAR` and will write the final coordinates
@@ -155,8 +180,14 @@ and ouput using `-i input-name` and `-o output-name`
 command line arguments.
 
 #### Outputs
-The trajectory is saved in `trajectory='md.traj'` by default.
+The trajectory is saved in `trajectory='md.traj'` for MD
+and `relax.py` for relaxation by default.
 This file can be processed using the `ase.io` module.
+The final coordinates of atoms are also written
+to `CONTCAR` for convenience.
+Possibly a folder named `vasp` which contains
+the most recent (single-point) VASP calculation
+may be present.
 The log for ML is written in `logfile='active.log'` which 
 can be visualized (converted to `active.pdf`) by
 ```sh
