@@ -499,7 +499,7 @@ class ActiveCalculator(Calculator):
                 self.model.add_inducing(loc)
                 added = -1 if m < 2 else 1
             elif beta < self.ediff_lb:
-                if m < 2 and beta > 0.:
+                if m < 2 and beta > torch.finfo().eps:
                     self.model.add_inducing(loc)
                     added = -1
             else:
