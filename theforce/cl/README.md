@@ -86,6 +86,31 @@ The other paramteres which control the sampling
 and accuracy should be gradually tuned to get the
 desired accuracy.
 
+#### Model initialization from random displacements (optional)
+In most cases starting from an empty ML model 
+is alright and the model can be built from scratch
+on-the-fly with dynamics.
+In some sensitive cases it could be difficult for
+the dynamics to get started smoothly.
+Too many atom types, too small systems, and highly 
+unstable arrangement of atoms are examples of such 
+cases.
+Also presence of hydrogen is always challenging.
+For such cases it could be helpful to generate a
+preliminary model by a few random displacements 
+of atoms from their initial positions.
+For this we can execute `init_model` (see *Run* below)
+where the following tages can be set in the `ARGS` file
+```
+samples:      number of samples (default=5)
+rattle:       stdev for random displacements (default=0.05)
+trajectory:   traj file name (defult='init.traj')
+```
+After execution a pickled model will be generated
+in the working directory (default name is `pckl='model.pckl/'`).
+Next, we set `covariance = 'model.pckl/'` in `ARGS`
+for making it available for the next simulation.
+
 #### Parameters for MD (file=`ARGS`)
 The parameters for MD are also set in the `ARGS` file.
 The following tags are available
@@ -170,7 +195,11 @@ the following script
 ```sh
 python -m theforce.calculator.calc_server &
 sleep 1 # waits 1 sec for the server to be set
-mpirun -n 8 python -m theforce.cl.md  # or theforce.cl.relax for relaxation
+#
+### choose one of following depending on you task
+# mpirun -n 8 python -m theforce.cl.init_model  # for model initialization
+# mpirun -n 8 python -m theforce.cl.relax       # for structure relaxation
+mpirun -n 8 python -m theforce.cl.md            # for ML accelerated MD
 ```
 This will try to read the initial coordinates
 from `POSCAR` and will write the final coordinates
