@@ -947,7 +947,7 @@ def kldiv_normal(y, sigma):
     return loss
 
 
-def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
+def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=0.1):
 
     if not hasattr(self, '_noise'):
         self._noise = {}
@@ -959,7 +959,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
     for z in zset:
         if z not in self._noise:
             self._noise[z] = to_inf_inf(self.gp.noise.signal.detach())
-        scale[z] = self.M.diag()[numbers == z].mean()
+        scale[z] = self.M.diag()[numbers == z].mean() * max_noise
 
     #
     L, ridge = jitcholesky(self.M)
@@ -1042,7 +1042,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0.):
         par.requires_grad = False
     opt.zero_grad()
     self.mu = self.mu.detach()
-    self.scaled_noise = {a: float(to_0_1(b)) for a, b in self._noise.items()}
+    self.scaled_noise = {a: float(to_0_1(b)*scale[a]) for a, b in self._noise.items()}
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
