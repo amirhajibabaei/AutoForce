@@ -508,8 +508,12 @@ class ActiveCalculator(Calculator):
                 added, delta = self.model.add_1inducing(
                     loc, ediff, detach=False)
         if added != 0:
-            self.tape.write(loc)
-            self.optimize()
+            if self.model.ridge > 0.:
+                self.model.pop_1inducing(clear_cached=True)
+                added = 0
+            else:
+                self.tape.write(loc)
+                self.optimize()
         return added
 
     def update_inducing(self):
