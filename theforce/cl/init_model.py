@@ -34,6 +34,6 @@ if __name__ == '__main__':
                         help='the initial coordinates of atoms, POSCAR, xyz, cif, etc.')
     args = parser.parse_args()
     atoms = read(args.input)
-    kwargs = cline.get_default_args(relax)
+    kwargs = cline.get_default_args(init_model)
     cline.update_args(kwargs)
     init_model(atoms, **kwargs)
