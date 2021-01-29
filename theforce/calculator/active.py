@@ -303,7 +303,7 @@ class ActiveCalculator(Calculator):
         energy = self.results['energy']
 
         # test
-        if self.test and self.step - self._last_test > self.test:
+        if self.active and self.test and self.step - self._last_test > self.test:
             self._test()
 
         # meta terms
