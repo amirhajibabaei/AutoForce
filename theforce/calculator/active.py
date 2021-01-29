@@ -60,7 +60,7 @@ inf = float('inf')
 class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
-    def __init__(self, covariance=None, calculator=None, process_group=None, meta=None,
+    def __init__(self, covariance='pckl', calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=2*kcal_mol,
@@ -202,7 +202,8 @@ class ActiveCalculator(Calculator):
         Calculator.__init__(self)
         self._calc = calculator
         self.process_group = process_group
-        self.get_model(covariance or default_kernel())
+        self.pckl = pckl
+        self.get_model(covariance)
         self.ediff = ediff
         self.ediff_lb = ediff_lb or self.ediff
         self.ediff_ub = ediff_ub or self.ediff
@@ -218,7 +219,6 @@ class ActiveCalculator(Calculator):
         self.log(f'kernel: {self.model.descriptors}')
         self.log_settings()
         self.log('model size: {} {}'.format(*self.size))
-        self.pckl = pckl
         self.tape = SgprIO(tape)
         if self.active:
             self.tape.write_params(ediff=self.ediff, ediff_lb=self.ediff_lb, ediff_ub=self.ediff_ub,
@@ -237,6 +237,13 @@ class ActiveCalculator(Calculator):
         return self._calc is not None
 
     def get_model(self, model):
+        if model == 'pckl':
+            if os.path.isdir(self.pckl):
+                model = self.pckl
+            else:
+                model = None
+        if model is None:
+            model = default_kernel()
         self._ready = True
         if type(model) == str:
             self.model = PosteriorPotentialFromFolder(
