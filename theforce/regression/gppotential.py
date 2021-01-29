@@ -1007,7 +1007,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
         loss = mean**2 + (std - noise_e)**2
         return loss
 
-    def loss_fn_f():
+    def loss_fn_f_fine():
         if not opt_f:
             return 0.
         loss = 0.
@@ -1016,8 +1016,19 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
             mean = delta.mean()
             std = delta.pow(2).mean().sqrt()
             loss = loss + mean**2 + (std - noise_f)**2
+        return loss
+
+    def loss_fn_f_gross():
+        if not opt_f:
+            return 0.
+        delta = self._fdiff
+        mean = delta.mean()
+        std = delta.pow(2).mean().sqrt()
+        loss = mean**2 + (std - noise_f)**2
         # loss = kldiv_normal(self._fdiff, noise_f)
         return loss
+
+    loss_fn_f = loss_fn_f_fine
 
     #
     def step():
