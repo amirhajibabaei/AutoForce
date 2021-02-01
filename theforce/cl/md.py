@@ -60,7 +60,10 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', default='CONTCAR', type=str,
                         help='the final coordinates of atoms')
     args = parser.parse_args()
-    atoms = read(args.input)
+    if args.input.endswith('.traj'):
+        atoms = read(args.input, -1)
+    else:
+        atoms = read(args.input)
     kwargs = cline.get_default_args(md)
     cline.update_args(kwargs)
     md(atoms, **kwargs)
