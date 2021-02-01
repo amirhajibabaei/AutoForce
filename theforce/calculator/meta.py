@@ -18,6 +18,8 @@ class Meta:
         self.colvar = colvar
         self.kde = Gaussian_kde(sigma)
         self.w = w
+        with open('meta.hist', 'w') as hst:
+            hst.write(f'# {sigma}\n')
 
     def __call__(self, calc):
         kwargs = {'op': '+='}
@@ -42,3 +44,7 @@ class Meta:
     def update(self):
         if self.rank == 0:
             self.kde.count(self._cv)
+            with open('meta.hist', 'a') as hst:
+                for f in self._cv:
+                    hst.write(f' {float(f)}')
+                hst.write('\n')
