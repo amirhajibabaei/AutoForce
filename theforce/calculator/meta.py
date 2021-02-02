@@ -1,5 +1,6 @@
 # +
 from theforce.util.kde import Gaussian_kde
+from theforce.math.ql import Ql
 import torch
 
 
@@ -48,3 +49,27 @@ class Meta:
                 for f in self._cv:
                     hst.write(f' {float(f)}')
                 hst.write('\n')
+
+
+class Qlvar:
+
+    def __init__(self, i, env, cutoff=4., l=[4, 6]):
+        """
+        i:      index of atom for which ql will be calculated
+        env:    type of atoms (Z) in the environment which contribute to ql
+        cutoff: cutoff for atoms in the neighborhood of i
+        l:      angular indices for ql
+        """
+        self.i = i
+        self.env = env
+        self.var = Ql(max(l), cutoff)
+        self.l = l
+
+    def __call__(self, numbers, xyz, cell, pbc, nl):
+        nei_i, off = nl.get_neighbors(self.i)
+        off = torch.from_numpy(off).type(xyz.type())
+        off = (off[..., None]*cell).sum(dim=1)
+        env = numbers[nei_i] == self.env
+        r_ij = xyz[nei_i[env]] - xyz[self.i] + off[env]
+        c = self.var(r_ij)
+        return c.index_select(0, torch.tensor(self.l))
