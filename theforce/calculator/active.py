@@ -729,10 +729,11 @@ def parse_logfile(file='active.log', window=(None, None)):
             energies += [(step, float(split[1]))]
             temperatures += [(step, float(split[2]))]
             covloss += [(step, float(split[3]))]
-            if 'meta:' in split:
-                meta += [(step, float(split[5]))]
         except:
             pass
+
+        if 'meta:' in split:
+            meta += [(step, float(split[split.index('meta:')+1]))]
 
         if 'exact energy' in line:
             exact_energies += [(step, float(split[3]))]
