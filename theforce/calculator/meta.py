@@ -2,6 +2,7 @@
 from theforce.util.kde import Gaussian_kde
 from theforce.math.ql import Ql
 import torch
+import numpy as np
 
 
 class Meta:
@@ -53,23 +54,40 @@ class Meta:
 
 class Qlvar:
 
-    def __init__(self, i, env, cutoff=4., l=[4, 6]):
+    def __init__(self, i, j, index=None, cutoff=4., l=[6]):
         """
-        i:      index of atom for which ql will be calculated
-        env:    type of atoms (Z) in the environment which contribute to ql
+        i:      type of the atom (Z) for which ql will be calculated
+        j:      type of the atoms (Z) in the environment which contribute to ql
+        index:  index of the atom for which ql will be calculated, if None -> the first found
         cutoff: cutoff for atoms in the neighborhood of i
         l:      angular indices for ql
         """
         self.i = i
-        self.env = env
+        self.j = j
+        self.index = index
         self.var = Ql(max(l), cutoff)
         self.l = l
 
     def __call__(self, numbers, xyz, cell, pbc, nl):
-        nei_i, off = nl.get_neighbors(self.i)
+        if self.index is None:
+            i = np.where(numbers == self.i)[0][0]
+        else:
+            i = self.index
+        if numbers[i] != self.i:
+            raise RuntimeError(f'numbers[{i}] != {self.i}')
+        nei_i, off = nl.get_neighbors(i)
         off = torch.from_numpy(off).type(xyz.type())
         off = (off[..., None]*cell).sum(dim=1)
-        env = numbers[nei_i] == self.env
-        r_ij = xyz[nei_i[env]] - xyz[self.i] + off[env]
-        c = self.var(r_ij)
-        return c.index_select(0, torch.tensor(self.l))
+        env = numbers[nei_i] == self.j
+        r_ij = xyz[nei_i[env]] - xyz[i] + off[env]
+        ql = self.var(r_ij).index_select(0, torch.tensor(self.l))
+        return ql
+
+
+class Catvar:
+
+    def __init__(self, *var):
+        self.var = var
+
+    def __call__(self, *args):
+        return torch.cat([var(*args).view(-1) for var in self.var])
