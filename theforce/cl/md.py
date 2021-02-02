@@ -48,6 +48,8 @@ def md(atoms, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=N
     dyn = NPT(filtered, dt*units.fs, tem*units.kB, stress*units.GPa,
               ttime, pfactor, mask=mask, trajectory=trajectory,
               append_trajectory=append, loginterval=loginterval)
+    if calc.meta is not None:
+        dyn.attach(calc.meta.update)
     dyn.run(picos*steps_for_1ps)
 
 
