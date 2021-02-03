@@ -52,6 +52,25 @@ class Meta:
                 hst.write('\n')
 
 
+class Posvar:
+
+    def __init__(self, index, select=None):
+        self.index = index
+        self.select = select
+
+    def __call__(self, numbers, xyz, cell, pbc, nl):
+        a = torch.ones(len(numbers), 1)
+        a[self.index] = 0.
+        if self.select is None:
+            p = xyz
+        else:
+            select = numbers == self.select
+            a = a[select]
+            p = xyz[select]
+        c = xyz[self.index] - (a*p).mean(dim=0)
+        return c
+
+
 class Qlvar:
 
     def __init__(self, i, j, index=None, cutoff=4., l=[6]):
@@ -70,9 +89,8 @@ class Qlvar:
 
     def __call__(self, numbers, xyz, cell, pbc, nl):
         if self.index is None:
-            i = np.where(numbers == self.i)[0][0]
-        else:
-            i = self.index
+            self.index = np.where(numbers == self.i)[0][0]
+        i = self.index
         if numbers[i] != self.i:
             raise RuntimeError(f'numbers[{i}] != {self.i}')
         nei_i, off = nl.get_neighbors(i)
