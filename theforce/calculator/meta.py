@@ -3,15 +3,17 @@ from theforce.util.kde import Gaussian_kde
 from theforce.math.ql import Ql
 import torch
 import numpy as np
+from ase.units import kB
 
 
 class Meta:
 
-    def __init__(self, colvar, sigma=0.1, w=0.01):
+    def __init__(self, colvar, sigma=0.1, w=0.01, tem=None):
         """
         colvar: a function which returns the CVs
-        sigma: the band-width for deposited Gaussians
-        w: the height of the Gaussians
+        sigma:  the band-width for deposited Gaussians (Ang)
+        w:      the height of the Gaussians multiplied by dt (eV*fs)
+        tem:    if given -> well-tempered metadynamics (K)
         ---------------------------------------------
         example for colvar:
         def colvar(numbers, xyz, cell, pbc, nl):
@@ -20,6 +22,7 @@ class Meta:
         self.colvar = colvar
         self.kde = Gaussian_kde(sigma)
         self.w = w
+        self.tem = tem
         with open('meta.hist', 'w') as hst:
             hst.write(f'# {sigma}\n')
 
@@ -41,6 +44,9 @@ class Meta:
     def energy(self, cv):
         kde = self.kde(cv, density=False)
         energy = self.w*kde
+        if self.tem is not None:
+            gamma = 1./(kB*self.tem)
+            energy = (1 + energy*gamma).log()/gamma
         return energy
 
     def update(self):
