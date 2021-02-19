@@ -151,7 +151,7 @@ class SeSoap(Module):
         return self.state
 
     def forward(self, coo, numbers, grad=False, normalize=None, sparse_tensor=True):
-        units = self.radii(numbers)
+        units = torch.as_tensor(self.radii(numbers))
         species = torch.unique(numbers, sorted=True)
         dim0 = len(species)**2
         bcasted = torch.broadcast_tensors(species[None, ], species[:, None])
