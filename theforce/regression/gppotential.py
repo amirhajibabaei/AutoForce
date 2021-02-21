@@ -119,13 +119,16 @@ class EnergyForceKernel(Module):
         return 'EnergyForceKernel({})'.format(self.state_args)
 
 
-class MeanEnergy:
+class ConstMean:
 
-    def __init__(self, data):
+    def __init__(self):
+        self.per_atom = torch.zeros([])
+        self.unique_params = []
+
+    def set_data(self, data):
         n = torch.as_tensor(data.natoms).view(-1)
         e = torch.stack([atoms.target_energy for atoms in data]).view(-1)
         self.per_atom = (e/n).mean
-        self.unique_params = []
 
     def __call__(self, atoms, forces=False):
         n = len(atoms)
@@ -142,7 +145,7 @@ class GaussianProcessPotential(Module):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
-        self.parametric = parametric
+        self.parametric = parametric or ConstMean()
 
     @property
     def params(self):
