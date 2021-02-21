@@ -407,9 +407,14 @@ class PosteriorPotential(Module):
     def K(self):
         return torch.cat([self.Ke, self.Kf], dim=0)
 
+    @property
+    def mean(self):
+        return self.gp.parametric
+
     def make_munu(self, algo=2, noisegrad=False, **kw):
         if self.M.numel() == 0 or self.K.numel() == 0:
             return
+        self.mean.set_data(self.data)
         parallel = torch.distributed.is_initialized()
         if parallel:
             rank = torch.distributed.get_rank()
@@ -896,13 +901,15 @@ class PosteriorPotential(Module):
         if self.has_target_forces:
             A = torch.cat([A, self.gp.kern(test, self.X, cov=quant+'_forces')],
                           dim=1)
-        if quant == 'energy':
-            mean = self.gp.mean(test, forces=False)
-        else:
-            _, mean = self.gp.mean(test, forces=True, cat=False)
-        out = (mean + A @ self.mu).view(*shape[quant])
+        out = (A @ self.mu).view(*shape[quant])
         if all_reduce:
             torch.distributed.all_reduce(out)
+        # mean is not distributed!
+        if quant == 'energy':
+            mean = self.mean(test, forces=False)
+        else:
+            _, mean = self.mean(test, forces=True)
+        out = out + mean
         if variance:
             if all_reduce:
                 raise NotImplementedError(
@@ -926,8 +933,9 @@ class PosteriorPotential(Module):
             B = torch.cat([B, self.gp.kern(test, self.X, cov='forces_forces')],
                           dim=1)
 
-        energy = A @ self.mu
-        forces = B @ self.mu
+        em, fm = self.mean(test, forces=True)
+        energy = A @ self.mu + em
+        forces = B @ self.mu + fm
 
         out = (energy, forces.view(-1, 3))
 
@@ -1073,7 +1081,8 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
         par.requires_grad = False
     opt.zero_grad()
     self.mu = self.mu.detach()
-    self.scaled_noise = {a: float(to_0_1(b)*scale[a]) for a, b in self._noise.items()}
+    self.scaled_noise = {
+        a: float(to_0_1(b)*scale[a]) for a, b in self._noise.items()}
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):

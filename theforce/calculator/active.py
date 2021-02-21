@@ -343,6 +343,10 @@ class ActiveCalculator(Calculator):
         if self.atoms.is_distributed and not reduced:
             torch.distributed.all_reduce(energy)
         forces, stress = self.grads(energy, retain_graph=retain_graph)
+        mean = self.model.mean(self.atoms)
+        if mean.grad_fn:  # only constant mean
+            raise RuntimeError('mean has grad_fn!')
+        energy = energy + mean
         if op == '=':
             self.results['energy'] = energy.detach().numpy()
             self.results['forces'] = forces.detach().numpy()
