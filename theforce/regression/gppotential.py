@@ -128,7 +128,7 @@ class ConstMean:
     def set_data(self, data):
         n = torch.as_tensor(data.natoms).view(-1)
         e = torch.stack([atoms.target_energy for atoms in data]).view(-1)
-        self.per_atom = (e/n).mean
+        self.per_atom = (e/n).mean()
 
     def __call__(self, atoms, forces=False):
         n = len(atoms)
