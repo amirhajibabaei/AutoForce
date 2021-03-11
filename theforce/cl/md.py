@@ -28,6 +28,7 @@ def md(atoms, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=N
     calc = cline.gen_active_calc()
     atoms.rattle(rattle, rng=np.random)
     atoms.set_calculator(calc)
+    atoms.get_potential_energy()
 
     # define and run Nose-Hoover dynamics
     if dt is None:
