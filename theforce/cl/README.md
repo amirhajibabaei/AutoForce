@@ -130,6 +130,8 @@ trajectory:   traj file name (default='md.traj')
 loginterval:  for traj file (default=1)
 append:       append to traj file (default=False)
 rattle:       rattle atoms at the initial step (default=0.0)
+tdamp:        temperature damping time (fs) (default=25)
+pdamp:        pressure damping time (fs) (default=100)
 ```
 All of the above tags have default values which will be overridden
 with the settings in `ARGS`. 
@@ -164,6 +166,11 @@ sometimes the active learning algorithm may fail.
 For this, we have introduced the `rattle` tag 
 which disturbs the atoms at the initial state.
 The default value is `rattle=0.0`.
+
+If hydrogen is present in the system, 
+faster kinetic damping (smaller `tdamp`) may be needed, 
+at least in the beginning of training.
+In general faster damping leads to smoother training.
 
 #### Parameters for structure relaxation (file=`ARGS`)
 The parameters for structure relaxation (minimization of forces) 

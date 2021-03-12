@@ -10,7 +10,7 @@ import os
 
 
 def md(atoms, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None,
-       trajectory='md.traj', loginterval=1, append=False, rattle=0.0):
+       trajectory='md.traj', loginterval=1, append=False, rattle=0.0, tdamp=25, pdamp=100):
     """
     atoms:        ASE atoms
     dt:           time-step in fs
@@ -23,6 +23,8 @@ def md(atoms, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=N
     loginterval:  for traj file
     append:       append to traj file
     rattle:       rattle atoms at initial step (recommended ~0.05)
+    tdamp:        temperature damping time (fs)
+    pdamp:        pressure damping time (fs)
     """
 
     calc = cline.gen_active_calc()
@@ -36,8 +38,8 @@ def md(atoms, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=N
             dt = 0.25
         else:
             dt = 1.
-    ttime = 25*units.fs
-    ptime = 100*units.fs
+    ttime = tdamp*units.fs
+    ptime = pdamp*units.fs
     if bulk_modulus:
         pfactor = (ptime**2)*bulk_modulus*units.GPa
     else:
