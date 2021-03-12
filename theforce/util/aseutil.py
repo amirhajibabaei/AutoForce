@@ -7,12 +7,14 @@ from ase import units
 import numpy as np
 
 
-def init_velocities(atoms, temperature, overwrite=False):
+def init_velocities(atoms, temperature, overwrite=False, cm0=True, rot0=True):
     """temperature in Kelvin"""
     if atoms.get_velocities() is None or overwrite:
         vd.MaxwellBoltzmannDistribution(atoms, temperature*units.kB)
-        vd.Stationary(atoms)
-        vd.ZeroRotation(atoms)
+        if cm0:
+            vd.Stationary(atoms)
+        if rot0:
+            vd.ZeroRotation(atoms)
 
 
 def single_point(self):
