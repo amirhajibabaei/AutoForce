@@ -304,9 +304,10 @@ class ActiveCalculator(Calculator):
             m, n = self.update(**self._update_args)
             if n > 0 or m > 0:
                 self.update_results(self.meta is not None)
-                self.deltas = {}
-                for quant in ['energy', 'forces', 'stress']:
-                    self.deltas[quant] = self.results[quant] - pre[quant]
+                if self.step > 0:
+                    self.deltas = {}
+                    for quant in ['energy', 'forces', 'stress']:
+                        self.deltas[quant] = self.results[quant] - pre[quant]
         energy = self.results['energy']
 
         # test
