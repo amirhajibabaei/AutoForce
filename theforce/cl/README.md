@@ -41,7 +41,7 @@ learning calculator and are the same for most ML tasks.
 The following tags are available
 ```
 # inputs
-covariance:      None, a kernal, folder-name for loading a pickled model (default=None)
+covariance:      'pckl', None, a kernal, folder-name for loading a pickled model (default='pckl')
 calculator:      None or 'VASP' (default=None)
 
 # outputs
@@ -75,6 +75,11 @@ covariance = 'model.pckl'
 ```
 Thus `covariance` is the input model and `pckl`
 is the output model.
+The default is `covariance='pckl'` which means
+input and output models are the same.
+Thus the training is resumed in consecutive runs 
+(the model is automatically loaded and saved in
+the `pckl` folder).
 
 After sufficient training, one might want to use
 the result ML potential for fast simulations 

@@ -70,11 +70,10 @@ lmax, nmax, exponent, cutoff = 3, 3, 4, 6.
 kernel = SeSoapKernel(lmax, nmax, exponent, cutoff)
 ML_calc = ActiveCalculator(covariance=kernel, ...)
 ```
-If not given, the default kernel will be used (see *Kernels*).
 
 The model will be pickled (saved) after every update
-in the folder given by `tape` (default=`'model.pckl/'`).
-Alternatively one can pass `tape=None` and manually
+in the folder given by `pckl` (default=`'model.pckl/'`).
+Alternatively one can pass `pckl=None` and manually
 save the model model by
 ```python
 ML_calc.model.to_folder('model.pckl/')
@@ -84,6 +83,15 @@ in the next run
 ```python
 ML_calc = ActiveCalculator(covariance='model.pckl/', ...)
 ```
+
+The default is `covariance='pckl'` which is
+equivalent to `covariance=pckl` which means
+the input and output models are the same.
+Thus with default setting, the model will be 
+automatically saved and loaded in consecutive
+runs.
+If `None`, the default kernel will be used 
+(see *Kernels*) with an empty initial model.
 
 #### calculator
 The main DFT calculator can which be any ASE 
@@ -125,7 +133,7 @@ in a simple text format.
 Unlike pickled models, it occupies much less memory
 and can be used for rebuilding the model from scratch.
 The default name is `tape='model.sgpr'`.
-By design these files are never overwritten. 
+By design `tape`-files are never overwritten. 
 These files can be used for retraining the model
 with different parameters or combining several
 trainig trajectories.
