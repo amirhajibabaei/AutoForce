@@ -65,7 +65,8 @@ class ActiveCalculator(Calculator):
                  ediff=kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=2*kcal_mol,
                  noise_e=-1, noise_f=None,
-                 ignore_forces=False):
+                 ignore_forces=False,
+                 include_params=None):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -197,6 +198,9 @@ class ActiveCalculator(Calculator):
 
         ignore_forces:
             This eliminates the forces from regression.
+        include_params:
+            This applies some constraints for sampling data when include_data/-tape are called.
+            e.g. {'fmax': 5.0}, etc.
         """
 
         Calculator.__init__(self)
@@ -231,6 +235,8 @@ class ActiveCalculator(Calculator):
         self.updated = False
         self._update_args = {}
         self.ignore_forces = ignore_forces
+        self.include_params = {'fmax': float('inf')}
+        self.include_params.update(include_params)
 
     @property
     def active(self):
@@ -611,6 +617,8 @@ class ActiveCalculator(Calculator):
             data = ase.io.read(data, '::')
         _calc = self._calc
         for atoms in data:
+            if abs(atoms.get_forces()).max() > self.include_params['fmax']:
+                continue
             self._calc = atoms.calc
             atoms.set_calculator(self)
             atoms.get_potential_energy()
@@ -624,6 +632,8 @@ class ActiveCalculator(Calculator):
         added_lce = [0, 0]
         for cls, obj in tape.read():
             if cls == 'atoms':
+                if abs(obj.get_forces()).max() > self.include_params['fmax']:
+                    continue
                 if added_lce[0] > 0:
                     self.log('added lone indus: {}/{} -> size: {} {}'.format(
                         *added_lce, *self.size))
