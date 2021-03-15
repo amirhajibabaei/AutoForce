@@ -236,7 +236,8 @@ class ActiveCalculator(Calculator):
         self._update_args = {}
         self.ignore_forces = ignore_forces
         self.include_params = {'fmax': float('inf')}
-        self.include_params.update(include_params)
+        if include_params:
+            self.include_params.update(include_params)
 
     @property
     def active(self):
