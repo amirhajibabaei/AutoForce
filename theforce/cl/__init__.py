@@ -15,12 +15,15 @@ def strip(line):
 
 
 def _calc(name):
-    if name.upper() == 'VASP':
+    caps = name.upper()
+    if caps == 'VASP':
         from theforce.calculator import vasp
         calc_script = vasp.__file__
-    elif name.upper() == 'GUASSIAN':
+    elif caps == 'GUASSIAN':
         from theforce.calculator import gaussian
         calc_script = gaussian.__file__
+    else:
+        raise RuntimeError(f'calculator {caps} is not implemented')
     return calc_script
 
 
