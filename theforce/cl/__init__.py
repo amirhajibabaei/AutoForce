@@ -18,6 +18,9 @@ def _calc(name):
     if name.upper() == 'VASP':
         from theforce.calculator import vasp
         calc_script = vasp.__file__
+    elif name.upper() == 'GUASSIAN':
+        from theforce.calculator import gaussian
+        calc_script = gaussian.__file__
     return calc_script
 
 
