@@ -21,7 +21,7 @@ def get_calc(script, ref='calc'):
     return scope[ref]
 
 
-def get_scope(script):
+def _get_scope(script):
     scope = {}
     try:
         exec(open(script).read(), scope)
@@ -30,8 +30,10 @@ def get_scope(script):
     return scope
 
 
-def get_scope_new(script):
-    calc_module = importlib.import_module(script)
+def get_scope(script):
+    spec = importlib.util.spec_from_file_location("calc_module", script)
+    calc_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(calc_module)
     scope = {'calc': calc_module.calc}
     return scope
 
