@@ -34,7 +34,8 @@ class GaussianCalculator(Calculator):
         output = read(self.args[2], format='gaussian-out')
         self.calc = output.calc
         self.results = output.calc.results
-        self.results['stress'] = np.zeros(6)
+        if 'stress' not in self.results:
+            self.results['stress'] = np.zeros(6)
 
 
 def get_gex():

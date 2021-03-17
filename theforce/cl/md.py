@@ -45,7 +45,7 @@ def md(atoms, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=N
     else:
         pfactor = None
     init_velocities(atoms, tem)
-    make_cell_upper_triangular(atoms)
+    configure_cell(atoms)
     filtered = FilterDeltas(atoms)
     steps_for_1ps = int(1000/dt)
     dyn = NPT(filtered, dt*units.fs, tem*units.kB, stress*units.GPa,
@@ -54,6 +54,10 @@ def md(atoms, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=N
     if calc.meta is not None:
         dyn.attach(calc.meta.update)
     dyn.run(picos*steps_for_1ps)
+
+
+def configure_cell(atoms):
+    make_cell_upper_triangular(atoms)
 
 
 if __name__ == '__main__':
