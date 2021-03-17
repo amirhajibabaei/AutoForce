@@ -29,8 +29,8 @@ class GaussianCalculator(Calculator):
         self.atoms.write(tmp, format='gaussian-in')
         blocks = get_blocks(tmp)
         self.blocks[2] = blocks[2]
-        write_blocks(self.blocks, file=self.args[1])
-        assert os.system('{} < {} > {}'.format(*self.args)) == 0
+        write_blocks(self.blocks, file=f'_{self.args[1]}')
+        assert os.system('{} < _{} > {}'.format(*self.args)) == 0
         output = read(self.args[2], format='gaussian-out')
         self.calc = output.calc
         self.results = output.calc.results
