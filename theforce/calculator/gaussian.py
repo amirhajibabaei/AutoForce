@@ -5,13 +5,14 @@ from io import StringIO
 import re
 from ase.calculators.calculator import Calculator, all_changes
 from ase.io import read
+from theforce.util.util import mkdir_p
 import numpy as np
 
 
 class GaussianCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
-    def __init__(self, command=None):
+    def __init__(self, command=None, wd='gaussian_wd'):
         """
         command: 'path_to_gxx < input > output'
         gxx: g16, g09, or g03
@@ -22,6 +23,7 @@ class GaussianCalculator(Calculator):
         else:
             self.args = (get_gex(), 'Gaussian.com', 'Gaussian.log')
         self.blocks = get_blocks(self.args[1])
+        self.wd = wd
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
@@ -29,9 +31,16 @@ class GaussianCalculator(Calculator):
         self.atoms.write(tmp, format='gaussian-in')
         blocks = get_blocks(tmp)
         self.blocks[2] = blocks[2]
-        write_blocks(self.blocks, file=f'_{self.args[1]}')
-        assert os.system('{} < _{} > {}'.format(*self.args)) == 0
+        #
+        cwd = os.getcwd()
+        mkdir_p(self.wd)
+        os.chdir(self.wd)
+        os.system('rm -f *')
+        write_blocks(self.blocks, file=f'{self.args[1]}')
+        assert os.system('{} < {} > {}'.format(*self.args)) == 0
         output = read(self.args[2], format='gaussian-out')
+        os.chdir(cwd)
+        #
         self.calc = output.calc
         self.results = output.calc.results
         if 'stress' not in self.results:
