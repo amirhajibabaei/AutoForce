@@ -30,7 +30,7 @@ class GaussianCalculator(Calculator):
         self.blocks[2] = blocks[2]
         write_blocks(self.blocks, file=self.args[1])
         assert os.system('{} < {} > {}'.format(*self.args)) == 0
-        output = read(self.self.args[2], format='gaussian-out')
+        output = read(self.args[2], format='gaussian-out')
         self.calc = output.calc
         self.results = output.calc.results
 
