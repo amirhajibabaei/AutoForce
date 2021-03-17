@@ -57,6 +57,8 @@ def md(atoms, dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=N
 
 
 def configure_cell(atoms):
+    if np.allclose(atoms.cell, 0.):
+        atoms.center(vacuum=6.)
     make_cell_upper_triangular(atoms)
 
 
