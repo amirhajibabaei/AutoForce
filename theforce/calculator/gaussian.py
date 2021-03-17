@@ -5,10 +5,11 @@ from io import StringIO
 import re
 from ase.calculators.calculator import Calculator, all_changes
 from ase.io import read
+import numpy as np
 
 
 class GaussianCalculator(Calculator):
-    implemented_properties = ['energy', 'forces']
+    implemented_properties = ['energy', 'forces', 'stress']
 
     def __init__(self, command=None):
         """
@@ -33,6 +34,7 @@ class GaussianCalculator(Calculator):
         output = read(self.args[2], format='gaussian-out')
         self.calc = output.calc
         self.results = output.calc.results
+        self.results['stress'] = np.zeros(6)
 
 
 def get_gex():
