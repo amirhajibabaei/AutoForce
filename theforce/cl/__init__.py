@@ -19,7 +19,7 @@ def _calc(name):
     if caps == 'VASP':
         from theforce.calculator import vasp
         calc_script = vasp.__file__
-    elif caps == 'GUASSIAN':
+    elif caps == 'GAUSSIAN':
         from theforce.calculator import gaussian
         calc_script = gaussian.__file__
     else:
