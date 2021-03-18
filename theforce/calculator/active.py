@@ -305,7 +305,6 @@ class ActiveCalculator(Calculator):
 
         # active learning
         self.deltas = None
-        self.covlog = ''
         if self.active:
             pre = self.results.copy()
             m, n = self.update(**self._update_args)
@@ -315,6 +314,8 @@ class ActiveCalculator(Calculator):
                     self.deltas = {}
                     for quant in ['energy', 'forces', 'stress']:
                         self.deltas[quant] = self.results[quant] - pre[quant]
+        else:
+            self.covlog = f'{float(self.get_covloss().max())}'
         energy = self.results['energy']
 
         # test
