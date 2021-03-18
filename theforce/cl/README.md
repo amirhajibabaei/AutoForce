@@ -10,7 +10,7 @@ ab initi calculator, are set in the `ARGS` file.
 #### Ab initio settings
 The input files for ab initio calculations depend on the software:
 * VASP: see [theforce/cl/README_vasp.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl/README_vasp.md).
-* Gaussian: see [theforce/cl/README_gaussian.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl/README_gassian.md).
+* Gaussian: see [theforce/cl/README_gaussian.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl/README_gaussian.md).
 
 Note that these files should be prepared only for single-point energy and force calculations.
 
@@ -34,9 +34,9 @@ tape:            for saving all of the model updates (default='model.sgpr')
 test:            integer; single-point testing intervals (default=None)
 
 # sampling and optimization
-ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 1 kcal/mol)
+ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
 ediff_tot: (eV)  total energy sensitivity for sampling DFT data (default ~ 4 kcal/mol)
-fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 2 kcal/mol)
+fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 3 kcal/mol)
 noise_e:   (ev)  bias noise for total energies (default=ediff_tot)
 noise_f:  (ev/A) bias noise for forces (default=fdiff)
 ```

@@ -62,8 +62,8 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance='pckl', calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
-                 ediff=kcal_mol, ediff_lb=None, ediff_ub=None,
-                 ediff_tot=4*kcal_mol, fdiff=2*kcal_mol,
+                 ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
+                 ediff_tot=4*kcal_mol, fdiff=3*kcal_mol,
                  noise_e=-1, noise_f=None,
                  ignore_forces=False,
                  include_params=None):
