@@ -10,7 +10,6 @@ for simulations of larger systems which are impossible with DFT.
 In principle, all the calculators supported by the atomic simulation environment 
 ([ASE](https://wiki.fysik.dtu.dk/ase/)) can be modeled.
 
-
 ### Dependencies
 * <ins>Main</ins>: numpy, scipy, pytorch, atomic simulation environment (ASE), psutil
 * <ins>Recommended</ins>: message passing interface (MPI enabled pytorch) for distributed computation.
@@ -32,7 +31,7 @@ pip install .
 
 ### Command line
 For machine learning accelerated molecular dynamics,
-structure relaxation, etc (using VASP) from the command line see 
+structure relaxation, etc (using VASP, Gaussian, etc.) from the command line see 
 [theforce/cl/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl).
 
 ### Python API
