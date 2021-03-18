@@ -21,6 +21,12 @@ def default_kernel(cutoff=6.):
     return SeSoapKernel(3, 3, 4, cutoff, radii=DefaultRadii())
 
 
+def clamp_forces(f, m):
+    g = np.where(f>m, m, f)
+    h = np.where(g<-m, -m, g)
+    return h
+
+
 class FilterDeltas(Filter):
 
     def __init__(self, atoms, shrink=0.95):
@@ -39,7 +45,8 @@ class FilterDeltas(Filter):
         if deltas:
             self.f += deltas['forces']
         self.f *= self.shrink
-        return f - self.f
+        g = clamp_forces(self.f, 1.)
+        return f - g
 
     def get_stress(self, *args, **kwargs):
         s = self.atoms.get_stress(*args, **kwargs)
