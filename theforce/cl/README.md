@@ -102,6 +102,7 @@ The parameters for MD are also set in the `ARGS` file.
 The following tags are available
 ```
 dt:           time-step in fs (default=1. or 0.25 if H is present)
+dynamics:     'NPT', 'Langevin' (default='NPT')
 tem:          temperature in Kelvin (default=300.)
 picos:        pico-seconds for md (default=100)
 bulk_modulus: bulk_modulus for NPT simulations. if None (default), NVT is performed
@@ -113,6 +114,7 @@ append:       append to traj file (default=False)
 rattle:       rattle atoms at the initial step (default=0.0)
 tdamp:        temperature damping time (fs) (default=25)
 pdamp:        pressure damping time (fs) (default=100)
+friction:     for Langevin dynamics (default=1e-3)
 ```
 All of the above tags have default values which will be overridden
 with the settings in `ARGS`. 
