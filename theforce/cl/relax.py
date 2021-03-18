@@ -67,4 +67,11 @@ if __name__ == '__main__':
     kwargs = cline.get_default_args(relax)
     cline.update_args(kwargs)
     relax(atoms, **kwargs)
-    atoms.write(args.output)
+    try:
+        atoms.write(args.output)
+    except:
+        import warnings
+        alt = 'relax.final.xyz'
+        msg = f'writing to {args.output} failed -> wrote {alt}'
+        warnings.warn(msg)
+        atoms.write(alt)

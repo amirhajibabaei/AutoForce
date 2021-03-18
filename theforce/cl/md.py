@@ -78,4 +78,11 @@ if __name__ == '__main__':
     kwargs = cline.get_default_args(md)
     cline.update_args(kwargs)
     md(atoms, **kwargs)
-    atoms.write(args.output)
+    try:
+        atoms.write(args.output)
+    except:
+        import warnings
+        alt = 'md.final.xyz'
+        msg = f'writing to {args.output} failed -> wrote {alt}'
+        warnings.warn(msg)
+        atoms.write(alt)
