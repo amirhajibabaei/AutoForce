@@ -11,7 +11,8 @@ import os
 
 
 def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None,
-       trajectory='md.traj', loginterval=1, append=False, rattle=0.0, tdamp=25, pdamp=100, friction=1e-3):
+       trajectory='md.traj', loginterval=1, append=False, rattle=0.0, tdamp=25, pdamp=100, friction=1e-3,
+       ml_filter=None):
     """
     atoms:        ASE atoms
     dynamics:     'NPT'
@@ -28,6 +29,7 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     tdamp:        temperature damping time (fs)
     pdamp:        pressure damping time (fs)
     frinction:    for Langevin dynamics
+    ml_filter:    filters force discontinuities due to ML updates range(0, 1)
     """
 
     calc = cline.gen_active_calc()
@@ -42,11 +44,16 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
         else:
             dt = 1.
 
+    if ml_filter:
+        md_atoms = FilterDeltas(atoms, shrink=ml_filter)
+    else:
+        md_atoms = atoms
+
     if dynamics.upper() == 'NPT':
-        dyn = npt_dynamics(atoms, dt, tem, bulk_modulus, stress, mask,
+        dyn = npt_dynamics(md_atoms, dt, tem, bulk_modulus, stress, mask,
                            trajectory, loginterval, append, tdamp, pdamp)
     elif dynamics.upper() == 'LANGEVIN':
-        dyn = langevin_dynamics(atoms, dt, tem, friction, trajectory,
+        dyn = langevin_dynamics(md_atoms, dt, tem, friction, trajectory,
                                 loginterval, append)
 
     if calc.meta is not None:
@@ -57,8 +64,7 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
 
 
 def langevin_dynamics(atoms, dt, tem, friction, trajectory, loginterval, append):
-    filtered = FilterDeltas(atoms)
-    dyn = Langevin(filtered, dt*units.fs, tem*units.kB, friction, rng=np.random,
+    dyn = Langevin(atoms, dt*units.fs, tem*units.kB, friction, rng=np.random,
                    trajectory=trajectory, append_trajectory=append,
                    loginterval=loginterval)
     return dyn
@@ -73,8 +79,7 @@ def npt_dynamics(atoms, dt, tem, bulk_modulus, stress, mask, trajectory, loginte
     else:
         pfactor = None
     configure_cell(atoms)
-    filtered = FilterDeltas(atoms)
-    dyn = NPT(filtered, dt*units.fs, tem*units.kB, stress*units.GPa,
+    dyn = NPT(atoms, dt*units.fs, tem*units.kB, stress*units.GPa,
               ttime, pfactor, mask=mask, trajectory=trajectory,
               append_trajectory=append, loginterval=loginterval)
     return dyn

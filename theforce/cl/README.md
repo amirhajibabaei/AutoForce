@@ -115,6 +115,7 @@ rattle:       rattle atoms at the initial step (default=0.0)
 tdamp:        temperature damping time (fs) (default=25)
 pdamp:        pressure damping time (fs) (default=100)
 friction:     for Langevin dynamics (default=1e-3)
+ml_filter:    range(0, 1); filters force discontinuities due to ML updates (default=None)
 ```
 All of the above tags have default values which will be overridden
 with the settings in `ARGS`. 
@@ -154,6 +155,14 @@ If hydrogen is present in the system,
 faster kinetic damping (smaller `tdamp`) may be needed, 
 at least in the beginning of training.
 In general faster damping leads to smoother training.
+
+`ml_filter` is used for smooth variation of forces 
+when the ML model is updated. The sudden changes of
+forces will appear as residual force which shrinks
+every step by a factor given by `ml_filter` (e.g. 0.9).
+This smoothens the dynamics but it can also lead to
+bad dynamics (bond breaking, etc) if the frequency 
+of ML updates is too much (e.g. at the beginning of training).
 
 #### Parameters for structure relaxation (file=`ARGS`)
 The parameters for structure relaxation (minimization of forces) 
