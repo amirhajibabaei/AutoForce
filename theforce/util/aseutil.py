@@ -9,7 +9,9 @@ import numpy as np
 
 def init_velocities(atoms, temperature, overwrite=False, cm0=True, rot0=True):
     """temperature in Kelvin"""
-    if atoms.get_velocities() is None or overwrite:
+    vel = atoms.get_velocities()
+    no_vel = vel is None or np.allclose(vel, 0.)
+    if no_vel or overwrite:
         vd.MaxwellBoltzmannDistribution(atoms, temperature*units.kB)
         if cm0:
             vd.Stationary(atoms)
