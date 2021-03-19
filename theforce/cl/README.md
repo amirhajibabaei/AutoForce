@@ -1,64 +1,47 @@
 <!-- #region -->
-### Machine learning from command line
+### On-the-fly machine learning from command line
 Here we describe the steps required for the machine learning accelerated 
-molecular dynamics (MLMD) using VASP from the command line.
-For this, we create the usual files required for a VASP calculation 
-with few minor modifications and extensions.
+molecular dynamics (MLMD) using VASP, Gaussian, etc from the command line.
+For this, we create the usual input input files required for a each 
+ab initio software.
+Then ML and MD related parameters, which do not depend on underlying 
+ab initi calculator, are set in the `ARGS` file.
 
-#### POSCAR and KPOINTS
-Create these files as usual.
+#### Ab initio settings
+The input files for ab initio calculations depend on the software:
+* VASP: see [theforce/cl/README_vasp.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl/README_vasp.md).
+* Gaussian: see [theforce/cl/README_gaussian.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl/README_gaussian.md).
 
-#### POTCAR
-`POTCAR` will be created automatically if the environment variable 
-`VASP_PP_PATH` is properly set.
-For more information see [this](https://wiki.fysik.dtu.dk/ase/ase/calculators/vasp.html).
-In this case one can control which potcars are used by creating a 
-file called `SETUPS`.
-For example a `SETUPS` containing the following will use `Li_sv`.
-```
-Li = _sv
-```
-
-#### INCAR
-Set the tags in `INCAR` as usual while adhering to the following.
-
-First, we shouldn't set any tags related to ionic steps in `INCAR`
-because `ase.md.npt` will drive the dynamics.
-Only tags related to the electronic steps should be set.
-
-Second, if necessary, we set the initial magnetic moments not in `INCAR`,
-but in a new file named `IMAG`.
-For example a line like 
-```
-28 = 2.
-```
-in `IMAG` sets the initial magnetic moment of 2. for all Ni atoms.
+Note that these files should be prepared only for single-point energy and force calculations.
 
 #### Parameters for ML (file=`ARGS`)
 The parameters for ML should be provided in a file named `ARGS`. 
 This group of parameters are used for setting up the machine
 learning calculator and are the same for most ML tasks.
+Keep in mind that the default behavior is set such that
+the result model of previous calculations is automatically 
+loaded if the respective files are present in the working directory.
 The following tags are available
 ```
 # inputs
-covariance:      None, a kernal, folder-name for loading a pickled model (default=None)
-calculator:      None or 'VASP' (default=None)
+covariance:      'pckl', None, a kernal, folder-name for loading a pickled model (default='pckl')
+calculator:      None, 'VASP', 'Gaussian' (default=None)
 
 # outputs
 logfile:         file name for logging (default='active.log')
 pckl:            folder-name for pickling the ML model (default='model.pckl')
 tape:            for saving all of the model updates (default='model.sgpr')
-test:            single-point testing intervals (default=None)
+test:            integer; single-point testing intervals (default=None)
 
 # sampling and optimization
-ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 1 kcal/mol)
+ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
 ediff_tot: (eV)  total energy sensitivity for sampling DFT data (default ~ 4 kcal/mol)
-fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 2 kcal/mol)
+fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 3 kcal/mol)
 noise_e:   (ev)  bias noise for total energies (default=ediff_tot)
 noise_f:  (ev/A) bias noise for forces (default=fdiff)
 ```
-Note that these parameters are not related to VASP
-despite possible name similarities.
+Note that these parameters are not related to any 
+ab initio software despite possible name similarities.
 They are explained in detail in
 [theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/calculator).
 The only difference is that here we specify the 
@@ -75,6 +58,11 @@ covariance = 'model.pckl'
 ```
 Thus `covariance` is the input model and `pckl`
 is the output model.
+The default is `covariance='pckl'` which means
+input and output models are the same.
+Thus the training is resumed in consecutive runs 
+(the model is automatically loaded and saved in
+the `pckl` folder).
 
 After sufficient training, one might want to use
 the result ML potential for fast simulations 
@@ -82,9 +70,9 @@ without further training.
 For this, all you need to do is to not specify any 
 `calculator` in `ARGS` or set `calculator=None`.
 
-The other paramteres which control the sampling
-and accuracy should be gradually tuned to get the
-desired accuracy.
+The other paramteres (`ediff`, `fdiff`) which control 
+the sampling and accuracy should be gradually tuned to 
+get the desired accuracy.
 
 #### Model initialization from random displacements (optional)
 In most cases starting from an empty ML model 
@@ -108,14 +96,13 @@ trajectory:   traj file name (defult='init.traj')
 ```
 After execution a pickled model will be generated
 in the working directory (default name is `pckl='model.pckl/'`).
-Next, we set `covariance = 'model.pckl/'` in `ARGS`
-for making it available for the next simulation.
 
 #### Parameters for MD (file=`ARGS`)
 The parameters for MD are also set in the `ARGS` file.
 The following tags are available
 ```
 dt:           time-step in fs (default=1. or 0.25 if H is present)
+dynamics:     'NPT', 'Langevin' (default='NPT')
 tem:          temperature in Kelvin (default=300.)
 picos:        pico-seconds for md (default=100)
 bulk_modulus: bulk_modulus for NPT simulations. if None (default), NVT is performed
@@ -125,6 +112,10 @@ trajectory:   traj file name (default='md.traj')
 loginterval:  for traj file (default=1)
 append:       append to traj file (default=False)
 rattle:       rattle atoms at the initial step (default=0.0)
+tdamp:        temperature damping time (fs) (default=25)
+pdamp:        pressure damping time (fs) (default=100)
+friction:     for Langevin dynamics (default=1e-3)
+ml_filter:    range(0, 1); filters force discontinuities due to ML updates (default=None)
 ```
 All of the above tags have default values which will be overridden
 with the settings in `ARGS`. 
@@ -160,6 +151,19 @@ For this, we have introduced the `rattle` tag
 which disturbs the atoms at the initial state.
 The default value is `rattle=0.0`.
 
+If hydrogen is present in the system, 
+faster kinetic damping (smaller `tdamp`) may be needed, 
+at least in the beginning of training.
+In general faster damping leads to smoother training.
+
+`ml_filter` is used for smooth variation of forces 
+when the ML model is updated. The sudden changes of
+forces will appear as residual force which shrinks
+every step by a factor given by `ml_filter` (e.g. 0.9).
+This smoothens the dynamics but it can also lead to
+bad dynamics (bond breaking, etc) if the frequency 
+of ML updates is too much (e.g. at the beginning of training).
+
 #### Parameters for structure relaxation (file=`ARGS`)
 The parameters for structure relaxation (minimization of forces) 
 are also set in the `ARGS` file. The following tags are available
@@ -185,12 +189,11 @@ many atoms are identical.
 
 #### Run
 Lets assume that 20 cores are available.
-We split these cores to 12 for VASP and 8 for ML.
-Then in a file named `COMMAND` we write
-```sh
-mpirun -n 12 vasp_std
-```
-After this, the simulation can be started with 
+We split these cores to 12 for the underlying ab initio 
+software and 8 for ML.
+Specification of cores for the ab initio software 
+is done in their respective input files (or in a file named `COMMAND`).
+Then, the simulation can be started with 
 the following script
 ```sh
 python -m theforce.calculator.calc_server &
@@ -201,21 +204,17 @@ sleep 1 # waits 1 sec for the server to be set
 # mpirun -n 8 python -m theforce.cl.relax       # for structure relaxation
 mpirun -n 8 python -m theforce.cl.md            # for ML accelerated MD
 ```
-This will try to read the initial coordinates
-from `POSCAR` and will write the final coordinates
-in `CONTCAR` for convenience.
-Optionally other file names can be passed as input
-and ouput using `-i input-name` and `-o output-name`
-command line arguments.
+Optionally, input and ouput atomic positions can be specified by
+`-i input-name` and `-o output-name`.
 
 #### Outputs
 The trajectory is saved in `trajectory='md.traj'` for MD
 and `'relax.traj'` for relaxation by default.
 This file can be processed using the `ase.io` module.
 The final coordinates of atoms are also written
-to `CONTCAR` for convenience.
-Possibly a folder named `vasp` which contains
-the most recent (single-point) VASP calculation
+in some capacity for convenience.
+Possibly a folder named `vasp` or `gaussian_wd` which contains
+the most recent (single-point) ab initio calculation
 may be present.
 The log for ML is written in `logfile='active.log'` which 
 can be visualized (converted to `active.pdf`) by
@@ -224,8 +223,7 @@ python -m theforce.calculator.active active.log
 ```
 The resulting ML model is saved in the `pckl` 
 (default=`'model.pckl'`) which can be used as the 
-input model for the next simulation 
-(by `covariance='model.pckl'` in `ARGS`).
+input model for the next simulation.
 ML updates are saved in the file specified by `tape`
 (default=`'model.sgpr'`).
 This file can be used for retraining with different
@@ -258,8 +256,6 @@ mpirun -n 20 python -m theforce.cl.train -i OUTCAR-1 OUTCAR-2   # read two OUTCA
 mpirun -n 20 python -m theforce.cl.train -i */OUTCAR            # all OUTCAR files in subfolders
 mpirun -n 20 python -m theforce.cl.train -i model.sgpr          # use the tape from another training
 ```
-Make sure to track the input and output models using the
-`covariance` and `pckl` tags in the `ARGS` file.
 Similarly, for testing
 ```sh
 mpirun -n 20 python -m theforce.cl.test -i dft.traj -o ml.traj # optionally -r ::

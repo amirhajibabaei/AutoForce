@@ -21,6 +21,12 @@ def default_kernel(cutoff=6.):
     return SeSoapKernel(3, 3, 4, cutoff, radii=DefaultRadii())
 
 
+def clamp_forces(f, m):
+    g = np.where(f>m, m, f)
+    h = np.where(g<-m, -m, g)
+    return h
+
+
 class FilterDeltas(Filter):
 
     def __init__(self, atoms, shrink=0.95):
@@ -39,7 +45,8 @@ class FilterDeltas(Filter):
         if deltas:
             self.f += deltas['forces']
         self.f *= self.shrink
-        return f - self.f
+        g = clamp_forces(self.f, 1.)
+        return f - g
 
     def get_stress(self, *args, **kwargs):
         s = self.atoms.get_stress(*args, **kwargs)
@@ -62,10 +69,11 @@ class ActiveCalculator(Calculator):
 
     def __init__(self, covariance='pckl', calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
-                 ediff=kcal_mol, ediff_lb=None, ediff_ub=None,
-                 ediff_tot=4*kcal_mol, fdiff=2*kcal_mol,
+                 ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
+                 ediff_tot=4*kcal_mol, fdiff=3*kcal_mol,
                  noise_e=-1, noise_f=None,
-                 ignore_forces=False):
+                 ignore_forces=False,
+                 include_params=None):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -197,6 +205,9 @@ class ActiveCalculator(Calculator):
 
         ignore_forces:
             This eliminates the forces from regression.
+        include_params:
+            This applies some constraints for sampling data when include_data/-tape are called.
+            e.g. {'fmax': 5.0}, etc.
         """
 
         Calculator.__init__(self)
@@ -231,6 +242,9 @@ class ActiveCalculator(Calculator):
         self.updated = False
         self._update_args = {}
         self.ignore_forces = ignore_forces
+        self.include_params = {'fmax': float('inf')}
+        if include_params:
+            self.include_params.update(include_params)
 
     @property
     def active(self):
@@ -298,15 +312,17 @@ class ActiveCalculator(Calculator):
 
         # active learning
         self.deltas = None
-        self.covlog = ''
         if self.active:
             pre = self.results.copy()
             m, n = self.update(**self._update_args)
             if n > 0 or m > 0:
                 self.update_results(self.meta is not None)
-                self.deltas = {}
-                for quant in ['energy', 'forces', 'stress']:
-                    self.deltas[quant] = self.results[quant] - pre[quant]
+                if self.step > 0:
+                    self.deltas = {}
+                    for quant in ['energy', 'forces', 'stress']:
+                        self.deltas[quant] = self.results[quant] - pre[quant]
+        else:
+            self.covlog = f'{float(self.get_covloss().max())}'
         energy = self.results['energy']
 
         # test
@@ -614,6 +630,8 @@ class ActiveCalculator(Calculator):
             data = ase.io.read(data, '::')
         _calc = self._calc
         for atoms in data:
+            if abs(atoms.get_forces()).max() > self.include_params['fmax']:
+                continue
             self._calc = atoms.calc
             atoms.set_calculator(self)
             atoms.get_potential_energy()
@@ -627,6 +645,8 @@ class ActiveCalculator(Calculator):
         added_lce = [0, 0]
         for cls, obj in tape.read():
             if cls == 'atoms':
+                if abs(obj.get_forces()).max() > self.include_params['fmax']:
+                    continue
                 if added_lce[0] > 0:
                     self.log('added lone indus: {}/{} -> size: {} {}'.format(
                         *added_lce, *self.size))

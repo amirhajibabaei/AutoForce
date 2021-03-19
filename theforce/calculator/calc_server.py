@@ -4,6 +4,7 @@ from ase.io import read
 from theforce.util.server import Server
 import warnings
 from theforce.util.util import date
+import importlib
 
 
 def reserve_ofile(o, msg='reserved'):
@@ -20,12 +21,20 @@ def get_calc(script, ref='calc'):
     return scope[ref]
 
 
-def get_scope(script):
+def _get_scope(script):
     scope = {}
     try:
         exec(open(script).read(), scope)
     except TypeError:
         exec(script.read(), scope)
+    return scope
+
+
+def get_scope(script):
+    spec = importlib.util.spec_from_file_location("calc_module", script)
+    calc_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(calc_module)
+    scope = {'calc': calc_module.calc}
     return scope
 
 
