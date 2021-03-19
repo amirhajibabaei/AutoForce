@@ -21,7 +21,7 @@ class GaussianCalculator(Calculator):
         if command:
             self.args = parse_command(command)
         else:
-            self.args = (get_gex(), 'Gaussian.com', 'Gaussian.log')
+            self.args = (get_gex(), 'Gaussian.gjf', 'Gaussian.log')
         self.blocks = get_blocks(self.args[1])
         self.wd = wd
 
