@@ -12,7 +12,7 @@ import os
 
 def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None,
        trajectory='md.traj', loginterval=1, append=False, rattle=0.0, tdamp=25, pdamp=100, friction=1e-3,
-       ml_filter=None):
+       ml_filter=0.8):
     """
     atoms:        ASE atoms
     dynamics:     'NPT'
