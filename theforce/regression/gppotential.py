@@ -159,15 +159,15 @@ def mean_energy_per_atom_type(data, eps=1e-3):
 
 class DefaultMean:
 
-    def __init__(self):
-        self.weights = {}
+    def __init__(self, weights=None):
+        self.weights = {} if weights is None else weights
         self.unique_params = []
 
     def set_data(self, data):
         self.weights = mean_energy_per_atom_type(data)
 
     def __call__(self, atoms, forces=False):
-        e = 0.
+        e = torch.zeros([])
         for a in atoms:
             if a.number in self.weights:
                 e += self.weights[a.number]
@@ -176,6 +176,10 @@ class DefaultMean:
         else:
             return e
 
+    def __repr__(self):
+        w = {z: float(w) for z, w in self.weights.items()}
+        return f"DefaultMean({w})"
+
 
 class GaussianProcessPotential(Module):
 
@@ -183,7 +187,7 @@ class GaussianProcessPotential(Module):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
-        self.parametric = parametric or ConstMean()
+        self.parametric = parametric or DefaultMean()
 
     @property
     def params(self):
@@ -340,11 +344,12 @@ class GaussianProcessPotential(Module):
     def __repr__(self):
         return self.state
 
-    def to_file(self, file, flag='', mode='a'):
+    def to_file(self, file, flag='', mode='w'):
         from theforce.util.util import one_liner
         with open(file, mode) as f:
-            f.write('\n\n\n#flag: {}\n'.format(flag))
+            f.write('\n#flag: {}\n'.format(flag))
             f.write(one_liner(self.state))
+            f.write('\n')
 
 
 def context_setting(method):
@@ -449,9 +454,15 @@ class PosteriorPotential(Module):
     def mean(self):
         return self.gp.parametric
 
+    @mean.setter
+    def mean(self, value):
+        self.gp.parametric = value
+
     def make_munu(self, algo=2, noisegrad=False, **kw):
         if self.M.numel() == 0 or self.K.numel() == 0:
             return
+        if not isinstance(self.mean, DefaultMean):
+            self.mean = DefaultMean()  # ConstMean -> DefaultMean
         self.mean.set_data(self.data)
         parallel = torch.distributed.is_initialized()
         if parallel:
