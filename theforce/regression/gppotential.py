@@ -139,6 +139,44 @@ class ConstMean:
             return e
 
 
+def mean_energy_per_atom_type(data, eps=1e-3):
+    types, counts = zip(*[(z, c) for z, c in data.counts().items()])
+    indices = {z: k for k, z in enumerate(types)}
+    X = torch.zeros(len(data), len(types))
+    for i, atoms in enumerate(data):
+        for z, c in atoms.counts().items():
+            X[i, indices[z]] = c
+    N = torch.tensor(data.natoms)
+    Y = data.target_energy
+    mean = (Y/N).mean()
+    cov = X.t()@X
+    ridge = cov.diag().mean()*torch.eye(len(types))*eps
+    inv = (ridge + cov).cholesky().cholesky_inverse()
+    mu = inv@X.t()@(Y-mean*N) + mean
+    weights = {z: w for z, w in zip(types, mu)}
+    return weights
+
+
+class DefaultMean:
+
+    def __init__(self):
+        self.weights = {}
+        self.unique_params = []
+
+    def set_data(self, data):
+        self.weights = mean_energy_per_atom_type(data)
+
+    def __call__(self, atoms, forces=False):
+        e = 0.
+        for a in atoms:
+            if a.number in self.weights:
+                e += self.weights[a.number]
+        if forces:
+            return e, torch.zeros(len(atoms), 3)
+        else:
+            return e
+
+
 class GaussianProcessPotential(Module):
 
     def __init__(self, kernels, noise=White(signal=0.01, requires_grad=True), parametric=None):
