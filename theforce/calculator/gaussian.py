@@ -13,7 +13,7 @@ import numpy as np
 class GaussianCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress']
 
-    def __init__(self, command=None, wd='gaussian_wd'):
+    def __init__(self, command=None, wd='gaussian_wd', subtract=False):
         """
         command: 'path_to_gxx < input > output'
         gxx: g16, g09, or g03
@@ -25,14 +25,16 @@ class GaussianCalculator(Calculator):
             self.args = (get_gex(), 'Gaussian.gjf', 'Gaussian.log')
         self.blocks = get_blocks(self.args[1])
         self.wd = wd
+        self.subtract = subtract
         self._single_atom_energy = {}
 
     def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
         # calculate energy-subtract
         subtract = 0
-        for a in self.atoms:
-            subtract += self.single_atom_energy(a.symbol)
+        if self.subtract:
+            for a in self.atoms:
+                subtract += self.single_atom_energy(a.symbol)
         # single-point calculation
         output = self._run(self.atoms)
         if output is None:
