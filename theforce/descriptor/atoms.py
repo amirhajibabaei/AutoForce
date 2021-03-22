@@ -409,7 +409,7 @@ class TorchAtoms(Atoms):
                          pbc=self.pbc.copy())
         if group and self.is_distributed:
             new.attach_process_group(self.process_group)
-            new.indices = self.indices # TODO: ignore?
+            new.indices = self.indices  # TODO: ignore?
         if update:
             new.update(cutoff=self.cutoff, descriptors=self.descriptors)
         vel = self.get_velocities()
@@ -504,10 +504,14 @@ class TorchAtoms(Atoms):
         self.attach_process_group(group)
         self.loc = [self.loc[i] for i in self.indices]
 
-    def counts(self):
+    def counts(self, total=True):
         c = Counter()
-        for loc in self.loc:
-            c[loc.number] += 1
+        if total:
+            for number in self.numbers.tolist():
+                c[number] += 1
+        else:
+            for loc in self.loc:
+                c[loc.number] += 1
         return c
 
 
@@ -671,10 +675,10 @@ class AtomsData:
         return LocalsData([random.choice(random.choice(self)).detach(keepids=keepids)
                            for _ in range(size)])
 
-    def counts(self):
+    def counts(self, total=True):
         c = Counter()
         for atoms in self:
-            for a, n in atoms.counts().items():
+            for a, n in atoms.counts(total=total).items():
                 c[a] += n
         return c
 

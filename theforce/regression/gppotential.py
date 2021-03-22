@@ -169,9 +169,9 @@ class DefaultMean:
 
     def __call__(self, atoms, forces=False):
         e = torch.zeros([])
-        for a in atoms:
-            if a.number in self.weights:
-                e += self.weights[a.number]
+        for number, count in atoms.counts().items():
+            if number in self.weights:
+                e += count*self.weights[number]
         if forces:
             return e, torch.zeros(len(atoms), 3)
         else:
