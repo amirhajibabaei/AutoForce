@@ -139,7 +139,7 @@ class ConstMean:
             return e
 
 
-def mean_energy_per_atom_type(data, eps=1e-3):
+def mean_energy_per_atom_type(data):
     types, counts = zip(*[(z, c) for z, c in data.counts().items()])
     indices = {z: k for k, z in enumerate(types)}
     X = torch.zeros(len(data), len(types))
@@ -150,10 +150,11 @@ def mean_energy_per_atom_type(data, eps=1e-3):
     Y = data.target_energy
     mean = (Y/N).mean()
     cov = X.t()@X
-    ridge = cov.diag().mean()*torch.eye(len(types))*eps
-    inv = (ridge + cov).cholesky().cholesky_inverse()
+    L, ridge = jitcholesky(cov)
+    inv = L.cholesky_inverse()
     mu = inv@X.t()@(Y-mean*N) + mean
     weights = {z: w for z, w in zip(types, mu)}
+    # max_err = (X@mu-Y).abs().max()
     return weights
 
 
