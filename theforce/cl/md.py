@@ -59,7 +59,7 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     if calc.meta is not None:
         dyn.attach(calc.meta.update)
 
-    steps = int(picos*1000/dt)
+    steps = int(picos*1000/dt) if picos > 0 else -picos
     dyn.run(steps)
 
 
