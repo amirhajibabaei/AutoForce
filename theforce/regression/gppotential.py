@@ -1060,7 +1060,7 @@ def kldiv_normal(y, sigma):
     return loss
 
 
-def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=0.1):
+def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=0.1, ldiff=1e-4):
 
     if not hasattr(self, '_noise'):
         self._noise = {}
@@ -1106,7 +1106,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
 
     #
     params = [{'params': self._noise.values()},
-              {'params': self.mean.unique_params, 'lr': 1.}]
+              {'params': self.mean.unique_params, 'lr': 0.1}]
     for grp in params:
         for par in grp['params']:
             par.requires_grad = True
@@ -1159,7 +1159,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
     _loss = step()
     for _ in range(1000):
         loss = step()
-        if abs(loss-_loss) < 1e-8*abs(loss):
+        if abs(loss-_loss) < ldiff*abs(loss):
             break
         _loss = loss
 

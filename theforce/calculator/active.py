@@ -70,7 +70,7 @@ class ActiveCalculator(Calculator):
     def __init__(self, covariance='pckl', calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
-                 ediff_tot=4*kcal_mol, fdiff=3*kcal_mol,
+                 ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, ldiff=1e-4,
                  noise_e=0., noise_f=0.,
                  ignore_forces=False,
                  include_params=None):
@@ -220,6 +220,7 @@ class ActiveCalculator(Calculator):
         self.ediff_ub = ediff_ub or self.ediff
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
+        self.ldiff = ldiff
         self.noise_e = ediff_tot if noise_e is None else noise_e
         self.noise_f = fdiff if noise_f is None else noise_f
         self.meta = meta
@@ -602,7 +603,7 @@ class ActiveCalculator(Calculator):
 
     def optimize(self):
         self.model.optimize_model_parameters(
-            noise_e=self.noise_e, noise_f=self.noise_f)
+            noise_e=self.noise_e, noise_f=self.noise_f, ldiff=self.ldiff)
 
     def update(self, inducing=True, data=True):
         self.updated = False
