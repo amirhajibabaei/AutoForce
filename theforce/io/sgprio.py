@@ -39,7 +39,7 @@ def read_lce(blk):
 
 def convert_block(typ, blk):
     if typ == 'atoms':
-        obj = read(io.StringIO(''.join(blk)), format='xyz')
+        obj = read(io.StringIO(''.join(blk)), format='extxyz')
     elif typ == 'local':
         obj = read_lce(blk)
     elif typ == 'params':
