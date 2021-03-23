@@ -182,13 +182,47 @@ class DefaultMean:
         return f"DefaultMean({w})"
 
 
+class AutoMean:
+
+    def __init__(self, weights=None):
+        if weights is None:
+            weights = {}
+        self.weights = {z: torch.as_tensor(w) for z, w in weights.items()}
+
+    @property
+    def unique_params(self):
+        return self.weights.values()
+
+    def set_data(self, data):
+        if self.weights == {}:
+            self.weights = mean_energy_per_atom_type(data)
+        else:
+            for z, c in data.counts().items():
+                if z not in self.weights:
+                    self.weights[z] = torch.tensor(0.)
+
+    def __call__(self, atoms, forces=False):
+        e = torch.zeros([])
+        for number, count in atoms.counts().items():
+            if number in self.weights:
+                e += count*self.weights[number]
+        if forces:
+            return e, torch.zeros(len(atoms), 3)
+        else:
+            return e
+
+    def __repr__(self):
+        w = {z: float(w) for z, w in self.weights.items()}
+        return f"AutoMean({w})"
+
+
 class GaussianProcessPotential(Module):
 
     def __init__(self, kernels, noise=White(signal=0.01, requires_grad=True), parametric=None):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
-        self.parametric = parametric or DefaultMean()
+        self.parametric = parametric or AutoMean()
 
     @property
     def params(self):
@@ -462,8 +496,8 @@ class PosteriorPotential(Module):
     def make_munu(self, algo=2, noisegrad=False, **kw):
         if self.M.numel() == 0 or self.K.numel() == 0:
             return
-        if not isinstance(self.mean, DefaultMean):
-            self.mean = DefaultMean()  # ConstMean -> DefaultMean
+        if not isinstance(self.mean, AutoMean):
+            self.mean = AutoMean()  # xxxMean -> AutoMean
         self.mean.set_data(self.data)
         parallel = torch.distributed.is_initialized()
         if parallel:
