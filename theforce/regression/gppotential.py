@@ -1078,13 +1078,13 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
     L, ridge = jitcholesky(self.M)
     self.ridge = torch.as_tensor(ridge)
     self.choli = L.inverse().contiguous()
-    y = self.gp.Y(self.data)
     ndat = len(self.data)
     select = ndat if self.ignore_forces else None
-    Y = torch.cat((y[:select], torch.zeros(L.size(0))))
 
     #
     def make():
+        y = self.gp.Y(self.data)
+        Y = torch.cat((y[:select], torch.zeros(L.size(0))))
         sigma = 0
         for z in zset:
             sigma_z = to_0_1(self._noise[z])*scale[z]
@@ -1105,7 +1105,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
         return
 
     #
-    params = self._noise.values()
+    params = [*self._noise.values(), *self.mean.unique_params]
     for par in params:
         par.requires_grad = True
     opt = torch.optim.Adam(params, lr=lr)
@@ -1155,7 +1155,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
 
     #
     _loss = step()
-    for _ in range(100):
+    for _ in range(1000):
         loss = step()
         if abs(loss-_loss) < 0.01*abs(loss):
             break
