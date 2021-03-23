@@ -22,8 +22,8 @@ def default_kernel(cutoff=6.):
 
 
 def clamp_forces(f, m):
-    g = np.where(f>m, m, f)
-    h = np.where(g<-m, -m, g)
+    g = np.where(f > m, m, f)
+    h = np.where(g < -m, -m, g)
     return h
 
 
@@ -71,7 +71,7 @@ class ActiveCalculator(Calculator):
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol,
-                 noise_e=-1, noise_f=None,
+                 noise_e=0., noise_f=0.,
                  ignore_forces=False,
                  include_params=None):
         """
@@ -619,6 +619,7 @@ class ActiveCalculator(Calculator):
                 *(float(v) for v in self.model._stats)))
             if self.rank == 0:
                 self.log(f'noise: {self.model.scaled_noise}')
+                self.log(f'mean: {self.model.mean}')
             if self.pckl:
                 self.model.to_folder(self.pckl)
             self.updated = True
