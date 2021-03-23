@@ -268,7 +268,9 @@ class TorchAtoms(Atoms):
             indices = balance_work(self.natoms, workers)
             rank = torch.distributed.get_rank(group=self.process_group)
             if randomize:
-                w = np.random.permutation(workers)
+                # reproducibility issue: rnd sequence becomes workers dependent
+                # w = np.random.permutation(workers)
+                w = (np.arange(workers) + np.random.randint(1024)) % workers
                 j = np.random.permutation(self.natoms)
                 self.indices = j[range(*indices[w[rank]])].tolist()
             else:
