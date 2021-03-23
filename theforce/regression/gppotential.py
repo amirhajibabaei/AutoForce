@@ -1159,7 +1159,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
     _loss = step()
     for _ in range(1000):
         loss = step()
-        if abs(loss-_loss) < 0.01*abs(loss):
+        if abs(loss-_loss) < 1e-8*abs(loss):
             break
         _loss = loss
 
