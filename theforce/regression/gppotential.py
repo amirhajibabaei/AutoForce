@@ -1105,9 +1105,11 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
         return
 
     #
-    params = [*self._noise.values(), *self.mean.unique_params]
-    for par in params:
-        par.requires_grad = True
+    params = [{'params': self._noise.values()},
+              {'params': self.mean.unique_params, 'lr': 1.}]
+    for grp in params:
+        for par in grp['params']:
+            par.requires_grad = True
     opt = torch.optim.Adam(params, lr=lr)
     dat_num = torch.cat([atoms.tnumbers for atoms in self.data])
     dat_num = dat_num.view(-1, 1).repeat(1, 3).view(-1)
@@ -1162,8 +1164,9 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
         _loss = loss
 
     #
-    for par in params:
-        par.requires_grad = False
+    for grp in params:
+        for par in grp['params']:
+            par.requires_grad = False
     opt.zero_grad()
     make()
     self.mu = self.mu.detach()
