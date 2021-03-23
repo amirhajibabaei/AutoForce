@@ -1165,6 +1165,7 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
     for par in params:
         par.requires_grad = False
     opt.zero_grad()
+    make()
     self.mu = self.mu.detach()
     self.scaled_noise = {
         a: float(to_0_1(b)*scale[a]) for a, b in self._noise.items()}
