@@ -91,14 +91,11 @@ class ActiveCalculator(Calculator):
             ediff_ub:        upper-bound for ediff | None -> ediff
             ediff_tot:       total energy sensitivity (eV) | inf is allowed
             fdiff:           forces sensitivity (eV/A) | inf is allowed
+            ldiff:           exit optimization if |delta-loss| < ldiff*|loss|
 
         callables:
             include_data     for modeling the existing data
             include_tape     for training from a sgpr tape
-
-        *** important ***
-        The default parameters are chosen for the most common uses such as 
-        MD where the accuracy of forces is important rather than energy.
 
         *** important ***
         You may wants to wrap atoms with FilterDeltas if you intend to 
