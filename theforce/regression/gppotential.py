@@ -1062,6 +1062,9 @@ def kldiv_normal(y, sigma):
 
 def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=0.1, ldiff=1e-4):
 
+    if self.ignore_forces:
+        raise RuntimeError('ignore_forces is deprecated!')
+
     if not hasattr(self, '_noise'):
         self._noise = {}
 
@@ -1078,100 +1081,72 @@ def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=
     L, ridge = jitcholesky(self.M)
     self.ridge = torch.as_tensor(ridge)
     self.choli = L.inverse().contiguous()
-    ndat = len(self.data)
-    select = ndat if self.ignore_forces else None
+    data = self.data
+    ndat = len(data)
+    energies = data.target_energy
+    forces = torch.cat([atoms.target_forces.view(-1) for atoms in data])
+    Y = torch.cat((forces, torch.zeros(L.size(0))))
 
     #
-    def make():
-        y = self.gp.Y(self.data)
-        Y = torch.cat((y[:select], torch.zeros(L.size(0))))
+    def make_mu():
         sigma = 0
         for z in zset:
             sigma_z = to_0_1(self._noise[z])*scale[z]
             sigma = sigma + (numbers == z).type(L.type())*sigma_z
         sigma = sigma.diag()
-        A = torch.cat((self.K[:select], sigma@L.t()))
+        A = torch.cat((self.Kf, sigma@L.t()))
         Q, R = torch.qr(A)
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
-        self._y = self.K@self.mu
-        diff = self._y - y
-        self._ediff = diff[:ndat]
-        self._fdiff = diff[ndat:]
+        diff = self.Kf@self.mu - forces
+        return diff
 
-    opt_e = noise_e is not None and noise_e >= 0.
-    opt_f = noise_f is not None and noise_f >= 0.
-    if not optimize or (not opt_e and not opt_f):
-        make()
-        return
-
-    #
-    params = [{'params': self._noise.values()},
-              {'params': self.mean.unique_params, 'lr': 0.1}]
-    for grp in params:
-        for par in grp['params']:
-            par.requires_grad = True
-    opt = torch.optim.Adam(params, lr=lr)
-    dat_num = torch.cat([atoms.tnumbers for atoms in self.data])
-    dat_num = dat_num.view(-1, 1).repeat(1, 3).view(-1)
-
-    def loss_fn_e():
-        if not opt_e:
-            return 0.
-        mean = self._ediff.mean()
-        std = self._ediff.pow(2).mean().sqrt()
-        loss = mean**2 + (std - noise_e)**2
-        return loss
-
-    def loss_fn_f_fine():
-        if not opt_f:
-            return 0.
-        loss = 0.
-        for z in zset:
-            delta = self._fdiff[dat_num == z]
-            mean = delta.mean()
-            std = delta.pow(2).mean().sqrt()
-            loss = loss + mean**2 + (std - noise_f)**2
-        return loss
-
-    def loss_fn_f_gross():
-        if not opt_f:
-            return 0.
-        delta = self._fdiff
-        mean = delta.mean()
-        std = delta.pow(2).mean().sqrt()
-        loss = mean**2 + (std - noise_f)**2
-        # loss = kldiv_normal(self._fdiff, noise_f)
-        return loss
-
-    loss_fn_f = loss_fn_f_fine
-
-    #
-    def step():
+    def step_mu(opt):
         opt.zero_grad()
-        make()
-        loss = loss_fn_e() + loss_fn_f()
+        diff = make_mu()
+        loss = diff.pow(2).mean()
         if loss.grad_fn:
             loss.backward()
         opt.step()
         return loss
 
-    #
-    _loss = step()
-    for _ in range(1000):
-        loss = step()
-        if abs(loss-_loss) < ldiff*abs(loss):
-            break
-        _loss = loss
+    def descent(step_fn, params, lr=0.1, maxsteps=1000):
+        for par in params:
+            par.requires_grad = True
+        opt = torch.optim.Adam(params, lr=lr)
+        _loss = step_fn(opt)
+        for k in range(maxsteps):
+            loss = step_fn(opt)
+            if abs(loss-_loss) < ldiff*abs(loss):
+                break
+            _loss = loss
+        for par in params:
+            par.requires_grad = False
+        opt.zero_grad()
+        return k+1
 
     #
-    for grp in params:
-        for par in grp['params']:
-            par.requires_grad = False
-    opt.zero_grad()
-    make()
+    if optimize:
+        steps = descent(step_mu, self._noise.values())
+    make_mu()
     self.mu = self.mu.detach()
     self.scaled_noise = {
         a: float(to_0_1(b)*scale[a]) for a, b in self._noise.items()}
+
+    #
+    def step_energy(opt):
+        opt.zero_grad()
+        mean = self.gp.mean(data, forces=False)
+        diff = mean - delta_energies
+        loss = diff.pow(2).mean()
+        if loss.grad_fn:
+            loss.backward()
+        opt.step()
+        return loss
+
+    delta_energies = energies - self.Ke@self.mu
+    steps = descent(step_energy, self.mean.unique_params, lr=1.)
+    if steps >= 500:
+        descent(step_energy, self.mean.unique_params, lr=0.1)
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
