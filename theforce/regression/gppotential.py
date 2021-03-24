@@ -1114,7 +1114,7 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
         opt.step()
         return loss
 
-    def descent(step_fn, params, lr=0.1, maxsteps=1000):
+    def descent(step_fn, params, lr=0.1, maxsteps=100):
         for par in params:
             par.requires_grad = True
         opt = torch.optim.Adam(params, lr=lr)
@@ -1130,8 +1130,9 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
         return k+1
 
     #
+    steps_f = 0
     if optimize:
-        steps = descent(step_mu, self._noise.values())
+        steps_f += descent(step_mu, self._noise.values())
     make_mu()
     self.mu = self.mu.detach()
     self.scaled_noise = {
@@ -1149,9 +1150,12 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
         return loss
 
     delta_energies = energies - self.Ke@self.mu
-    steps = descent(step_energy, self.mean.unique_params, lr=1.)
-    if steps >= 500:
-        descent(step_energy, self.mean.unique_params, lr=0.1)
+    _diff = self.gp.mean(data, forces=False) - delta_energies
+    _maxsteps = 3*int(_diff.abs().max())+1
+    steps_e = descent(step_energy, self.mean.unique_params,
+                      lr=1., maxsteps=_maxsteps)
+    if steps_e >= _maxsteps-100:
+        steps_e += descent(step_energy, self.mean.unique_params, lr=0.1)
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
