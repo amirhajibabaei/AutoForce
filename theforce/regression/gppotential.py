@@ -193,6 +193,10 @@ class AutoMean:
     def unique_params(self):
         return self.weights.values()
 
+    def sync_params(self):
+        for k in sorted(self.weights.keys()):
+            torch.distributed.broadcast(self.weights[k], 0)
+
     def set_data(self, data):
         if self.weights == {}:
             self.weights = mean_energy_per_atom_type(data)
@@ -536,6 +540,7 @@ class PosteriorPotential(Module):
             torch.distributed.broadcast(self.ridge, 0)
             torch.distributed.broadcast(self.mu, 0)
             torch.distributed.broadcast(self.choli, 0)
+            self.mean.sync_params()
         if not noisegrad and (self.mu.requires_grad or self.choli.requires_grad):
             warnings.warn('mu or choli requires grad!')
         self.Mi = self.choli.t()@self.choli
