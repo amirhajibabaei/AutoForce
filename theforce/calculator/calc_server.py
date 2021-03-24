@@ -7,7 +7,7 @@ from theforce.util.util import date
 import importlib
 
 
-imported_calcs = {}
+_imported = {}
 
 
 def reserve_ofile(o, msg='reserved'):
@@ -34,12 +34,21 @@ def _get_scope(script):
 
 
 def get_scope(script):
-    if script not in imported_calcs:
-        spec = importlib.util.spec_from_file_location("calc_module", script)
-        calc_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(calc_module)
-        imported_calcs[script] = calc_module.calc
-    scope = {'calc': imported_calcs[script]}
+    if script not in _imported:
+        spec = importlib.util.spec_from_file_location("_import", script)
+        _import = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_import)
+        _imported[script] = _import
+    _module = _imported[script]
+    scope = {'calc': _module.calc}
+    try:
+        scope['preprocess_atoms'] = _module.preprocess_atoms
+    except:
+        pass
+    try:
+        scope['postprocess_atoms'] = _module.postprocess_atoms
+    except:
+        pass
     return scope
 
 
