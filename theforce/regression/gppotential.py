@@ -1065,7 +1065,7 @@ def kldiv_normal(y, sigma):
     return loss
 
 
-def _regression(self, optimize=False, lr=0.1, noise_e=0., noise_f=0., max_noise=0.1, ldiff=1e-4):
+def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
 
     if self.ignore_forces:
         raise RuntimeError('ignore_forces is deprecated!')

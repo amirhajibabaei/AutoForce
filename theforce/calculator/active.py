@@ -71,8 +71,6 @@ class ActiveCalculator(Calculator):
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, ldiff=1e-4,
-                 noise_e=0., noise_f=0.,
-                 ignore_forces=False,
                  include_params=None):
         """
         inputs:
@@ -93,9 +91,6 @@ class ActiveCalculator(Calculator):
             ediff_ub:        upper-bound for ediff | None -> ediff
             ediff_tot:       total energy sensitivity (eV) | inf is allowed
             fdiff:           forces sensitivity (eV/A) | inf is allowed
-            noise_e:         bias for total energy error | -1, 0, and None are allowed | None -> ediff_tot
-            noise_f:         bias for forces error | -1, 0, and None are allowed | None -> fdiff
-            ignore_forces:   ignores forces data
 
         callables:
             include_data     for modeling the existing data
@@ -188,23 +183,6 @@ class ActiveCalculator(Calculator):
             If one of them is inf, it will be ignored. Thus you can set ediff_tot=inf
             for focusing on forces or vice versa.
 
-        noise_e, noise_f: -> used for optimizing the hyper-parameters
-            Often the samplig algorithm can benefit from some synthetic noise.
-            In optimization of hyper-parameters, the errors are minimized towards
-            these values. They can be set to 0 for simple minimization of RMSE;
-            but there is a chance for overfittiong. The value of 0 maybe used
-            for fitting a limitted data with a high accuracy, but in MD simulation 
-            of sensitive systems it is recommended to set noise_f to a finite number 
-            (~kcal/mol) and ignore energies by noise_e = -1; which is the default setting.
-
-            If noise_e = None -> noise_e = ediff_tot
-            If noise_e < 0 -> RMSE of energies is omitted from the loss function.
-
-            If noise_f = None -> noise_f = fdiff
-            If noise_f < 0 -> RMSE of forces is omitted from the loss function.
-
-        ignore_forces:
-            This eliminates the forces from regression.
         include_params:
             This applies some constraints for sampling data when include_data/-tape are called.
             e.g. {'fmax': 5.0}, etc.
@@ -221,8 +199,6 @@ class ActiveCalculator(Calculator):
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
         self.ldiff = ldiff
-        self.noise_e = ediff_tot if noise_e is None else noise_e
-        self.noise_f = fdiff if noise_f is None else noise_f
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
@@ -233,16 +209,14 @@ class ActiveCalculator(Calculator):
         self.log('model size: {} {}'.format(*self.size))
         self.tape = SgprIO(tape)
         if self.active:
-            self.tape.write_params(ediff=self.ediff, ediff_lb=self.ediff_lb, ediff_ub=self.ediff_ub,
-                                   ediff_tot=self.ediff_tot, fdiff=self.fdiff,
-                                   noise_e=self.noise_e, noise_f=self.noise_f)
+            self.tape.write_params(ediff=self.ediff, ediff_tot=self.ediff_tot,
+                                   fdiff=self.fdiff)
         self.test = test
         self._last_test = 0
         self._ktest = 0
         self.normalized = None
         self.updated = False
         self._update_args = {}
-        self.ignore_forces = ignore_forces
         self.include_params = {'fmax': float('inf')}
         if include_params:
             self.include_params.update(include_params)
@@ -602,8 +576,7 @@ class ActiveCalculator(Calculator):
         return added
 
     def optimize(self):
-        self.model.optimize_model_parameters(
-            noise_e=self.noise_e, noise_f=self.noise_f, ldiff=self.ldiff)
+        self.model.optimize_model_parameters(ldiff=self.ldiff)
 
     def update(self, inducing=True, data=True):
         self.updated = False
@@ -689,9 +662,7 @@ class ActiveCalculator(Calculator):
                 f.write(' '.join([str(float(arg)) for arg in args])+'\n')
 
     def log_settings(self):
-        settings = ['ediff',  # 'ediff_lb', 'ediff_ub',
-                    'ediff_tot', 'fdiff',
-                    'noise_e', 'noise_f']
+        settings = ['ediff', 'ediff_tot', 'fdiff']
         s = ''.join([f' {s}: {getattr(self, s)} ' for s in settings])
         self.log(f'settings: {s}')
 
@@ -839,8 +810,6 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
             R2 = axes[3].twinx()
             R2.plot(p, 1-q[:, 4], ':', color='grey')
             R2.set_ylabel(r'$1-R^2$')
-        axes[3].axhline(y=settings['noise_f:'], ls='--', color='k', alpha=0.5)
-        axes[3].axhline(y=-settings['noise_f:'], ls='--', color='k', alpha=0.5)
     fig.tight_layout()
     return fig
 
