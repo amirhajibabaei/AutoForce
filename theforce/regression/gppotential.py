@@ -1151,11 +1151,12 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
 
     delta_energies = energies - self.Ke@self.mu
     _diff = self.gp.mean(data, forces=False) - delta_energies
-    _maxsteps = 3*int(_diff.abs().max())+1
+    _maxsteps = 100*(int(_diff.abs().max())+1)
     steps_e = descent(step_energy, self.mean.unique_params,
                       lr=1., maxsteps=_maxsteps)
     if steps_e >= _maxsteps-100:
-        steps_e += descent(step_energy, self.mean.unique_params, lr=0.1)
+        steps_e += descent(step_energy, self.mean.unique_params,
+                           lr=0.1, maxsteps=_maxsteps)
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
