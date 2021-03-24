@@ -72,7 +72,7 @@ def calculate(file, calc):
         atoms.get_stress()
         if 'postprocess_atoms' in scope:
             scope['postprocess_atoms'](atoms)
-        atoms.write(o)
+        atoms.write(o, format='extxyz')
     except FileNotFoundError:
         warnings.warn(f'unable to read {i} -> calculation skipped')
 

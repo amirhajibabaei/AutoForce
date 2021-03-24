@@ -57,7 +57,7 @@ class SocketCalculator(Calculator):
         if self.rank == 0:
             s = socket.socket()
             s.connect((self.ip, self.port))
-            self.atoms.write('socket_send.xyz')
+            self.atoms.write('socket_send.xyz', format='extxyz')
             s.send(self.message.encode())
             ierr = int(s.recv(1024).decode('utf-8'))
             s.close()

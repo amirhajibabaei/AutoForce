@@ -76,7 +76,7 @@ class SgprIO:
         if rank() == 0:
             with open(self.path, 'a') as f:
                 f.write('\nstart: atoms\n')
-            atoms.write(self.path, format='xyz', append=True)
+            atoms.write(self.path, format='extxyz', append=True)
             with open(self.path, 'a') as f:
                 f.write('end: atoms\n')
 
