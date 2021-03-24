@@ -1142,13 +1142,14 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
     def step_energy(opt):
         opt.zero_grad()
         mean = self.gp.mean(data, forces=False)
-        diff = mean - delta_energies
+        diff = (mean - delta_energies)/N
         loss = diff.pow(2).mean()
         if loss.grad_fn:
             loss.backward()
         opt.step()
         return loss
 
+    N = torch.tensor(data.natoms)
     delta_energies = energies - self.Ke@self.mu
     _diff = self.gp.mean(data, forces=False) - delta_energies
     _maxsteps = 100*(int(_diff.abs().max())+1)
