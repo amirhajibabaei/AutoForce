@@ -10,6 +10,7 @@ from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
 from theforce.optimize.optimizers import ClampedSGD
 from collections import Counter
+from scipy.optimize import minimize
 from math import pi
 import copy
 import os
@@ -1130,7 +1131,7 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
         opt.zero_grad()
         return k+1
 
-    #
+    # optimize mu
     steps_f = 0
     if optimize:
         steps_f += descent(step_mu, self._noise.values())
@@ -1139,27 +1140,23 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
     self.scaled_noise = {
         a: float(to_0_1(b)*scale[a]) for a, b in self._noise.items()}
 
-    #
-    def step_energy(opt):
-        opt.zero_grad()
+    # optimize mean
+    def objective(w):
+        for k, v in zip(keys, w):
+            weights[k] = torch.tensor(v)
         mean = self.gp.mean(data, forces=False)
         diff = (mean - delta_energies)/N
         loss = diff.pow(2).mean()
-        if loss.grad_fn:
-            loss.backward()
-        opt.step()
-        return loss
+        return float(loss)
 
-    if optimize:
-        N = torch.tensor(data.natoms)
-        delta_energies = energies - self.Ke@self.mu
-        _diff = self.gp.mean(data, forces=False) - delta_energies
-        _maxsteps = 100*(int(_diff.abs().max())+1)
-        steps_e = descent(step_energy, self.mean.unique_params,
-                          lr=1., maxsteps=_maxsteps)
-        if steps_e >= _maxsteps-100:
-            steps_e += descent(step_energy, self.mean.unique_params,
-                               lr=0.1, maxsteps=_maxsteps)
+    N = torch.tensor(data.natoms)
+    delta_energies = energies - self.Ke@self.mu
+    weights = self.mean.weights
+    keys = sorted(weights.keys())
+    x0 = [float(weights[k]) for k in keys]
+    res = minimize(objective, x0=x0)
+    for k, v in zip(keys, res.x):
+        weights[k] = torch.tensor(v)
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
