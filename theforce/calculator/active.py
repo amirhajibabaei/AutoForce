@@ -385,7 +385,23 @@ class ActiveCalculator(Calculator):
         details = [(j, self.atoms.numbers[j]) for j in i]
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
+        self.sample_rand_lces(repeat=2)
         self.optimize()
+
+    def sample_rand_lces(self, repeat=1):
+        added = 0
+        for _ in range(repeat):
+            tmp = (self.atoms.as_ase() if self.to_ase else self.atoms).copy()
+            shape = tmp.positions.shape
+            tmp.positions += np.random.uniform(-0.05, 0.05, size=shape)
+            tmp.calc = None
+            atoms = TorchAtoms(ase_atoms=tmp)
+            atoms.update(posgrad=False, cellgrad=False, dont_save_grads=True,
+                         cutoff=self.model.cutoff, descriptors=self.model.descriptors)
+            m = len(atoms.loc)
+            for k in np.random.permutation(m):
+                added += abs(self.update_lce(atoms.loc[k]))
+        self.log(f'added {added} randomly displaced LCEs')
 
     def _test(self):
         tmp = self.atoms.as_ase() if self.to_ase else self.atoms
