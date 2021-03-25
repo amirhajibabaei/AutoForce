@@ -390,7 +390,7 @@ class ActiveCalculator(Calculator):
             self.sample_rand_lces(repeat=2)
         self.optimize()
 
-    def sample_rand_lces(self, repeat=1):
+    def sample_rand_lces(self, repeat=1, extend_cov=False):
         added = 0
         for _ in range(repeat):
             tmp = (self.atoms.as_ase() if self.to_ase else self.atoms).copy()
@@ -402,7 +402,11 @@ class ActiveCalculator(Calculator):
                          cutoff=self.model.cutoff, descriptors=self.model.descriptors)
             m = len(atoms.loc)
             for k in np.random.permutation(m):
-                added += abs(self.update_lce(atoms.loc[k]))
+                res = abs(self.update_lce(atoms.loc[k]))
+                added += res
+                if res > 0 and extend_cov:
+                    cov = self.model.gp.kern(self.atoms, self.model.X[-1])
+                    self.cov = torch.cat([self.cov, cov], dim=1)
         self.log(f'added {added} randomly displaced LCEs')
 
     def _test(self):
