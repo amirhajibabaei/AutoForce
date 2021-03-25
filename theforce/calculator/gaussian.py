@@ -24,6 +24,7 @@ class GaussianCalculator(Calculator):
         else:
             self.args = (get_gex(), 'Gaussian.gjf', 'Gaussian.log')
         self.blocks = get_blocks(self.args[1])
+        self.charge_spin = self.blocks[2][0]
         self.wd = wd
         self.subtract = subtract
         self._single_atom_energy = {}
@@ -74,6 +75,7 @@ class GaussianCalculator(Calculator):
         atoms.write(tmp, format='gaussian-in')
         blocks = get_blocks(tmp)
         self.blocks[2] = blocks[2]
+        self.blocks[2][0] = self.charge_spin
         cwd = os.getcwd()
         mkdir_p(self.wd)
         os.chdir(self.wd)
