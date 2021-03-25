@@ -217,6 +217,7 @@ class ActiveCalculator(Calculator):
         self.include_params = {'fmax': float('inf')}
         if include_params:
             self.include_params.update(include_params)
+        self.tune_for_md = True
 
     @property
     def active(self):
@@ -385,7 +386,8 @@ class ActiveCalculator(Calculator):
         details = [(j, self.atoms.numbers[j]) for j in i]
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
-        self.sample_rand_lces(repeat=2)
+        if self.tune_for_md:
+            self.sample_rand_lces(repeat=2)
         self.optimize()
 
     def sample_rand_lces(self, repeat=1):
@@ -574,6 +576,15 @@ class ActiveCalculator(Calculator):
         return added
 
     def update_data(self, try_fake=True):
+        # try bypassing
+        if self.tune_for_md and len(self.model.data) > 2:
+            last = self.model.data[-1]
+            if last.natoms == self.atoms.natoms:
+                if (last.numbers == self.atoms.numbers).all():
+                    if (abs(last.positions-self.atoms.positions) < 0.1).all():
+                        return 0
+
+        #
         n = self.model.ndata
         new = self.snapshot(fake=try_fake)
         #self.model.add_1atoms(new, self.ediff_tot, self.fdiff)
@@ -616,6 +627,8 @@ class ActiveCalculator(Calculator):
     def include_data(self, data):
         if type(data) == str:
             data = ase.io.read(data, '::')
+        tune_for_md = self.tune_for_md
+        self.tune_for_md = False
         _calc = self._calc
         for atoms in data:
             if abs(atoms.get_forces()).max() > self.include_params['fmax']:
@@ -625,11 +638,14 @@ class ActiveCalculator(Calculator):
             atoms.get_potential_energy()
             atoms.set_calculator(self._calc)
         self._calc = _calc
+        self.tune_for_md = tune_for_md
 
     def include_tape(self, tape):
         if type(tape) == str:
             tape = SgprIO(tape)
         _calc = self._calc
+        tune_for_md = self.tune_for_md
+        self.tune_for_md = False
         added_lce = [0, 0]
         for cls, obj in tape.read():
             if cls == 'atoms':
@@ -650,6 +666,7 @@ class ActiveCalculator(Calculator):
                 added_lce[0] += abs(added)
                 added_lce[1] += 1
         self._calc = _calc
+        self.tune_for_md = tune_for_md
 
     @property
     def rank(self):
