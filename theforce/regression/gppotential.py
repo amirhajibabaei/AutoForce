@@ -1067,7 +1067,7 @@ def kldiv_normal(y, sigma):
     return loss
 
 
-def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
+def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff=1e-4):
 
     if self.ignore_forces:
         raise RuntimeError('ignore_forces is deprecated!')
@@ -1110,7 +1110,7 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
     def step_mu(opt):
         opt.zero_grad()
         diff = make_mu()
-        loss = diff.pow(2).mean()
+        loss = diff.abs().mean().sub(noise_f).pow(2)
         if loss.grad_fn:
             loss.backward()
         opt.step()
@@ -1149,14 +1149,15 @@ def _regression(self, optimize=False, lr=0.1, max_noise=0.1, ldiff=1e-4):
         loss = diff.pow(2).mean()
         return float(loss)
 
-    N = torch.tensor(data.natoms)
-    delta_energies = energies - self.Ke@self.mu
-    weights = self.mean.weights
-    keys = sorted(weights.keys())
-    x0 = [float(weights[k]) for k in keys]
-    res = minimize(objective, x0=x0)
-    for k, v in zip(keys, res.x):
-        weights[k] = torch.tensor(v)
+    if optimize:
+        N = torch.tensor(data.natoms)
+        delta_energies = energies - self.Ke@self.mu
+        weights = self.mean.weights
+        keys = sorted(weights.keys())
+        x0 = [float(weights[k]) for k in keys]
+        res = minimize(objective, x0=x0)
+        for k, v in zip(keys, res.x):
+            weights[k] = torch.tensor(v)
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
