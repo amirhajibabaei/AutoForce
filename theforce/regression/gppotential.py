@@ -558,8 +558,8 @@ class PosteriorPotential(Module):
         self._ediff = diff[:n]/torch.tensor(self.data.natoms)
         self._fdiff = diff[n:]
         self._force_r2 = coeff_of_determination(yy[n:], y[n:])
-        self._stats = [self._ediff.mean(), self._ediff.var().sqrt(),
-                       self._fdiff.mean(), self._fdiff.var().sqrt(),
+        self._stats = [self._ediff.mean(), self._ediff.abs().mean(),
+                       self._fdiff.mean(), self._fdiff.abs().mean(),
                        self._force_r2]
         # forces info
         self._f_max = y[n:].abs().max()

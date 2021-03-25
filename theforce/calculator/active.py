@@ -387,7 +387,7 @@ class ActiveCalculator(Calculator):
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
         if self.tune_for_md:
-            self.sample_rand_lces(repeat=2)
+            self.sample_rand_lces(repeat=1)
         self.optimize()
 
     def sample_rand_lces(self, repeat=1, extend_cov=False):
@@ -617,7 +617,7 @@ class ActiveCalculator(Calculator):
             update_data = self.get_covloss().max() > self.ediff
         n = self.update_data(try_fake=not try_real) if update_data else 0
         if m > 0 or n > 0:
-            self.log('fit error (mean,std): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
+            self.log('fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
                 *(float(v) for v in self.model._stats)))
             if self.rank == 0:
                 self.log(f'noise: {self.model.scaled_noise}')
@@ -838,7 +838,7 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
         axes[3].scatter(p, q[:, 0], color='salmon')
         axes[3].grid()
         axes[3].legend()
-        axes[3].set_ylabel('Errors')
+        axes[3].set_ylabel('MAE')
         # R2
         if q.shape[1] > 4:
             R2 = axes[3].twinx()
