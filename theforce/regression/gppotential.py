@@ -1094,7 +1094,6 @@ def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff
     forces = torch.cat([atoms.target_forces.view(-1) for atoms in data])
     Y = torch.cat((forces, torch.zeros(L.size(0))))
 
-    #
     def make_mu():
         sigma = 0
         for z in zset:
@@ -1107,43 +1106,33 @@ def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff
         diff = self.Kf@self.mu - forces
         return diff
 
-    def step_mu(opt):
-        opt.zero_grad()
+    # ------------ optimize mu ------------
+    def objective_mu(x, keys):
+        for v, key in zip(x, keys):
+            self._noise[key] = torch.tensor(v)
         diff = make_mu()
         loss = diff.abs().mean().sub(noise_f).pow(2)
-        if loss.grad_fn:
-            loss.backward()
-        opt.step()
-        return loss
+        return float(loss)
 
-    def descent(step_fn, params, lr=0.1, maxsteps=100):
-        for par in params:
-            par.requires_grad = True
-        opt = torch.optim.Adam(params, lr=lr)
-        _loss = step_fn(opt)
-        for k in range(maxsteps):
-            loss = step_fn(opt)
-            if abs(loss-_loss) < ldiff*abs(loss):
-                break
-            _loss = loss
-        for par in params:
-            par.requires_grad = False
-        opt.zero_grad()
-        return k+1
-
-    # optimize mu
-    steps_f = 0
     if optimize:
-        steps_f += descent(step_mu, self._noise.values())
-    make_mu()
-    self.mu = self.mu.detach()
-    self.scaled_noise = {
-        a: float(to_0_1(b)*scale[a]) for a, b in self._noise.items()}
+        keys = sorted(self._noise.keys())
+        x0 = [float(self._noise[key]) for key in keys]
+        res = minimize(objective_mu, x0=x0, args=(keys,))
+        for v, key in zip(res.x, keys):
+            self._noise[key] = torch.tensor(v)
 
-    # optimize mean
-    def objective(w):
-        for k, v in zip(keys, w):
-            weights[k] = torch.tensor(v)
+    # make mu
+    make_mu()
+    if self.mu.requires_grad:
+        warnings.warn('why mu requires grad?!')
+        self.mu = self.mu.detach()
+    self.scaled_noise = {a: float(to_0_1(b)*scale[a])
+                         for a, b in self._noise.items()}
+
+    # ------------ optimize mean ------------
+    def objective_mean(w, keys):
+        for v, key in zip(w, keys):
+            self.mean.weights[key] = torch.tensor(v)
         mean = self.gp.mean(data, forces=False)
         diff = (mean - delta_energies)/N
         loss = diff.pow(2).mean()
@@ -1152,12 +1141,11 @@ def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff
     if optimize:
         N = torch.tensor(data.natoms)
         delta_energies = energies - self.Ke@self.mu
-        weights = self.mean.weights
-        keys = sorted(weights.keys())
-        x0 = [float(weights[k]) for k in keys]
-        res = minimize(objective, x0=x0)
-        for k, v in zip(keys, res.x):
-            weights[k] = torch.tensor(v)
+        keys = sorted(self.mean.weights.keys())
+        x0 = [float(self.mean.weights[key]) for key in keys]
+        res = minimize(objective_mean, x0=x0, args=(keys,))
+        for v, key in zip(res.x, keys):
+            self.mean.weights[key] = torch.tensor(v)
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
