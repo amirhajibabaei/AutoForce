@@ -1067,7 +1067,7 @@ def kldiv_normal(y, sigma):
     return loss
 
 
-def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff=1e-4):
+def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff=1e-4, same_sigma=True):
 
     if self.ignore_forces:
         raise RuntimeError('ignore_forces is deprecated!')
@@ -1076,13 +1076,18 @@ def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff
         self._noise = {}
 
     #
-    numbers = torch.tensor([x.number for x in self.X])
-    zset = numbers.unique().tolist()
     scale = {}
-    for z in zset:
-        if z not in self._noise:
-            self._noise[z] = to_inf_inf(self.gp.noise.signal.detach())
-        scale[z] = self.M.diag()[numbers == z].mean() * max_noise
+    if same_sigma:
+        if 'all' not in self._noise:
+            self._noise['all'] = to_inf_inf(self.gp.noise.signal.detach())
+        scale['all'] = self.M.diag().mean() * max_noise
+    else:
+        numbers = torch.tensor([x.number for x in self.X])
+        zset = numbers.unique().tolist()
+        for z in zset:
+            if z not in self._noise:
+                self._noise[z] = to_inf_inf(self.gp.noise.signal.detach())
+            scale[z] = self.M.diag()[numbers == z].mean() * max_noise
 
     #
     L, ridge = jitcholesky(self.M)
@@ -1095,11 +1100,15 @@ def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff
     Y = torch.cat((forces, torch.zeros(L.size(0))))
 
     def make_mu():
-        sigma = 0
-        for z in zset:
-            sigma_z = to_0_1(self._noise[z])*scale[z]
-            sigma = sigma + (numbers == z).type(L.type())*sigma_z
-        sigma = sigma.diag()
+        if same_sigma:
+            sigma = to_0_1(self._noise['all'])*scale['all']
+            sigma = sigma*torch.eye(L.shape[0])
+        else:
+            sigma = 0
+            for z in zset:
+                sigma_z = to_0_1(self._noise[z])*scale[z]
+                sigma = sigma + (numbers == z).type(L.type())*sigma_z
+            sigma = sigma.diag()
         A = torch.cat((self.Kf, sigma@L.t()))
         Q, R = torch.qr(A)
         self.mu = (R.inverse()@Q.t()@Y).contiguous()
@@ -1124,7 +1133,7 @@ def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff
     # make mu
     make_mu()
     if self.mu.requires_grad:
-        warnings.warn('why mu requires grad?!')
+        warnings.warn('why does mu require grad?!')
         self.mu = self.mu.detach()
     self.scaled_noise = {a: float(to_0_1(b)*scale[a])
                          for a, b in self._noise.items()}
