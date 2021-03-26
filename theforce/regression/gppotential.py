@@ -1067,13 +1067,16 @@ def kldiv_normal(y, sigma):
     return loss
 
 
-def _regression(self, optimize=False, noise_f=0.06, lr=0.1, max_noise=0.1, ldiff=1e-4, same_sigma=True):
+def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=True):
 
     if self.ignore_forces:
         raise RuntimeError('ignore_forces is deprecated!')
 
     if not hasattr(self, '_noise'):
         self._noise = {}
+
+    if noise_f is None:
+        noise_f = 0.
 
     #
     scale = {}

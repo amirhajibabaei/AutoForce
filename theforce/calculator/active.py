@@ -70,7 +70,7 @@ class ActiveCalculator(Calculator):
     def __init__(self, covariance='pckl', calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
-                 ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, ldiff=1e-4,
+                 ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol,
                  include_params=None):
         """
         inputs:
@@ -91,7 +91,7 @@ class ActiveCalculator(Calculator):
             ediff_ub:        upper-bound for ediff | None -> ediff
             ediff_tot:       total energy sensitivity (eV) | inf is allowed
             fdiff:           forces sensitivity (eV/A) | inf is allowed
-            ldiff:           exit optimization if |delta-loss| < ldiff*|loss|
+            noise_f:         bias force (fit) MAE to this value
 
         callables:
             include_data     for modeling the existing data
@@ -195,7 +195,7 @@ class ActiveCalculator(Calculator):
         self.ediff_ub = ediff_ub or self.ediff
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
-        self.ldiff = ldiff
+        self.noise_f = noise_f
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
@@ -604,7 +604,7 @@ class ActiveCalculator(Calculator):
         return added
 
     def optimize(self):
-        self.model.optimize_model_parameters(ldiff=self.ldiff)
+        self.model.optimize_model_parameters(noise_f=self.noise_f)
 
     def update(self, inducing=True, data=True):
         self.updated = False
