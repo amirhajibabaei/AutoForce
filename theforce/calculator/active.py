@@ -673,7 +673,8 @@ class ActiveCalculator(Calculator):
         for cls, obj in tape.read():
             if cls == 'atoms':
                 if abs(obj.get_forces()).max() > self.include_params['fmax']:
-                    continue
+                    if len(self.model.data) > 0:
+                        continue
                 _save()
                 self._update_args = dict(inducing=False)
                 self._calc = obj.calc
