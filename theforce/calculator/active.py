@@ -295,6 +295,7 @@ class ActiveCalculator(Calculator):
 
         # active learning
         self.deltas = None
+        self.covlog = ''
         if self.active:
             pre = self.results.copy()
             m, n = self.update(**self._update_args)
@@ -660,14 +661,20 @@ class ActiveCalculator(Calculator):
         _calc = self._calc
         tune_for_md = self.tune_for_md
         self.tune_for_md = False
+
+        def _save():
+            if added_lce[0] > 0:
+                if self.pckl:
+                    self.model.to_folder(self.pckl)
+                self.log('added lone indus: {}/{} -> size: {} {}'.format(
+                    *added_lce, *self.size))
+        #
         added_lce = [0, 0]
         for cls, obj in tape.read():
             if cls == 'atoms':
                 if abs(obj.get_forces()).max() > self.include_params['fmax']:
                     continue
-                if added_lce[0] > 0:
-                    self.log('added lone indus: {}/{} -> size: {} {}'.format(
-                        *added_lce, *self.size))
+                _save()
                 self._update_args = dict(inducing=False)
                 self._calc = obj.calc
                 obj.set_calculator(self)
@@ -679,6 +686,9 @@ class ActiveCalculator(Calculator):
                 added = self.update_lce(obj)
                 added_lce[0] += abs(added)
                 added_lce[1] += 1
+        _save()
+
+        #
         self._calc = _calc
         self.tune_for_md = tune_for_md
 
