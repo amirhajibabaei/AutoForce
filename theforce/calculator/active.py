@@ -17,8 +17,8 @@ import warnings
 import os
 
 
-def default_kernel(cutoff=6.):
-    return SeSoapKernel(3, 3, 4, cutoff, radii=DefaultRadii())
+def default_kernel(lmax=3, nmax=3, exponent=4, cutoff=6.):
+    return SeSoapKernel(lmax, nmax, exponent, cutoff, radii=DefaultRadii())
 
 
 def clamp_forces(f, m):
@@ -71,7 +71,7 @@ class ActiveCalculator(Calculator):
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol,
-                 include_params=None):
+                 kernel_kw=None, include_params=None):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -92,6 +92,10 @@ class ActiveCalculator(Calculator):
             ediff_tot:       total energy sensitivity (eV) | inf is allowed
             fdiff:           forces sensitivity (eV/A) | inf is allowed
             noise_f:         bias force (fit) MAE to this value
+
+        control:
+            kernel_kw:       kwargs passed when default_kernel is called
+            include_params:  used when include_data, include_tape is called
 
         callables:
             include_data     for modeling the existing data
@@ -180,6 +184,12 @@ class ActiveCalculator(Calculator):
             If one of them is inf, it will be ignored. Thus you can set ediff_tot=inf
             for focusing on forces or vice versa.
 
+        kernel_kw:
+            If covariance = None, default kernel is used. kernel_kw can be used for
+            passing some parameters for initiating the kernel. kernel_kw = None is
+            equivalent to {'lmax': 3, 'nmax': 3, 'exponent': 4, 'cutoff': 6.}.
+            e.g. kernel_kw = {'cutoff': 7.0} changes the cutoff to 7.
+
         include_params:
             This applies some constraints for sampling data when include_data/-tape are called.
             e.g. {'fmax': 5.0}, etc.
@@ -189,7 +199,7 @@ class ActiveCalculator(Calculator):
         self._calc = calculator
         self.process_group = process_group
         self.pckl = pckl
-        self.get_model(covariance)
+        self.get_model(covariance, kernel_kw or {})
         self.ediff = ediff
         self.ediff_lb = ediff_lb or self.ediff
         self.ediff_ub = ediff_ub or self.ediff
@@ -223,14 +233,14 @@ class ActiveCalculator(Calculator):
     def active(self):
         return self._calc is not None
 
-    def get_model(self, model):
+    def get_model(self, model, kernel_kw):
         if model == 'pckl':
             if os.path.isdir(self.pckl):
                 model = self.pckl
             else:
                 model = None
         if model is None:
-            model = default_kernel()
+            model = default_kernel(**kernel_kw)
         self._ready = True
         if type(model) == str:
             self.model = PosteriorPotentialFromFolder(
