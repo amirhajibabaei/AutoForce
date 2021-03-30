@@ -185,10 +185,8 @@ class DefaultMean:
 
 class AutoMean:
 
-    def __init__(self, weights=None):
-        if weights is None:
-            weights = {}
-        self.weights = {z: torch.as_tensor(w) for z, w in weights.items()}
+    def __init__(self):
+        self.weights = {}
 
     @property
     def unique_params(self):
@@ -199,25 +197,24 @@ class AutoMean:
             torch.distributed.broadcast(self.weights[k], 0)
 
     def set_data(self, data):
-        if self.weights == {}:
-            self.weights = mean_energy_per_atom_type(data)
-        else:
-            for z, c in data.counts().items():
-                if z not in self.weights:
-                    self.weights[z] = torch.tensor(0.)
+        self._weights = mean_energy_per_atom_type(data)
+        for z in self._weights.keys():
+            if z not in self.weights:
+                self.weights[z] = torch.tensor(0.)
 
     def __call__(self, atoms, forces=False):
         e = torch.zeros([])
-        for number, count in atoms.counts().items():
-            if number in self.weights:
-                e += count*self.weights[number]
+        for z, count in atoms.counts().items():
+            if z in self.weights:
+                e += count*(self.weights[z]+self._weights[z])
         if forces:
             return e, torch.zeros(len(atoms), 3)
         else:
             return e
 
     def __repr__(self):
-        w = {z: float(w) for z, w in self.weights.items()}
+        w = {z: float(self.weights[z]+self._weights[z])
+             for z in self.weights.keys()}
         return f"AutoMean({w})"
 
 
