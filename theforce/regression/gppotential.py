@@ -1064,7 +1064,7 @@ def kldiv_normal(y, sigma):
     return loss
 
 
-def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=True):
+def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=True, wjac=True):
 
     if self.ignore_forces:
         raise RuntimeError('ignore_forces is deprecated!')
@@ -1116,17 +1116,24 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=Tr
         return diff
 
     # ------------ optimize mu ------------
-    def objective_mu(x, keys):
+    def objective_mu(x, keys, jac):
         for v, key in zip(x, keys):
             self._noise[key] = torch.tensor(v)
+            if jac:
+                self._noise[key].requires_grad = True
         diff = make_mu()
         loss = diff.abs().mean().sub(noise_f).pow(2)
-        return float(loss)
+        if jac:
+            loss.backward()
+            g = torch.stack([self._noise[key].grad for key in keys])
+            return float(loss), g.view(-1).numpy()
+        else:
+            return float(loss)
 
     if optimize:
         keys = sorted(self._noise.keys())
         x0 = [float(self._noise[key]) for key in keys]
-        res = minimize(objective_mu, x0=x0, args=(keys,))
+        res = minimize(objective_mu, x0=x0, jac=wjac, args=(keys, wjac))
         for v, key in zip(res.x, keys):
             self._noise[key] = torch.tensor(v)
 
@@ -1139,20 +1146,27 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=Tr
                          for a, b in self._noise.items()}
 
     # ------------ optimize mean ------------
-    def objective_mean(w, keys):
+    def objective_mean(w, keys, jac):
         for v, key in zip(w, keys):
             self.mean.weights[key] = torch.tensor(v)
+            if jac:
+                self.mean.weights[key].requires_grad = True
         mean = self.gp.mean(data, forces=False)
         diff = (mean - delta_energies)/N
         loss = diff.pow(2).mean()
-        return float(loss)
+        if jac:
+            loss.backward()
+            g = torch.stack([self.mean.weights[key].grad for key in keys])
+            return float(loss), g.view(-1).numpy()
+        else:
+            return float(loss)
 
     if optimize:
         N = torch.tensor(data.natoms)
         delta_energies = energies - self.Ke@self.mu
         keys = sorted(self.mean.weights.keys())
         x0 = [float(self.mean.weights[key]) for key in keys]
-        res = minimize(objective_mean, x0=x0, args=(keys,))
+        res = minimize(objective_mean, x0=x0, jac=wjac, args=(keys, wjac))
         for v, key in zip(res.x, keys):
             self.mean.weights[key] = torch.tensor(v)
 
