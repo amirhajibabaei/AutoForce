@@ -798,20 +798,21 @@ def parse_logfile(file='active.log', window=(None, None)):
             indu += [(step, sf)]
 
         if 'errors (pre)' in line:
-            errors += [(step, [float(v) for v in split[4:8:2]])]
+            errors += [(step, [float(v) for v in split[4:10:2]])]
 
         if 'errors (test)' in line:
-            test_errors += [(step, [float(v) for v in split[4:8:2]])]
+            test_errors += [(step, [float(v) for v in split[4:10:2]])]
 
         if 'fit' in line:
             fit += [(step, [float(split[k]) for k in [-7, -6, -4, -3, -1]])]
-    return energies, exact_energies, test_energies, temperatures, covloss, meta, indu, fit, elapsed, settings
+    return energies, exact_energies, test_energies, temperatures, \
+        covloss, meta, indu, fit, elapsed, settings, test_errors
 
 
-def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
+def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True, plot_test=True):
     import pylab as plt
-    ml, fp, test, tem, covloss, meta, indu, fit, elapsed, settings = parse_logfile(
-        file, window=window)
+    ml, fp, test, tem, covloss, meta, indu, fit, elapsed,\
+        settings, test_errors = parse_logfile(file, window=window)
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
     # 0
@@ -865,6 +866,12 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True):
             R2 = axes[3].twinx()
             R2.plot(p, 1-q[:, 4], ':', color='grey')
             R2.set_ylabel(r'$1-R^2$')
+    if len(test_errors) > 0 and plot_test:
+        steps, tmp = zip(*test_errors)
+        de, dfmax, df = zip(*tmp)
+        axes[3].plot(steps, de, 'v--', color='salmon')
+        axes[3].plot(steps, df, 'v--', color='cornflowerblue')
+        axes[3].plot(steps, dfmax, 'v:', color='cornflowerblue')
     fig.tight_layout()
     return fig
 
