@@ -1099,7 +1099,7 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=Tr
     forces = torch.cat([atoms.target_forces.view(-1) for atoms in data])
     Y = torch.cat((forces, torch.zeros(L.size(0))))
 
-    def make_mu():
+    def make_mu(with_energies=None):
         if same_sigma:
             sigma = to_0_1(self._noise['all'])*scale['all']
             sigma = sigma*torch.eye(L.shape[0])
@@ -1109,9 +1109,15 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=Tr
                 sigma_z = to_0_1(self._noise[z])*scale[z]
                 sigma = sigma + (numbers == z).type(L.type())*sigma_z
             sigma = sigma.diag()
-        A = torch.cat((self.Kf, sigma@L.t()))
+        if with_energies is None:
+            _K = self.Kf
+            _Y = Y
+        else:
+            _K = self.K
+            _Y = torch.cat([with_energies, Y])
+        A = torch.cat((_K, sigma@L.t()))
         Q, R = torch.qr(A)
-        self.mu = (R.inverse()@Q.t()@Y).contiguous()
+        self.mu = (R.inverse()@Q.t()@_Y).contiguous()
         diff = self.Kf@self.mu - forces
         return diff
 
@@ -1169,6 +1175,10 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=Tr
         res = minimize(objective_mean, x0=x0, jac=wjac, args=(keys, wjac))
         for v, key in zip(res.x, keys):
             self.mean.weights[key] = torch.tensor(v)
+
+    # ------------ finalize ------------
+    residual = energies - self.gp.mean(data, forces=False)
+    make_mu(with_energies=residual)
 
 
 def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
