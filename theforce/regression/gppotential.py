@@ -197,7 +197,8 @@ class AutoMean:
             torch.distributed.broadcast(self.weights[k], 0)
 
     def set_data(self, data):
-        self._weights = mean_energy_per_atom_type(data)
+        # self._weights = mean_energy_per_atom_type(data) # unstable?
+        self._weights = {z: 0. for z in data.counts().keys()}
         for z in self._weights.keys():
             if z not in self.weights:
                 self.weights[z] = torch.tensor(0.)
