@@ -809,7 +809,7 @@ class PosteriorPotential(Module):
             #reject = de < ediff and df < fdiff and df_max < 3*fdiff
             N = torch.distributions.Normal(0., fdiff_t)
             # reject = de < ediff and N.log_prob(d).mean() > N.log_prob(fdiff_t)
-            reject = N.log_prob(d).mean() > N.log_prob(fdiff_t)
+            reject = N.log_prob(d).mean() > N.log_prob(fdiff_t) and df_max < 3*fdiff
         #
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         if reject and not blind:
