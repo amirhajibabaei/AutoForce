@@ -215,9 +215,9 @@ class ActiveCalculator(Calculator):
         self.log_settings()
         self.log('model size: {} {}'.format(*self.size))
         self.tape = SgprIO(tape)
-        if self.active:
-            self.tape.write_params(ediff=self.ediff, ediff_tot=self.ediff_tot,
-                                   fdiff=self.fdiff)
+        # if self.active:
+        #    self.tape.write_params(ediff=self.ediff, ediff_tot=self.ediff_tot,
+        #                           fdiff=self.fdiff)
         self.test = test
         self._last_test = 0
         self._ktest = 0
@@ -603,9 +603,10 @@ class ActiveCalculator(Calculator):
         n = self.model.ndata
         new = self.snapshot(fake=try_fake)
         #self.model.add_1atoms(new, self.ediff_tot, self.fdiff)
-        self.model.add_1atoms_fast(new, self.ediff_tot, self.fdiff, self.atoms.xyz,
-                                   self.cov, self.atoms.is_distributed)
+        a, de, df = self.model.add_1atoms_fast(new, self.ediff_tot, self.fdiff, self.atoms.xyz,
+                                               self.cov, self.atoms.is_distributed)
         added = self.model.ndata - n
+        self.log(f'DF: {df}  accept: {added}')
         if added > 0:
             if try_fake:
                 self.head()
@@ -748,6 +749,7 @@ def parse_logfile(file='active.log', window=(None, None)):
     energies = []
     temperatures = []
     covloss = []
+    DF = []
     exact_energies = []
     test_energies = []
     indu = []
@@ -805,14 +807,18 @@ def parse_logfile(file='active.log', window=(None, None)):
 
         if 'fit' in line:
             fit += [(step, [float(split[k]) for k in [-7, -6, -4, -3, -1]])]
+
+        if 'DF' in line:
+            DF += [(step, float(split[2]), int(split[4]))]
+
     return energies, exact_energies, test_energies, temperatures, \
-        covloss, meta, indu, fit, elapsed, settings, test_errors
+        covloss, meta, indu, fit, elapsed, settings, test_errors, DF
 
 
 def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True, plot_test=True):
     import pylab as plt
     ml, fp, test, tem, covloss, meta, indu, fit, elapsed,\
-        settings, test_errors = parse_logfile(file, window=window)
+        settings, test_errors, DF = parse_logfile(file, window=window)
     fig, _axes = plt.subplots(2, 2, figsize=figsize)
     axes = _axes.reshape(-1)
     # 0
@@ -846,6 +852,9 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True, plot
     #axes[2].axhline(y=settings['ediff_lb:'], ls='--', color='k')
     #axes[2].axhline(y=settings['ediff_ub:'], ls='--', color='k', alpha=0.3)
     axes[2].grid()
+    if len(DF) > 0:
+        steps, df, add = zip(*DF)
+        axes[2].scatter(steps, df, marker='*', c=add, zorder=2)
     # 3
     if len(fit) > 0:
         p, q = zip(*fit)
