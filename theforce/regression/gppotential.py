@@ -1066,7 +1066,7 @@ def kldiv_normal(y, sigma):
     return loss
 
 
-def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=True, wjac=True):
+def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=True, wjac=True):
 
     if self.ignore_forces:
         raise RuntimeError('ignore_forces is deprecated!')
@@ -1149,6 +1149,7 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=Tr
                 losses[sig] = diff.abs().mean().sub(noise_f).pow(2)
             sig = min(losses, key=losses.get)
             self._noise['all'] = to_inf_inf(sig)
+            self._losses = losses
         else:
             raise NotImplementedError('implement grid search!')
         # find local min
