@@ -1139,6 +1139,11 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=Tr
 
     if optimize:
         keys = sorted(self._noise.keys())
+        # reset noise if too close to max (stuck in local min?)
+        small = torch.tensor(1e-3)
+        for z in keys:
+            if to_0_1(self._noise[z]) > 0.98:
+                self._noise[z] = to_inf_inf(small)*scale[z]
         x0 = [float(self._noise[key]) for key in keys]
         res = minimize(objective_mu, x0=x0, jac=wjac, args=(keys, wjac))
         for v, key in zip(res.x, keys):
