@@ -809,7 +809,8 @@ class PosteriorPotential(Module):
             #reject = de < ediff and df < fdiff and df_max < 3*fdiff
             N = torch.distributions.Normal(0., fdiff_t)
             # reject = de < ediff and N.log_prob(d).mean() > N.log_prob(fdiff_t)
-            reject = N.log_prob(d).mean() > N.log_prob(fdiff_t) and df_max < 3*fdiff
+            reject = (N.log_prob(d).mean() > N.log_prob(fdiff_t) and
+                      df_max < 3*fdiff)
         #
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         if reject and not blind:
@@ -1138,12 +1139,20 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.1, same_sigma=Tr
             return float(loss)
 
     if optimize:
+        # find approx global min on a grid
+        if same_sigma:
+            grid = torch.arange(.1, 5., 0.2).neg().exp()
+            losses = {}
+            for sig in grid:
+                self._noise['all'] = to_inf_inf(sig)
+                diff = make_mu()
+                losses[sig] = diff.abs().mean().sub(noise_f).pow(2)
+            sig = min(losses, key=losses.get)
+            self._noise['all'] = to_inf_inf(sig)
+        else:
+            raise NotImplementedError('implement grid search!')
+        # find local min
         keys = sorted(self._noise.keys())
-        # reset noise if too close to max (stuck in local min?)
-        small = torch.tensor(1e-3)
-        for z in keys:
-            if to_0_1(self._noise[z]) > 0.98:
-                self._noise[z] = to_inf_inf(small)*scale[z]
         x0 = [float(self._noise[key]) for key in keys]
         res = minimize(objective_mu, x0=x0, jac=wjac, args=(keys, wjac))
         for v, key in zip(res.x, keys):
