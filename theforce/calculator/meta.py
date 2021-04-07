@@ -27,7 +27,7 @@ class Meta:
             hst.write(f'# {sigma}\n')
 
     def __call__(self, calc):
-        kwargs = {'op': '+='}
+        kwargs = {'op': '+=', 'is_meta': True}
         self.rank = calc.rank
         if calc.rank == 0:
             cv = self.colvar(calc.atoms.numbers,

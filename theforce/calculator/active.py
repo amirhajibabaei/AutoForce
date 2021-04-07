@@ -338,15 +338,16 @@ class ActiveCalculator(Calculator):
         # retain_graph = self.active or (self.meta is not None)
         # energy = self.reduce(energies, retain_graph=retain_graph, reduced=True)
 
-    def reduce(self, local_energies, op='=', retain_graph=False, reduced=False):
+    def reduce(self, local_energies, op='=', retain_graph=False, reduced=False, is_meta=False):
         energy = local_energies.sum()
         if self.atoms.is_distributed and not reduced:
             torch.distributed.all_reduce(energy)
         forces, stress = self.grads(energy, retain_graph=retain_graph)
-        mean = self.model.mean(self.atoms)
-        if mean.grad_fn:  # only constant mean
-            raise RuntimeError('mean has grad_fn!')
-        energy = energy + mean
+        if not is_meta:
+            mean = self.model.mean(self.atoms)
+            if mean.grad_fn:  # only constant mean
+                raise RuntimeError('mean has grad_fn!')
+            energy = energy + mean
         if op == '=':
             self.results['energy'] = energy.detach().numpy()
             self.results['forces'] = forces.detach().numpy()
@@ -738,8 +739,28 @@ class Meta:
         mu = nu.detach().sum(dim=1)/norm.detach()
         self.pot = padded(self.pot, mu.size()) + self.scale*mu
         energies = (cov@self.pot).sum()/norm
-        kwargs = {'op': '+=', 'reduced': True}
+        kwargs = {'op': '+=', 'reduced': True, 'is_meta': True}
         return energies, kwargs
+
+
+class ActiveMeta:
+
+    def __init__(self, scale=1e-2):
+        self.scale = scale
+
+    def __call__(self, calc):
+        cov = calc.gather(calc.cov)
+        b = calc.model.choli@cov.t()
+        c = (b*b).sum(dim=0)
+        beta = (1 - c).clamp(min=0.).sqrt()
+        vscale = [calc.model._vscale[z] for z in calc.atoms.numbers]
+        vscale = torch.tensor(vscale).sqrt()
+        pot = -(beta*vscale).sum()*self.scale
+        kwargs = {'op': '+=', 'reduced': True, 'is_meta': True}
+        return pot, kwargs
+
+    def update(self):
+        pass
 
 
 def parse_logfile(file='active.log', window=(None, None)):
