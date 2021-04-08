@@ -3,7 +3,7 @@ from theforce.regression.gppotential import PosteriorPotential, PosteriorPotenti
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
 from theforce.similarity.sesoap import SeSoapKernel
 from theforce.math.sesoap import DefaultRadii
-from theforce.util.tensors import padded
+from theforce.util.tensors import padded, nan_to_num
 from theforce.util.util import date, timestamp
 from theforce.io.sgprio import SgprIO
 from ase.calculators.calculator import Calculator, all_changes
@@ -343,7 +343,9 @@ class ActiveCalculator(Calculator):
         if self.atoms.is_distributed and not reduced:
             torch.distributed.all_reduce(energy)
         forces, stress = self.grads(energy, retain_graph=retain_graph)
-        if not is_meta:
+        if is_meta:
+            forces = nan_to_num(forces, 0.)
+        else:
             mean = self.model.mean(self.atoms)
             if mean.grad_fn:  # only constant mean
                 raise RuntimeError('mean has grad_fn!')
