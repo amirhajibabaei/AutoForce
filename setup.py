@@ -17,10 +17,3 @@ setup(
         "Operating System :: OS Independent",
     ],
 )
-
-# new
-# theforce.cl.relax
-# theforce.cl.init_model
-# theforce.calculator.meta -> Qlvar
-# theforce.calculator.gaussian
-# theforce.cl.md -> Langevin

@@ -25,6 +25,7 @@ The following tags are available
 ```
 # inputs
 covariance:      'pckl', None, a kernal, folder-name for loading a pickled model (default='pckl')
+kernel_kw:       e.g. {'cutoff': 6.}
 calculator:      None, 'VASP', 'Gaussian' (default=None)
 
 # outputs
@@ -35,9 +36,7 @@ test:            integer; single-point testing intervals (default=None)
 
 # sampling and optimization
 ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
-ediff_tot: (eV)  total energy sensitivity for sampling DFT data (default ~ 4 kcal/mol)
 fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 3 kcal/mol)
-noise_e:   (ev)  bias noise for total energies (default=ediff_tot)
 noise_f:  (ev/A) bias noise for forces (default=fdiff)
 ```
 Note that these parameters are not related to any 
@@ -63,6 +62,12 @@ input and output models are the same.
 Thus the training is resumed in consecutive runs 
 (the model is automatically loaded and saved in
 the `pckl` folder).
+
+At the beginning of training, if covariance
+is not given, the default kernel will be
+instantiated. 
+In this case `kernel_kw` can be used for
+defining kernel parameters (e.g. cutoff).
 
 After sufficient training, one might want to use
 the result ML potential for fast simulations 

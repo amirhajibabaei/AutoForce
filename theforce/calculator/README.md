@@ -39,6 +39,7 @@ The following parameters can be passed to `ActiveCalculator`
 ```
 # inputs
 covariance:      either a kernel or path to a saved/pickled model
+kernel_kw        e.g. {'cutoff': 6.}
 calculator:      any ASE calculator or SocketCalculator
 process_group:   None or the value of mpi_init()
 meta:            meta energy calculator for metadynamics
@@ -51,16 +52,11 @@ test:            intervals for single point tests during MD
 
 # sampling and optimization
 ediff:           energy sensitivity for sampling LCEs
-ediff_tot:       total energy sensitivity for sampling DFT data
 fdiff:           forces sensitivity for sampling DFT data
-noise_e:         bias noise for total energies
 noise_f:         bias noise for forces
-
-#
-ignore_forces:   dumps forces data from the regression
 ```
 
-#### covariance
+#### covariance, kernel_kw
 This parameter can be used for passing a kernel
 or a saved/pickled model to the calculator
 ```python
@@ -92,6 +88,9 @@ automatically saved and loaded in consecutive
 runs.
 If `None`, the default kernel will be used 
 (see *Kernels*) with an empty initial model.
+In that case `kernel_kw` can be used for 
+passing some parameters (e.g. cutoff) to
+the kernel instantiation.
 
 #### calculator
 The main DFT calculator can which be any ASE 
@@ -150,12 +149,11 @@ and the ML predictions will be saved in `'active_ML.traj'`.
 A single point calculation is triggered if `test` 
 steps have passed from the last one.
 
-#### ediff, ediff_tot, fdiff
+#### ediff, fdiff
 These parameters control the sampling.
 `ediff` is mainly used for sampling of the LCEs
 as the inducing data for the sparse representation.
-`ediff_tot` and `fdiff` control the sampling
-of DFT data.
+`fdiff` control the sampling of DFT data.
 The default parameters should be appropriate for 
 starting the simulation.
 One can set `fdiff` equal to the desired accuracy
@@ -166,25 +164,18 @@ For global exploration, we recommend increasing the
 accuracy gradually/iteratively rather than choosing 
 small values for these parameters from the beginning.
 
-If `ediff_tot=float('inf')`, this parameter becomes 
-irrelevent, which might be the desired behaviour in 
-certain applications (similar for `fdiff`).
-
-#### noise_e, noise_f
-In optimization of hyper-parameters, the errors 
-(e.g. RMSE) are minimized towards these values. 
-They can be set to 0 for simple minimization of 
-RMSE but there is a chance for overfitting. 
-For instance choosing smaller `noise_f` may
+#### noise_f
+In optimization of hyper-parameters, the 
+mean absolute error (MAE) of forces in fitting 
+is tuned to this value: MAE$\sim$`noise_f`.
+`noise_f` of 0 is also acceptable but
+there is a chance for overfitting.
+For instance during on-the-fly training,
+choosing smaller `noise_f` may
 cause more sampling of DFT data without a
 meaningful increase of the models accuracy.
-The value of 0 maybe used for fitting a static 
-data set with a high accuracy.
-For more control see the following options
-* If noise_e = None -> noise_e = ediff_tot (<- default)
-* If noise_e < 0 -> RMSE of energies is omitted from the loss function.
-* If noise_f = None -> noise_f = fdiff (<- default)
-* If noise_f < 0 -> RMSE of forces is omitted from the loss function.
+But the value of 0 maybe used for fitting a 
+static data set whithout any issues.
 
 ### Training with existing data
 If some DFT data already exists, one can train a 
