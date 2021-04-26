@@ -102,8 +102,8 @@ class ActiveCalculator(Calculator):
             include_tape     for training from a sgpr tape
 
         *** important ***
-        You may wants to wrap atoms with FilterDeltas if you intend to 
-        carry out molecular dynamics simulations. 
+        You may wants to wrap atoms with FilterDeltas if you intend to
+        carry out molecular dynamics simulations.
 
         *** important ***
         For training the model with existing data use the following
@@ -135,12 +135,12 @@ class ActiveCalculator(Calculator):
 
         calculator:
             The ab initio calculator which the model intends to learn.
-            In case one wishes to use an existing model without further updates, 
+            In case one wishes to use an existing model without further updates,
             then pass "calculator=None".
 
         process_group:
             For parallelism, import "mpi_init" from theforce.util.parallel,
-            then set 
+            then set
                 process_group = mpi_init()
             as kwarg when creating the ActiveCalculator.
 
@@ -148,12 +148,12 @@ class ActiveCalculator(Calculator):
             The model will be pickled after every update in this folder
             which can be loaded in the future simulations simply by
                 calc = ActiveCalculator(pckl)
-            This way, there is no overhead for rebuilding the model from 
+            This way, there is no overhead for rebuilding the model from
             scratch.
 
         tape:
-            The tape arg is the name of the file used for saving the 
-            updates (the added data and inducing LCEs). 
+            The tape arg is the name of the file used for saving the
+            updates (the added data and inducing LCEs).
             "tape" files are never overwritten (allways appended).
             These files can be used for rebuilding the model with different
             parameters, combining models, and in general post processing.
@@ -163,12 +163,12 @@ class ActiveCalculator(Calculator):
 
         test:
             For instance, if test=100 and 100 steps have passed since the last
-            exact calculation, an exact calculation will be performed. 
-            This can be used for monitoring the on-the-fly ML accuracy and 
+            exact calculation, an exact calculation will be performed.
+            This can be used for monitoring the on-the-fly ML accuracy and
             has no effect on training. The exact calculation (FP) will be saved
             in 'active_FP.traj' while the models predictions (ML) will be saved
-            in 'active_ML.traj'. These files will be overwritten in the next 
-            simulation. The following command can be used for a quick description 
+            in 'active_ML.traj'. These files will be overwritten in the next
+            simulation. The following command can be used for a quick description
             of ML errors
 
                 python -m theforce.regression.scores active_ML.traj active_FP.traj
@@ -391,7 +391,8 @@ class ActiveCalculator(Calculator):
 
     def initiate_model(self):
         data = AtomsData([self.snapshot()])
-        i = self.atoms.first_of_each_atom_type()
+        #i = self.atoms.first_of_each_atom_type()
+        i = self.get_unique_lces()
         inducing = LocalsData([self.atoms.local(j, detach=True) for j in i])
         self.model.set_data(data, inducing)
         # data is stored in _exact, thus we only store the inducing
@@ -401,10 +402,28 @@ class ActiveCalculator(Calculator):
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
         if self.tune_for_md:
-            self.sample_rand_lces(repeat=1)
+            self.sample_rand_lces(indices=i, repeat=1)
         self.optimize()
 
-    def sample_rand_lces(self, repeat=1, extend_cov=False):
+    def get_unique_lces(self, thresh=0.95):
+        tmp = (self.atoms.as_ase() if self.to_ase else self.atoms).copy()
+        tmp.calc = None
+        atoms = TorchAtoms(ase_atoms=tmp)
+        atoms.update(posgrad=False, cellgrad=False, dont_save_grads=True,
+                     cutoff=self.model.cutoff, descriptors=self.model.descriptors)
+        k = self.model.gp.kern(atoms, atoms)
+        unique = []
+        for i in range(k.shape[0]):
+            is_unique = True
+            for j in unique:
+                if k[i, j] >= thresh:
+                    is_unique = False
+                    break
+            if is_unique:
+                unique.append(i)
+        return unique
+
+    def sample_rand_lces(self, indices=None, repeat=1, extend_cov=False):
         added = 0
         for _ in range(repeat):
             tmp = (self.atoms.as_ase() if self.to_ase else self.atoms).copy()
@@ -414,8 +433,9 @@ class ActiveCalculator(Calculator):
             atoms = TorchAtoms(ase_atoms=tmp)
             atoms.update(posgrad=False, cellgrad=False, dont_save_grads=True,
                          cutoff=self.model.cutoff, descriptors=self.model.descriptors)
-            m = len(atoms.loc)
-            for k in np.random.permutation(m):
+            if indices is None:
+                indices = np.random.permutation(len(atoms.loc))
+            for k in indices:
                 res = abs(self.update_lce(atoms.loc[k]))
                 added += res
                 if res > 0 and extend_cov:
@@ -605,7 +625,7 @@ class ActiveCalculator(Calculator):
         #
         n = self.model.ndata
         new = self.snapshot(fake=try_fake)
-        #self.model.add_1atoms(new, self.ediff_tot, self.fdiff)
+        # self.model.add_1atoms(new, self.ediff_tot, self.fdiff)
         a, de, df = self.model.add_1atoms_fast(new, self.ediff_tot, self.fdiff, self.atoms.xyz,
                                                self.cov, self.atoms.is_distributed)
         added = self.model.ndata - n
@@ -872,8 +892,8 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True, plot
     wall.plot(*zip(*elapsed), color='cyan', alpha=0.5)
     wall.set_ylabel('minutes')
     axes[2].axhline(y=settings['ediff:'], ls='--', color='k')
-    #axes[2].axhline(y=settings['ediff_lb:'], ls='--', color='k')
-    #axes[2].axhline(y=settings['ediff_ub:'], ls='--', color='k', alpha=0.3)
+    # axes[2].axhline(y=settings['ediff_lb:'], ls='--', color='k')
+    # axes[2].axhline(y=settings['ediff_ub:'], ls='--', color='k', alpha=0.3)
     axes[2].grid()
     if len(DF) > 0:
         steps, df, add = zip(*DF)
