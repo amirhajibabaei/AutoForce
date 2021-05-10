@@ -1,12 +1,54 @@
+# +
 import numpy as np
 from scipy.spatial import Voronoi, ConvexHull
 from ase.neighborlist import NeighborList
 import warnings
 
 
+class VorNei:
+
+    def __init__(self, i, j, zi, zj, rij, aij, vij):
+        """
+        i:   index of the central atom
+        j:   indices for Voronoi neighbors of i
+        zi:  atomic number for i
+        zj:  atomic numbers for j
+        rij: rj-ri
+        aij: area of ij facet
+        vij: volume around i spanned by ij facet,
+
+        * in periodic cells sum vij = total volume
+
+                      j
+                      |
+                      |
+                      |
+                xxxx-aij-xxxx
+                x .   |   . x
+                x  . vij .  x
+                x   . | .   x
+          m ----x---- i ----x---- k
+                x     |     x
+                x     |     x
+                x     |     x
+                xxxxxxxxxxxxx
+                      |
+                      |
+                      |
+                      l
+        """
+        self.i = i
+        self.j = j
+        self.zi = zi
+        self.zj = zj
+        self.rij = rij
+        self.aij = aij
+        self.vij = vij
+
+
 def check_total_area_volume(vor, data):
     """
-    Tests if the split data of the Voronoi cell adds 
+    tests if the split data of the Voronoi cell adds
     up to total area/volume.
     """
     reg = vor.point_region[0]
@@ -20,12 +62,12 @@ def check_total_area_volume(vor, data):
 
 def vor_local(rij, test=False):
     """
-    rij: Relative coordinates of an atom's neighbors (shape=[:, 3]).
-         It is assumed that the coordinates of the central 
+    rij: relative coordinates of an atom's neighbors (shape=[:, 3]).
+         it is assumed that the coordinates of the central
          atom itself (=[0, 0, 0]) is not included in rij.
 
-    The Voronoi cell (around origin), is constructed
-    and the indices, areas, and volumes corresponding to 
+    the Voronoi cell (around origin), is constructed
+    and the indices, areas, and volumes corresponding to
     each facet/neighbor are returned:
 
         data = [(i1, area1, vol1), ...]
@@ -61,30 +103,26 @@ def vor_local(rij, test=False):
     return data
 
 
-def get_vor_neighborhood(atoms, cutoff):
+def get_voronoi_neighbors(atoms, cutoff):
     """
-    atoms: ase.Atoms object
-    cutoff: Consider i, j as neighbors if |rj-ri| < cutoff
+    atoms:  ase.Atoms object
+    cutoff: limits the neighbor search to |rj-ri| < cutoff,
+            used only for faster search, it should be large
+            enough so that the output doesn't depend on cutoff.
 
-    Returns: I, J, A, V
-    I, J: indices of atoms who share a Voronoi facet (neighbors)
-    A: The surface area of facet
-    V: The volume around I spanned by J
+    returns: a list of VorNei objects
 
-    Note:
-    1) i, j and j, i repeated.
-    2) cutoff should be large enough to enclose all Voronoi neighbors.
-    3) sum(V) == total volume. If not, a warning is raised.
-       In that case, increase the cutoff.
+    * notes:
+    1) cutoff should be large enough to enclose all Voronoi neighbors.
+    2) sum(vij) == total volume. If not, a warning is raised,
+       in that case, increase the cutoff.
     """
     N = atoms.get_global_number_of_atoms()
     nl = NeighborList(N*[cutoff/2], skin=0., bothways=True,
                       self_interaction=False)
     nl.update(atoms)
-    I = []
-    J = []
-    A = []
-    V = []
+    vornei = []
+    vol = 0
     for i in range(N):
         j, off = nl.get_neighbors(i)
         off = (off[..., None]*atoms.cell).sum(axis=1)
@@ -92,12 +130,13 @@ def get_vor_neighborhood(atoms, cutoff):
         rij = atoms.positions[j] - atoms.positions[i] + off
         data = vor_local(rij)
         _j, areas, vols = zip(*data)
-        I.extend(len(_j)*[i])
-        J.extend(j[list(_j)].tolist())
-        A.extend(areas)
-        V.extend(vols)
-    I, J, A, V = (np.array(buff) for buff in (I, J, A, V))
-    if not np.isclose(V.sum(), atoms.get_volume()):
+        j_vor = j[list(_j)]
+        zi = atoms.numbers[i]
+        zj = atoms.numbers[j_vor]
+        vor_i = VorNei(i, j_vor, zi, zj, rij[j_vor], areas, vols)
+        vornei.append(vor_i)
+        vol += sum(vols)
+    if not np.isclose(vol, atoms.get_volume()):
         warnings.warn(
             'Voronoi volumes did not add up to total volume: try larger cutoff!')
-    return I, J, A, V
+    return vornei
