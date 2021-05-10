@@ -130,10 +130,11 @@ def get_voronoi_neighbors(atoms, cutoff):
         rij = atoms.positions[j] - atoms.positions[i] + off
         data = vor_local(rij)
         _j, areas, vols = zip(*data)
-        j_vor = j[list(_j)]
+        _j = list(_j)
+        j_vor = j[_j]
         zi = atoms.numbers[i]
         zj = atoms.numbers[j_vor]
-        vor_i = VorNei(i, j_vor, zi, zj, rij[j_vor], areas, vols)
+        vor_i = VorNei(i, j_vor, zi, zj, rij[_j], areas, vols)
         vornei.append(vor_i)
         vol += sum(vols)
     if not np.isclose(vol, atoms.get_volume()):
