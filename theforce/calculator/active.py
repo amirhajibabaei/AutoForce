@@ -537,8 +537,13 @@ class ActiveCalculator(Calculator):
         else:
             beta = c
         beta = self.gather(beta)
-        vscale = torch.tensor([self.model._vscale[z]
-                               for z in self.atoms.numbers]).sqrt()
+        vscale = []
+        for z in self.atoms.numbers:
+            if z in self.model._vscale:
+                vscale.append(self.model._vscale[z])
+            else:
+                vscale.append(float('inf'))
+        vscale = torch.tensor(vscale).sqrt()
         return beta*vscale
 
     def update_lce(self, loc, beta=None):
@@ -546,7 +551,11 @@ class ActiveCalculator(Calculator):
             k = self.model.gp.kern(loc, self.model.X)
             b = self.model.choli@k.detach().t()
             c = (b*b).sum()  # /self.model.gp.kern(loc, loc)
-            beta = ((1-c)*self.model._vscale[loc.number]).clamp(min=0.).sqrt()
+            if loc.number in self.model._vscale:
+                vscale = self.model._vscale[loc.number]
+            else:
+                vscale = float('inf')
+            beta = ((1-c)*vscale).clamp(min=0.).sqrt()
         added = 0
         m = self.model.indu_counts[loc.number]
         if loc.number in self.model.gp.species:
