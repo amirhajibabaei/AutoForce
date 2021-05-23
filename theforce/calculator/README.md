@@ -6,10 +6,10 @@ generates a machine learning model on-the-fly
 with the SGPR and adaptive sampling algorithms.
 For instance
 ```python
-from ase.calculators.vasp import Vasp2
+from ase.calculators.vasp import Vasp
 from theforce.calculator.active import ActiveCalculator
 
-DFT_calc = Vasp2(command='mpirun -n 12 vasp_std')
+DFT_calc = Vasp(command='mpirun -n 12 vasp_std')
 ML_calc = ActiveCalculator(calculator=DFT_calc)
 ```
 Next, we create an `atoms` object 
@@ -196,12 +196,12 @@ Currently, this is resolved by defining the DFT
 calculator in a seperate script (e.g. `calc.py`)
 ```python
 # calc.py
-from ase.calculators.vasp import Vasp2
+from ase.calculators.vasp import Vasp
 
-calc = Vasp2(command="mpirun -n 6 vasp_std", 
-             directory='vasp',
-             #...
-            )
+calc = Vasp(command="mpirun -n 6 vasp_std",
+            directory='vasp',
+            #...
+           )
 
 # optional function
 def preprocess_atoms(atoms):

@@ -1,5 +1,5 @@
 # +
-from ase.calculators.vasp import Vasp2
+from ase.calculators.vasp import Vasp
 import re
 import os
 
@@ -59,9 +59,9 @@ def preprocess_atoms(atoms):
 
 
 command = get_command()
-calc = Vasp2(command=command,
-             setups=get_setups(),
-             directory='vasp')
+calc = Vasp(command=command,
+            setups=get_setups(),
+            directory='vasp')
 if os.path.isfile('INCAR'):
     calc.read_incar()
 if os.path.isfile('KPOINTS'):

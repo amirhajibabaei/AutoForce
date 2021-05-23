@@ -1,10 +1,11 @@
-from ase.calculators.vasp import Vasp2
+# +
+from ase.calculators.vasp import Vasp
 
 
-calc = Vasp2(command="mpirun -n 6 vasp_std", 
-             directory='vasp',
-             ispin=2,
-             kspacing=0.5,
+calc = Vasp(command="mpirun -n 6 vasp_std",
+            directory='vasp',
+            ispin=2,
+            kspacing=0.5,
             )
 
 
@@ -13,7 +14,7 @@ def preprocess_atoms(atoms):
     # this can be defined for setting the parameters
     # that can not be set when defining the calculator.
     #
-    # for instance: 
+    # for instance:
     # atoms.set_initial_magnetic_moments(len(atoms)*[1.])
     pass
 

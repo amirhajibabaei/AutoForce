@@ -1,3 +1,4 @@
+# +
 import torch
 import numpy as np
 from theforce.dynamics.leapfrog import Leapfrog
@@ -43,11 +44,11 @@ def suffixed_new(name, ew=''):
 
 
 def my_vasp(**kwargs):
-    from ase.calculators.vasp import Vasp, Vasp2
-    calc = Vasp2(command='mpirun -np $NSLOTS vasp_std',
-                 setups='recommended',
-                 lreal='Auto',
-                 istart=0, **kwargs)
+    from ase.calculators.vasp import Vasp
+    calc = Vasp(command='mpirun -np $NSLOTS vasp_std',
+                setups='recommended',
+                lreal='Auto',
+                istart=0, **kwargs)
     return calc
 
 
@@ -70,6 +71,8 @@ def numpy_same_random_seed():
     torch.distributed.broadcast(seed, 0)
     np.random.seed(seed.numpy())
 
+
+# -
 
 def init_velocities(atoms, t, overwrite=False):
     if atoms.get_velocities() is None or overwrite:
