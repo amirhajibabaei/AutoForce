@@ -48,8 +48,8 @@ pfactor = (ptime**2)*bulk_modulus*units.GPa
 init_velocities(atoms, tem)
 # make_cell_upper_triangular(atoms)
 filtered = FilterDeltas(atoms)
-dyn = NPT(filtered, dt*units.fs, tem*units.kB, stress*units.GPa,
-          ttime, pfactor if npt else None, mask=None, trajectory='md.traj',
+dyn = NPT(filtered, dt*units.fs, temperature_K=tem, externalstress=stress*units.GPa,
+          ttime=ttime, pfactor=pfactor if npt else None, mask=None, trajectory='md.traj',
           append_trajectory=False, loginterval=1)
 
 # update histograms
