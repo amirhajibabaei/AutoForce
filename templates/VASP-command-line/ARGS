@@ -1,0 +1,24 @@
+calculator = 'VASP'
+
+
+# ML:
+ediff = 1.5*kcal_mol
+fdiff = 1.5*kcal_mol
+
+
+# MD:
+rattle = 0.05           # randomly displace positions before starting MD (so that forces != 0)
+tem    = 300.           # temperature in Kelvin
+tdamp  = 10.            # thermostat parameter
+
+dt          = 0.25      # timestep in fs (small because of Hydrogens)
+picos       = 5         # MD for 5 picoseconds, equivalent to picos = -20000 <- MD steps
+loginterval = 40        # write to traj every 10 fs
+test        = 1000      # force single point ab inito tests in this intervals
+
+
+# other defaults:
+# noise_f = 1*kcal_mol
+# pckl = 'model.pckl'
+# tape = 'model.sgpr'
+# kernerl_kw = {'cutoff': 6., 'lmax': 3, 'nmax': 3, 'exponent': 4}
