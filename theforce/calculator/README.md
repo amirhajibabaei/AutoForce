@@ -19,7 +19,8 @@ and set `ML_calc` as its calculator
 atoms.set_calculator(ML_calc)
 ```
 After this, we can perform simulations such as 
-[molecular dynamics](https://wiki.fysik.dtu.dk/ase/ase/md.html).
+[molecular dynamics](https://wiki.fysik.dtu.dk/ase/ase/md.html)
+with on-the-fly machine learning.
 
 The above script runs in parallel for DFT but 
 it is serial for ML calculations.
@@ -57,7 +58,7 @@ noise_f:         bias noise for forces
 ```
 
 #### covariance, kernel_kw
-This parameter can be used for passing a kernel
+The `covariance` keyword can be used for passing a kernel
 or a saved/pickled model to the calculator
 ```python
 from theforce.similarity.sesoap import SeSoapKernel

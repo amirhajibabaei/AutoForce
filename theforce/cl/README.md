@@ -37,7 +37,7 @@ test:            integer; single-point testing intervals (default=None)
 # sampling and optimization
 ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
 fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 3 kcal/mol)
-noise_f:  (ev/A) bias noise for forces (default=fdiff)
+noise_f:  (ev/A) bias noise for forces (default ~ 1 kcal/mol)
 ```
 Note that these parameters are not related to any 
 ab initio software despite possible name similarities.
@@ -67,7 +67,7 @@ At the beginning of training, if covariance
 is not given, the default kernel will be
 instantiated. 
 In this case `kernel_kw` can be used for
-defining kernel parameters (e.g. cutoff).
+defining kernel parameters (e.g. `kernel_kw = {'cutoff' : 6.}`).
 
 After sufficient training, one might want to use
 the result ML potential for fast simulations 
@@ -145,13 +145,15 @@ will be performed (with cell fluctuations).
 It is recommended to first perform a NVT
 simulation and then use the result `pckl`
 as the starting potential for the NPT simulation.
-NPT simulations are more vulnerable to sudden ML updates.
-If the model is mature, this is not an issue.
+NPT simulations are more vulnerable to sudden ML updates
+when starting from an empty model.
 
 A practical issue may rise if the MD simulation starts 
-with an empty model and a state with forces close to zero.
-Although this is not a issue in most cases, 
-sometimes the active learning algorithm may fail.
+with an empty model and a state with forces very close to zero.
+If the initial configuration doesn't have diverse
+local environments (e.g. perfect crystaline strutures),
+the predictive variance remains very close to 0 and
+the active learning algorithm fails.
 For this, we have introduced the `rattle` tag 
 which disturbs the atoms at the initial state.
 The default value is `rattle=0.0`.
