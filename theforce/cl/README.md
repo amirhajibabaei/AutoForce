@@ -7,6 +7,9 @@ ab initio software.
 Then ML and MD related parameters, which do not depend on underlying 
 ab initi calculator, are set in the `ARGS` file.
 
+Running examples are available at top-level
+[template](https://github.com/amirhajibabaei/AutoForce/tree/master/templates) folder.
+
 #### Ab initio settings
 The input files for ab initio calculations depend on the software:
 * VASP: see [theforce/cl/README_vasp.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl/README_vasp.md).
@@ -63,8 +66,8 @@ Thus the training is resumed in consecutive runs
 (the model is automatically loaded and saved in
 the `pckl` folder).
 
-At the beginning of training, if covariance
-is not given, the default kernel will be
+At the beginning of training, if no covariance
+is given (or `= None`), the default kernel will be
 instantiated. 
 In this case `kernel_kw` can be used for
 defining kernel parameters (e.g. `kernel_kw = {'cutoff' : 6.}`).
