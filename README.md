@@ -29,7 +29,7 @@ Go to the source code directory and install by
 pip install .
 ```
 
-### Command line
+### Command line interface
 For machine learning accelerated molecular dynamics,
 structure relaxation, etc (using VASP, Gaussian, etc.) from the command line see 
 [theforce/cl/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl).
@@ -51,4 +51,8 @@ atoms.set_calculator(calc)
 ```
 For detailed information see 
 [theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/calculator).
+
+
+### Examples
+For usage examples, see the [template](https://github.com/amirhajibabaei/AutoForce/tree/master/templates) folder.
 <!-- #endregion -->
