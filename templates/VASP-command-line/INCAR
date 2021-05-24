@@ -1,0 +1,4 @@
+ISTART = 0
+GGA = PE
+IVDW = 11
+NPAR = 4

@@ -6,10 +6,10 @@ generates a machine learning model on-the-fly
 with the SGPR and adaptive sampling algorithms.
 For instance
 ```python
-from ase.calculators.vasp import Vasp2
+from ase.calculators.vasp import Vasp
 from theforce.calculator.active import ActiveCalculator
 
-DFT_calc = Vasp2(command='mpirun -n 12 vasp_std')
+DFT_calc = Vasp(command='mpirun -n 12 vasp_std')
 ML_calc = ActiveCalculator(calculator=DFT_calc)
 ```
 Next, we create an `atoms` object 
@@ -19,7 +19,8 @@ and set `ML_calc` as its calculator
 atoms.set_calculator(ML_calc)
 ```
 After this, we can perform simulations such as 
-[molecular dynamics](https://wiki.fysik.dtu.dk/ase/ase/md.html).
+[molecular dynamics](https://wiki.fysik.dtu.dk/ase/ase/md.html)
+with on-the-fly machine learning.
 
 The above script runs in parallel for DFT but 
 it is serial for ML calculations.
@@ -57,7 +58,7 @@ noise_f:         bias noise for forces
 ```
 
 #### covariance, kernel_kw
-This parameter can be used for passing a kernel
+The `covariance` keyword can be used for passing a kernel
 or a saved/pickled model to the calculator
 ```python
 from theforce.similarity.sesoap import SeSoapKernel
@@ -195,12 +196,12 @@ Currently, this is resolved by defining the DFT
 calculator in a seperate script (e.g. `calc.py`)
 ```python
 # calc.py
-from ase.calculators.vasp import Vasp2
+from ase.calculators.vasp import Vasp
 
-calc = Vasp2(command="mpirun -n 6 vasp_std", 
-             directory='vasp',
-             #...
-            )
+calc = Vasp(command="mpirun -n 6 vasp_std",
+            directory='vasp',
+            #...
+           )
 
 # optional function
 def preprocess_atoms(atoms):

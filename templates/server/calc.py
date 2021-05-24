@@ -1,10 +1,11 @@
-from ase.calculators.vasp import Vasp2
+# +
+from ase.calculators.vasp import Vasp
 
 
-calc = Vasp2(command="mpirun -n 6 vasp_std", 
-             directory='vasp',
-             ispin=2,
-             kspacing=0.5,
+calc = Vasp(command="mpirun -n 6 vasp_std",
+            directory='vasp',
+            ispin=2,
+            kspacing=0.5,
             )
 
 

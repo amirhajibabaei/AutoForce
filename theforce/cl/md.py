@@ -64,9 +64,8 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
 
 
 def langevin_dynamics(atoms, dt, tem, friction, trajectory, loginterval, append):
-    dyn = Langevin(atoms, dt*units.fs, tem*units.kB, friction, rng=np.random,
-                   trajectory=trajectory, append_trajectory=append,
-                   loginterval=loginterval)
+    dyn = Langevin(atoms, dt*units.fs, temperature_K=tem, friction=friction, rng=np.random,
+                   trajectory=trajectory, append_trajectory=append, loginterval=loginterval)
     return dyn
 
 
@@ -79,8 +78,8 @@ def npt_dynamics(atoms, dt, tem, bulk_modulus, stress, mask, trajectory, loginte
     else:
         pfactor = None
     configure_cell(atoms)
-    dyn = NPT(atoms, dt*units.fs, tem*units.kB, stress*units.GPa,
-              ttime, pfactor, mask=mask, trajectory=trajectory,
+    dyn = NPT(atoms, dt*units.fs, temperature_K=tem, externalstress=stress*units.GPa,
+              ttime=ttime, pfactor=pfactor, mask=mask, trajectory=trajectory,
               append_trajectory=append, loginterval=loginterval)
     return dyn
 

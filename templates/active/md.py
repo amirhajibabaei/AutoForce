@@ -20,7 +20,7 @@ calc = ActiveCalculator(covariance=kern,          # kern, if None the default is
                         process_group=mpi_init(), # for mpi parallelism
                         pckl='model.pckl/',       # for continuous pickling (saving) the model
                         tape='Au.sgpr',           # for saving the training data step by step
-                        test = 100,               # test 100 steps after last dft (None for no test)
+                        test=100,                 # test 100 steps after last dft (None for no test)
                         )
 # note that, all of the above have default values.
 # for a minimal  example, you only need to set
@@ -69,8 +69,8 @@ pfactor = (ptime**2)*bulk_modulus*units.GPa
 init_velocities(atoms, tem)
 # make_cell_upper_triangular(atoms)
 filtered = FilterDeltas(atoms)
-dyn = NPT(filtered, dt*units.fs, tem*units.kB, stress*units.GPa,
-          ttime, pfactor if npt else None, mask=None, trajectory='md.traj',
+dyn = NPT(filtered, dt*units.fs, temperature_K=tem, externalstress=stress*units.GPa,
+          ttime=ttime, pfactor=pfactor if npt else None, mask=None, trajectory='md.traj',
           append_trajectory=False, loginterval=1)
 
 # F. run md
@@ -82,7 +82,7 @@ dyn.run(1000)
 # H. restart
 #    calc = ActiveCalculator(covariance='model.pckl/', ...)
 
-# I. using thr saved tapes (.sgpr files)
+# I. using the saved tapes (.sgpr files)
 # these files can be used for faster retraining the model e. g.
 # with different parameters, etc.
 #    calc.include_tape('model.sgpr')
@@ -92,6 +92,5 @@ dyn.run(1000)
 
 # J. training with existing data:
 #    calc.include_data(data)
-# where data is either a list of atoms objects or 
+# where data is either a list of atoms objects or
 # path to a traj file e. g. 'data.traj'.
-
