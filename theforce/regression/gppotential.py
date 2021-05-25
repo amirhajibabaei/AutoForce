@@ -730,7 +730,12 @@ class PosteriorPotential(Module):
         if remake:
             self.make_munu()
 
-    def downsize(self, n, m, first=False, remake=True):
+    def downsize(self, n, m, first=False, lii=False, remake=True):
+        """
+        lii: remove least important inducing
+        """
+        if any([x.requires_grad for x in (self.M, self.Ke, self.Kf)]):
+            raise RuntimeError('cov matrices require grad!')
         ch1 = 0
         while len(self.data) > n:
             if first:
@@ -739,12 +744,17 @@ class PosteriorPotential(Module):
                 self.pop_1data(remake=False)
             ch1 += 1
         ch2 = 0
-        while len(self.X) > m:
-            if first:
-                self.popfirst_1inducing(remake=False)
-            else:
-                self.pop_1inducing(remake=False)
-            ch2 += 1
+        if lii and m < len(self.X):
+            indices = torch.argsort(self.M.sum(axis=1)).tolist()
+            ch2 = indices[:m]
+            self.select_inducing(ch2, deleted=indices[m:], remake=False)
+        else:
+            while len(self.X) > m:
+                if first:
+                    self.popfirst_1inducing(remake=False)
+                else:
+                    self.pop_1inducing(remake=False)
+                ch2 += 1
         if remake and (ch1 or ch2):
             self.make_munu()
         return ch1, ch2

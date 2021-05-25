@@ -71,7 +71,7 @@ class ActiveCalculator(Calculator):
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol,
-                 kernel_kw=None, include_params=None):
+                 max_data=inf, max_inducing=inf, kernel_kw=None, include_params=None):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -92,6 +92,8 @@ class ActiveCalculator(Calculator):
             ediff_tot:       total energy sensitivity (eV) | inf is allowed
             fdiff:           forces sensitivity (eV/A) | inf is allowed
             noise_f:         bias force (fit) MAE to this value
+            max_data:        if data exceeds this limit, remove earlier data
+            max_inducing     if inducing exceeds this limit, remove earlier inducing
 
         control:
             kernel_kw:       kwargs passed when default_kernel is called
@@ -206,6 +208,8 @@ class ActiveCalculator(Calculator):
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
         self.noise_f = noise_f
+        self.max_data = max_data
+        self.max_inducing = max_inducing
         self.meta = meta
         self.logfile = logfile
         self.stdout = True
@@ -661,6 +665,13 @@ class ActiveCalculator(Calculator):
             update_data = self.get_covloss().max() > self.ediff
         n = self.update_data(try_fake=not try_real) if update_data else 0
         if m > 0 or n > 0:
+            ch1, ch2 = self.model.downsize(
+                self.max_data, self.max_inducing, first=True, lii=True)
+            if ch1 or ch2:
+                self.optimize()
+                self.log('downsized -> size: {} {}'.format(*self.size))
+            if ch2:
+                self.cov = self.cov.index_select(1, torch.as_tensor(ch2))
             self.log('fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
                 *(float(v) for v in self.model._stats)))
             if self.rank == 0:
