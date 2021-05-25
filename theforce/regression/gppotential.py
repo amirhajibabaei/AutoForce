@@ -711,13 +711,43 @@ class PosteriorPotential(Module):
         if remake:
             self.make_munu()
 
-    def downsize(self, n, m, remake=True):
-        while len(self.data) > n:
-            self.pop_1data(remake=False)
-        while len(self.X) > m:
-            self.pop_1inducing(remake=False)
+    def popfirst_1data(self, remake=True, clear_cached=True):
+        self.Ke = self.Ke[1:]
+        self.Kf = self.Kf[3*self.data[0].natoms:]
+        if clear_cached:
+            self.gp.clear_cached([self.data.X[0]])
+        del self.data.X[0]
         if remake:
             self.make_munu()
+
+    def popfirst_1inducing(self, remake=True, clear_cached=True):
+        self.Ke = self.Ke[:, 1:]
+        self.Kf = self.Kf[:, 1:]
+        self.M = self.M[1:, 1:]
+        if clear_cached:
+            self.gp.clear_cached([self.X.X[0]])
+        del self.X.X[0]
+        if remake:
+            self.make_munu()
+
+    def downsize(self, n, m, first=False, remake=True):
+        ch1 = 0
+        while len(self.data) > n:
+            if first:
+                self.popfirst_1data(remake=False)
+            else:
+                self.pop_1data(remake=False)
+            ch1 += 1
+        ch2 = 0
+        while len(self.X) > m:
+            if first:
+                self.popfirst_1inducing(remake=False)
+            else:
+                self.pop_1inducing(remake=False)
+            ch2 += 1
+        if remake and (ch1 or ch2):
+            self.make_munu()
+        return ch1, ch2
 
     def add_1atoms(self, atoms, ediff, fdiff):
         """ ediff here is ediff_tot """
