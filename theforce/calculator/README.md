@@ -55,6 +55,8 @@ test:            intervals for single point tests during MD
 ediff:           energy sensitivity for sampling LCEs
 fdiff:           forces sensitivity for sampling DFT data
 noise_f:         bias noise for forces
+max_data:        maximum number of ab initio data
+max_inducing:    maximum number of reference/inducing LCEs
 ```
 
 #### covariance, kernel_kw
@@ -177,6 +179,18 @@ cause more sampling of DFT data without a
 meaningful increase of the models accuracy.
 But the value of 0 maybe used for fitting a 
 static data set whithout any issues.
+
+#### max_data, max_inducing
+These flags can be used for increasing the speed.
+The computational cost for the ML energy-force
+predictions is propodtional to the n.o. inducing LCEs.
+For updating the model, the cost depends also
+on the n.o. ab initio data.
+If n.o. data > `max_data`, the earliest data
+will be dumped.
+If n.o. inducing > `max_inducing`, those LCEs
+which have the maximum cumulative covariance with
+the remaining LCEs will be eliminated.
 
 ### Training with existing data
 If some DFT data already exists, one can train a 
