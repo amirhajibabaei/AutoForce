@@ -1,7 +1,7 @@
 # +
 from theforce.calculator.socketcalc import SocketCalculator
 from theforce.calculator.active import ActiveCalculator, FilterDeltas
-from theforce.similarity.sesoap import SeSoapKernel
+from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
 from theforce.util.parallel import mpi_init
 from theforce.util.aseutil import init_velocities, make_cell_upper_triangular
 from ase.build import bulk
@@ -13,7 +13,8 @@ main_calc = SocketCalculator(script='calc_emt.py') # or calc_vasp.py
 
 # B. the kernel and the active learning calculator
 lmax, nmax, exponent, cutoff = 3, 3, 4, 6.
-kern = SeSoapKernel(lmax, nmax, exponent, cutoff)
+# kern = SubSeSoapKernel(lmax, nmax, exponent,cutoff, 79, [79])    # <- fixed atoms types (faster?)
+kern = SeSoapKernel(lmax, nmax, exponent, cutoff) # <- universal (all atoms types)
 calc = ActiveCalculator(covariance=kern,          # kern, if None the default is used
                         calculator=main_calc,     # main (DFT) calc
                         ediff=0.01, fdiff=0.05,   # control params for accuracy/speed tradeoff
