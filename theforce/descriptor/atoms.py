@@ -638,10 +638,10 @@ class AtomsData:
     def __len__(self):
         return len(self.X)
 
-    def to_traj(self, trajname, mode='w'):
+    def to_traj(self, trajname, mode='w', start=0):
         from ase.io import Trajectory
         t = Trajectory(trajname, mode)
-        for atoms in self:
+        for atoms in self.X[start:]:
             t.write(atoms)
         t.close()
 
@@ -711,10 +711,10 @@ class LocalsData:
         for loc in self:
             loc.stage(iterable(descriptors), dont_save_grads=dont_save_grads)
 
-    def to_traj(self, trajname, mode='w'):
+    def to_traj(self, trajname, mode='w', start=0):
         from ase.io import Trajectory
         t = Trajectory(trajname, mode)
-        for loc in self:
+        for loc in self.X[start:]:
             t.write(loc.as_atoms())
         t.close()
 

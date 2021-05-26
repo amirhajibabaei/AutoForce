@@ -984,7 +984,8 @@ class PosteriorPotential(Module):
         self.data = data
         self.gp.cahced = cached
 
-    def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=False):
+    def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=False,
+                  appendto=None):
         if pickle_data and self.data.is_distributed:
             raise NotImplementedError(
                 'trying to pickle data which is distributed! call gathere_() first!')
@@ -995,8 +996,15 @@ class PosteriorPotential(Module):
         mkdir_p(folder)
         with open(os.path.join(folder, 'cutoff'), 'w') as file:
             file.write('{}\n'.format(self.cutoff))
-        self.data.to_traj(os.path.join(folder, 'data.traj'))
-        self.X.to_traj(os.path.join(folder, 'inducing.traj'))
+
+        def mode(s):
+            return 'a' if s > 0 else 'w'
+
+        sdat, sind = (0, 0) if appendto is None else appendto
+        self.data.to_traj(os.path.join(folder, 'data.traj'),
+                          mode=mode(sdat), start=sdat)
+        self.X.to_traj(os.path.join(folder, 'inducing.traj'),
+                       mode=mode(sind), start=sind)
         self.gp.to_file(os.path.join(folder, 'gp'))
         self.save(os.path.join(folder, 'model'),
                   supress_warnings=supress_warnings)
