@@ -41,6 +41,8 @@ test:            integer; single-point testing intervals (default=None)
 ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
 fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 3 kcal/mol)
 noise_f:  (ev/A) bias noise for forces (default ~ 1 kcal/mol)
+max_data:        max data size (default=inf)
+max_inducing:    max inducing size (default=inf)
 ```
 Note that these parameters are not related to any 
 ab initio software despite possible name similarities.
@@ -81,6 +83,12 @@ For this, all you need to do is to not specify any
 The other paramteres (`ediff`, `fdiff`) which control 
 the sampling and accuracy should be gradually tuned to 
 get the desired accuracy.
+
+If the size of accumulated data/inducing becomes too large,
+the simulation may become too slow.
+`max_data` and `max_inducing` can be used to set an
+upper limit for the sizedata by the model.
+
 
 #### Model initialization from random displacements (optional)
 In most cases starting from an empty ML model 
