@@ -54,7 +54,7 @@ For detailed information see
 
 
 ### Examples
-For usage examples, see the [template/](https://github.com/amirhajibabaei/AutoForce/tree/master/templates) folder.
+For usage examples, see the [examples/](https://github.com/amirhajibabaei/AutoForce/tree/master/examples) folder.
 
 ### Practical notes
 

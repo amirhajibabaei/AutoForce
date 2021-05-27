@@ -27,7 +27,7 @@ it is serial for ML calculations.
 For notes on full parallelism of both DFT and ML 
 see the section **Parallelism** in the following.
 Running examples can be found 
-[here](https://github.com/amirhajibabaei/AutoForce/tree/master/templates).
+[here](https://github.com/amirhajibabaei/AutoForce/tree/master/examples).
 
 With `ML_calc`, the ML model will be generated 
 automatically on-the-fly with our arbitrary

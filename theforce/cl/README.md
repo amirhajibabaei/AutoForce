@@ -8,7 +8,7 @@ Then ML and MD related parameters, which do not depend on underlying
 ab initi calculator, are set in the `ARGS` file.
 
 Running examples are available at top-level
-[template](https://github.com/amirhajibabaei/AutoForce/tree/master/templates) folder.
+[examples](https://github.com/amirhajibabaei/AutoForce/tree/master/examples) folder.
 
 #### Ab initio settings
 The input files for ab initio calculations depend on the software:
