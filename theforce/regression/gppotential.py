@@ -986,7 +986,7 @@ class PosteriorPotential(Module):
         self.gp.cahced = cached
 
     def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=False,
-                  appendto=None):
+                  to_traj=False):
         if pickle_data and self.data.is_distributed:
             raise NotImplementedError(
                 'trying to pickle data which is distributed! call gathere_() first!')
@@ -997,15 +997,9 @@ class PosteriorPotential(Module):
         mkdir_p(folder)
         with open(os.path.join(folder, 'cutoff'), 'w') as file:
             file.write('{}\n'.format(self.cutoff))
-
-        def mode(s):
-            return 'a' if s > 0 else 'w'
-
-        sdat, sind = (0, 0) if appendto is None else appendto
-        self.data.to_traj(os.path.join(folder, 'data.traj'),
-                          mode=mode(sdat), start=sdat)
-        self.X.to_traj(os.path.join(folder, 'inducing.traj'),
-                       mode=mode(sind), start=sind)
+        if to_traj:  # not necessary, data will be pickled as self._raw_data
+            self.data.to_traj(os.path.join(folder, 'data.traj'))
+            self.X.to_traj(os.path.join(folder, 'inducing.traj'))
         self.gp.to_file(os.path.join(folder, 'gp'))
         self.save(os.path.join(folder, 'model'),
                   supress_warnings=supress_warnings)
@@ -1258,8 +1252,12 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group
             if group:
                 self.data.distribute_(group)
         else:
-            self.data = AtomsData(traj=os.path.join(folder, 'data.traj'),
-                                  group=group)
+            if hasattr(self, '_raw_data'):
+                self.data = AtomsData(self._raw_data, convert=True, group=group)
+                del self._raw_data
+            else:  # for backward compatibility
+                self.data = AtomsData(traj=os.path.join(folder, 'data.traj'),
+                                      group=group)
             if update_data:
                 self.data.update(
                     cutoff=self.cutoff, descriptors=self.gp.kern.kernels)

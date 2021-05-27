@@ -522,17 +522,19 @@ class TorchAtoms(Atoms):
 
 class AtomsData:
 
-    def __init__(self, X=None, traj=None, posgrad=False, cellgrad=False, **kwargs):
+    def __init__(self, X=None, traj=None, posgrad=False, cellgrad=False, convert=False, **kwargs):
         if X is not None:
-            self.X = X
+            if convert:
+                self.X = [TorchAtoms(ase_atoms=a, **kwargs) for a in X]
+            else:
+                self.X = X
             assert self.check_content()
         elif traj is not None:
-            self.X = []
             from ase.io import read
-            self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
-                       for atoms in read(traj, ':')]
+            self.X = [TorchAtoms(ase_atoms=atoms, **kwargs)
+                      for atoms in read(traj, ':')]
         else:
-            raise RuntimeError('AtomsData invoked without any input')
+            raise RuntimeError('AtomsData without any input!')
         self.posgrad = posgrad
         self.cellgrad = cellgrad
 
