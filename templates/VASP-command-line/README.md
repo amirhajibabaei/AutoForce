@@ -4,10 +4,10 @@
 * create `ARGS` file for setting ML and MD params
 * use `./run.sh` for running the example
 * the log can be visualized as follows
-```
+```sh
 python -m theforce.calculator.active active.log
 ```
 
 An example is given here.
-It is assumed that 20 cores are available which are devided as 8 for ML, 12 for VASP.
+It is assumed that 20 cores are available which are split as 8 for ML, 12 for VASP.
 You can modify the cores for VASP in `COMMAND` and for ML in `run.sh`.

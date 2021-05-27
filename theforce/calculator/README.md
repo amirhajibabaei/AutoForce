@@ -55,6 +55,8 @@ test:            intervals for single point tests during MD
 ediff:           energy sensitivity for sampling LCEs
 fdiff:           forces sensitivity for sampling DFT data
 noise_f:         bias noise for forces
+max_data:        maximum number of ab initio data
+max_inducing:    maximum number of reference/inducing LCEs
 ```
 
 #### covariance, kernel_kw
@@ -92,6 +94,29 @@ If `None`, the default kernel will be used
 In that case `kernel_kw` can be used for 
 passing some parameters (e.g. cutoff) to
 the kernel instantiation.
+
+Unless you want to use a kernel different
+from the defaults, the recommended way to
+instantiate the `ActiveCalculator` is to
+pass `kernel_kw` (do not pass `covariance`).
+Currently two implementations of the SOAP
+kernels are used as defaults:
+wildcard (no need to specify the atomic types)
+and specified atomic types (see *Kernels*).
+The latter can be much faster.
+If `'species'` are given in `kernel_kw`,
+the latter kernel will be used.
+```
+# method 1:
+kw = {'lmax': 3, 'nmax': 3, 'exponent': 4, 'cutoff': 6.} # <- any system, this is the default
+ML_calc = ActiveCalculator(kernel_kw=kw)
+
+# method 2:
+kw = {'lmax': 3, 'nmax': 3, 'exponent': 4, 'cutoff': 6., species=[1, 8]} # <- specifically for water
+ML_calc = ActiveCalculator(kernel_kw=kw)
+```
+If the model is loaded from a file,
+`kernel_kw` will have no effect.
 
 #### calculator
 The main DFT calculator can which be any ASE 
@@ -177,6 +202,18 @@ cause more sampling of DFT data without a
 meaningful increase of the models accuracy.
 But the value of 0 maybe used for fitting a 
 static data set whithout any issues.
+
+#### max_data, max_inducing
+These flags can be used for increasing the speed.
+The computational cost for the ML energy-force
+predictions is propodtional to the n.o. inducing LCEs.
+For updating the model, the cost depends also
+on the n.o. ab initio data.
+If n.o. data > `max_data`, the earliest data
+will be dumped.
+If n.o. inducing > `max_inducing`, those LCEs
+which have the maximum cumulative covariance with
+the remaining LCEs will be eliminated.
 
 ### Training with existing data
 If some DFT data already exists, one can train a 
@@ -278,4 +315,10 @@ a = SubSeSoapKernel(lmax, nmax, exponent, cutoff, 1, (1, 8))
 b = SubSeSoapKernel(lmax, nmax, exponent, cutoff, 8, (1, 8))
 kernel = [a, b]
 ```
+The recommended way to use the default kernels is to pass
+`kernel_kw` (see above).
+Integers (positive) `lmax`, `nmax` can be decreased
+for faster calculations or increased for higher accuracy.
+Although the higher accuracy is not always guaranteed
+(we haven't tested).
 <!-- #endregion -->

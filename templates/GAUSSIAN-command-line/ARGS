@@ -1,0 +1,17 @@
+calculator = 'Gaussian'
+
+# ML
+ediff = 1*kcal_mol      # LCE sampling threshold
+fdiff = 1*kcal_mol      # DFT sampling threshold
+
+# MD
+tem    = 300.           # temperature (K)
+rattle = 0.02           # break symmetry at step 0 by random displaceents; good for ML
+dt     = 0.25           # time step (fs)
+tdamp  = 10             # thermostat parameter (fs)
+picos  = 10             # run for 10 ps
+test   = 100            # tests every 100 steps; eliminate this in real calculations
+
+# structure relaxation/optimization
+# rattle = 0.05
+# fmax = 0.05

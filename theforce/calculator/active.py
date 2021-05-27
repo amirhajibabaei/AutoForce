@@ -1,7 +1,7 @@
 # +
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
 from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
-from theforce.similarity.sesoap import SeSoapKernel
+from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
 from theforce.math.sesoap import DefaultRadii
 from theforce.util.tensors import padded, nan_to_num
 from theforce.util.util import date, timestamp
@@ -17,8 +17,13 @@ import warnings
 import os
 
 
-def default_kernel(lmax=3, nmax=3, exponent=4, cutoff=6.):
-    return SeSoapKernel(lmax, nmax, exponent, cutoff, radii=DefaultRadii())
+def default_kernel(lmax=3, nmax=3, exponent=4, cutoff=6., species=None):
+    if species is None:
+        kern = SeSoapKernel(lmax, nmax, exponent, cutoff, radii=DefaultRadii())
+    else:
+        kern = [SubSeSoapKernel(lmax, nmax, exponent, cutoff, z, species, radii=DefaultRadii())
+                for z in species]
+    return kern
 
 
 def clamp_forces(f, m):

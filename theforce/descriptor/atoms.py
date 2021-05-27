@@ -432,7 +432,10 @@ class TorchAtoms(Atoms):
 
     def as_ase(self):
         atoms = Atoms(positions=self.positions, cell=self.cell,
-                      pbc=self.pbc, numbers=self.numbers)  # TODO: e, f
+                      pbc=self.pbc, numbers=self.numbers)
+        atoms.calc = self.calc   # DONE: e, f
+        if atoms.calc is not None:
+            atoms.calc.atoms = atoms
         vel = self.get_velocities()
         if vel is not None:
             atoms.set_velocities(vel)
@@ -519,17 +522,19 @@ class TorchAtoms(Atoms):
 
 class AtomsData:
 
-    def __init__(self, X=None, traj=None, posgrad=False, cellgrad=False, **kwargs):
+    def __init__(self, X=None, traj=None, posgrad=False, cellgrad=False, convert=False, **kwargs):
         if X is not None:
-            self.X = X
+            if convert:
+                self.X = [TorchAtoms(ase_atoms=a, **kwargs) for a in X]
+            else:
+                self.X = X
             assert self.check_content()
         elif traj is not None:
-            self.X = []
             from ase.io import read
-            self.X += [TorchAtoms(ase_atoms=atoms, **kwargs)
-                       for atoms in read(traj, ':')]
+            self.X = [TorchAtoms(ase_atoms=atoms, **kwargs)
+                      for atoms in read(traj, ':')]
         else:
-            raise RuntimeError('AtomsData invoked without any input')
+            raise RuntimeError('AtomsData without any input!')
         self.posgrad = posgrad
         self.cellgrad = cellgrad
 
@@ -638,10 +643,10 @@ class AtomsData:
     def __len__(self):
         return len(self.X)
 
-    def to_traj(self, trajname, mode='w'):
+    def to_traj(self, trajname, mode='w', start=0):
         from ase.io import Trajectory
         t = Trajectory(trajname, mode)
-        for atoms in self:
+        for atoms in self.X[start:]:
             t.write(atoms)
         t.close()
 
@@ -711,10 +716,10 @@ class LocalsData:
         for loc in self:
             loc.stage(iterable(descriptors), dont_save_grads=dont_save_grads)
 
-    def to_traj(self, trajname, mode='w'):
+    def to_traj(self, trajname, mode='w', start=0):
         from ase.io import Trajectory
         t = Trajectory(trajname, mode)
-        for loc in self:
+        for loc in self.X[start:]:
             t.write(loc.as_atoms())
         t.close()
 
