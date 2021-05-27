@@ -95,6 +95,29 @@ In that case `kernel_kw` can be used for
 passing some parameters (e.g. cutoff) to
 the kernel instantiation.
 
+Unless you want to use a kernel different
+from the defaults, the recommended way to
+instantiate the `ActiveCalculator` is to
+pass `kernel_kw` (do not pass `covariance`).
+Currently two implementations of the SOAP
+kernels are used as defaults:
+wildcard (no need to specify the atomic types)
+and specified atomic types (see *Kernels*).
+The latter can be much faster.
+If `'species'` are given in `kernel_kw`,
+the latter kernel will be used.
+```
+# method 1:
+kw = {'lmax': 3, 'nmax': 3, 'exponent': 4, 'cutoff': 6.} # <- any system, this is the default
+ML_calc = ActiveCalculator(kernel_kw=kw)
+
+# method 2:
+kw = {'lmax': 3, 'nmax': 3, 'exponent': 4, 'cutoff': 6., species=[1, 8]} # <- specifically for water
+ML_calc = ActiveCalculator(kernel_kw=kw)
+```
+If the model is loaded from a file,
+`kernel_kw` will have no effect.
+
 #### calculator
 The main DFT calculator can which be any ASE 
 calculator or a `SocketCalculator` (see *Parallelism*).
@@ -292,4 +315,10 @@ a = SubSeSoapKernel(lmax, nmax, exponent, cutoff, 1, (1, 8))
 b = SubSeSoapKernel(lmax, nmax, exponent, cutoff, 8, (1, 8))
 kernel = [a, b]
 ```
+The recommended way to use the default kernels is to pass
+`kernel_kw` (see above).
+Integers (positive) `lmax`, `nmax` can be decreased
+for faster calculations or increased for higher accuracy.
+Although the higher accuracy is not always guaranteed
+(we haven't tested).
 <!-- #endregion -->
