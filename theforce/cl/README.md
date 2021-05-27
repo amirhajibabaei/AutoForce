@@ -87,7 +87,7 @@ get the desired accuracy.
 If the size of accumulated data/inducing becomes too large,
 the simulation may become too slow.
 `max_data` and `max_inducing` can be used to set an
-upper limit for the sizedata by the model.
+upper limit for these sizes.
 
 
 #### Model initialization from random displacements (optional)
