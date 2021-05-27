@@ -977,6 +977,7 @@ class PosteriorPotential(Module):
         self.gp.del_cached()
         data = self.data
         del self.data
+        self._raw_data = [atoms.as_ase() for atoms in data]
         with warnings.catch_warnings():
             if supress_warnings:
                 warnings.simplefilter("ignore")

@@ -432,7 +432,10 @@ class TorchAtoms(Atoms):
 
     def as_ase(self):
         atoms = Atoms(positions=self.positions, cell=self.cell,
-                      pbc=self.pbc, numbers=self.numbers)  # TODO: e, f
+                      pbc=self.pbc, numbers=self.numbers)
+        atoms.calc = self.calc   # DONE: e, f
+        if atoms.calc is not None:
+            atoms.calc.atoms = atoms
         vel = self.get_velocities()
         if vel is not None:
             atoms.set_velocities(vel)
