@@ -5,9 +5,9 @@ from distutils.core import setup
 setup(
     name="theforce",
     version="v2021.05",
-    author="Amir HajiBabaei T.",
+    author="Amir Hajibabaei",
     author_email="a.hajibabaei.86@gmail.com",
-    description="machine learning of the potential energy surface from DFT",
+    description="machine learning of the ab initio potential energy surface",
     url="https://github.com",
     package_dir={'theforce': 'theforce'},
     packages=['theforce'],
