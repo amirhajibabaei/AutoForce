@@ -91,5 +91,5 @@ The computational cost is roughly proportional to $s^2$.
 
 
 
-![UNIST](https://github.com/amirhajibabaei/AutoForce/tree/master/docs/sources/UNIST.jpg)
+![alt text](https://github.com/amirhajibabaei/AutoForce/tree/master/docs/sources/UNIST.jpg?raw=True)
 <!-- #endregion -->
