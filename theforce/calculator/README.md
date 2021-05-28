@@ -90,7 +90,7 @@ Thus with default setting, the model will be
 automatically saved and loaded in consecutive
 runs.
 If `None`, the default kernel will be used 
-(see *Kernels*) with an empty initial model.
+(see **Kernels**) with an empty initial model.
 In that case `kernel_kw` can be used for 
 passing some parameters (e.g. cutoff) to
 the kernel instantiation.
@@ -102,11 +102,11 @@ pass `kernel_kw` (do not pass `covariance`).
 Currently two implementations of the SOAP
 kernels are used as defaults:
 wildcard (no need to specify the atomic types)
-and specified atomic types (see *Kernels*).
+and specified atomic types (see **Kernels**).
 The latter can be much faster.
 If `'species'` are given in `kernel_kw`,
 the latter kernel will be used.
-```
+```python
 # method 1:
 kw = {'lmax': 3, 'nmax': 3, 'exponent': 4, 'cutoff': 6.} # <- any system, this is the default
 ML_calc = ActiveCalculator(kernel_kw=kw)
@@ -125,7 +125,7 @@ For using an existing ML model without further
 training pass `calculator=None`.
 
 #### process_group
-see *Parallelism*.
+see **Parallelism**.
 
 #### meta
 This part is for metadynamics and it is still under development.
@@ -144,7 +144,7 @@ fig = log_to_figure('active.log')
 model after every update step.
 The default is `pckl='model.pckl'`.
 For disabling this feature and manual saving
-pass `pckl=None`.
+pass `pckl=None` (for less IO overhead).
 For resuming the training from a saved model
 we pass the folder-name instead of a kernel
 as `covariance`
@@ -199,13 +199,13 @@ there is a chance for overfitting.
 For instance during on-the-fly training,
 choosing smaller `noise_f` may
 cause more sampling of DFT data without a
-meaningful increase of the models accuracy.
+significant increase in accuracy of predictions.
 But the value of 0 maybe used for fitting a 
-static data set whithout any issues.
+static data set without any issues.
 
 #### max_data, max_inducing
 These flags can be used for increasing the speed.
-The computational cost for the ML energy-force
+The computational cost for energy and force
 predictions is propodtional to the n.o. inducing LCEs.
 For updating the model, the cost depends also
 on the n.o. ab initio data.
@@ -227,7 +227,7 @@ or path to a (`.traj`) file.
 ### Parallelism
 The main issue for ML parallelism is that `mpirun` 
 can not be invoked twice in the same process.
-Thus we need to seperate the processes for ML 
+Thus we need two seperate processes for ML
 and DFT calculations.
 Currently, this is resolved by defining the DFT 
 calculator in a seperate script (e.g. `calc.py`)

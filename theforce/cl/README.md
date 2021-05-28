@@ -5,7 +5,7 @@ molecular dynamics (MLMD) using VASP, Gaussian, etc from the command line.
 For this, we create the usual input input files required for a each 
 ab initio software.
 Then ML and MD related parameters, which do not depend on underlying 
-ab initi calculator, are set in the `ARGS` file.
+ab initio calculator, are set in the `ARGS` file.
 
 Running examples are available at top-level
 [examples](https://github.com/amirhajibabaei/AutoForce/tree/master/examples) folder.
@@ -103,7 +103,7 @@ Also presence of hydrogen is always challenging.
 For such cases it could be helpful to generate a
 preliminary model by a few random displacements 
 of atoms from their initial positions.
-For this we can execute `init_model` (see *Run* below)
+For this we can execute `init_model` (see **Run** in proceeding)
 where the following tages can be set in the `ARGS` file
 ```
 samples:      number of samples (default=5)
@@ -218,7 +218,7 @@ the following script
 python -m theforce.calculator.calc_server &
 sleep 1 # waits 1 sec for the server to be set
 #
-### choose one of following depending on you task
+### choose one of following depending on the task
 # mpirun -n 8 python -m theforce.cl.init_model  # for model initialization
 # mpirun -n 8 python -m theforce.cl.relax       # for structure relaxation
 mpirun -n 8 python -m theforce.cl.md            # for ML accelerated MD
@@ -252,12 +252,12 @@ parameters, etc.
 After the training is finished, we can perform MD
 using only the ML potential (without further updates) simply by
 ```sh
-mpirun -n 20 python -m theforce.cl.md
+mpirun -n 20 python -m theforce.cl.md -i POSCAR  # or -i Gaussian.gjf, coords.xyz, etc.
 ```
 provided that `ARGS` has the following entries
 ```
 covariance = `model.pckl` # path to the saved model
-calculator = None         # not necessary because this is the default
+calculator = None         # not necessary because both are defaults
 ```
 This time all 20 cores are used for ML and we can simulate
 much bigger systems.
