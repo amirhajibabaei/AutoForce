@@ -88,8 +88,24 @@ Currently no GPU acceleration is implemented.
 Presence of more atomic species makes the simulation slower.
 The computational cost is roughly proportional to $s^2$.
 
+### Citation
+```
+@article{PhysRevB.103.214102,
+  title = {Sparse Gaussian process potentials: Application to lithium diffusivity in superionic conducting solid electrolytes},
+  author = {Hajibabaei, Amir and Myung, Chang Woo and Kim, Kwang S.},
+  journal = {Phys. Rev. B},
+  volume = {103},
+  issue = {21},
+  pages = {214102},
+  numpages = {7},
+  year = {2021},
+  month = {Jun},
+  publisher = {American Physical Society},
+  doi = {10.1103/PhysRevB.103.214102},
+  url = {https://link.aps.org/doi/10.1103/PhysRevB.103.214102}
+}
+```
 
-
-
+<br/><br/><br/>
 ![alt text](https://github.com/amirhajibabaei/AutoForce/blob/master/docs/sources/UNIST.jpg?raw=True)
 <!-- #endregion -->
