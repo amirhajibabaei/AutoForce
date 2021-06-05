@@ -1,8 +1,89 @@
-
+# +
 import numpy as np
+from numpy.linalg import norm
 import torch
 
 
+def generate_random_cluster(distances):
+    """
+    distances:
+        A list of distances with length n,
+        generates a cluster with n+1 points.
+        The first point is [0, 0, 0].
+
+    The points are selected such that the nearest neighbor
+    of each point with index k > 0 is equal to distances[k-1].
+    In other words:
+
+        get_distances(cls).min(axis=0)[1:] == distances
+
+    See the test in proceeding.
+    """
+    cls = np.zeros((1, 3))
+    for dist in distances:
+        u = random_unit_vector()
+        proj = (u*cls).sum(axis=1)
+        order = np.argsort(proj)[::-1]
+        for j, k in enumerate(order):
+            x = proj[k]
+            y = norm(cls[k]-x*u)
+            if y < dist:
+                x += np.sqrt(dist**2-y**2)
+                break
+        for k in order[j:]:
+            if x-proj[k] > dist:
+                break
+            y = norm(cls[k]-x*u)
+            if y < dist:
+                z = norm(cls[k]-proj[k]*u)
+                x = proj[k] + np.sqrt(dist**2-z**2)
+        cls = np.r_[cls, x*u]
+    return cls
+
+
+def random_unit_vector(n=1):
+    u = np.random.uniform(-1., 1., size=(n, 3))
+    u /= norm(u, axis=1, keepdims=True)
+    return u
+
+
+def get_distances(cls):
+    """
+    Returns the distance matrix with diagonal elements (=0) eliminated.
+    """
+    d = np.linalg.norm(cls[None]-cls[:, None], axis=-1)
+    return skip_diag_strided(d)
+
+
+# -----------------------------------------------------------------------------------
+# See: https://stackoverflow.com/questions/46736258/deleting-diagonal-elements-of-a-numpy-array
+def skip_diag_masking(A):
+    return A[~np.eye(A.shape[0], dtype=bool)].reshape(A.shape[0], -1)
+
+
+def skip_diag_broadcasting(A):
+    m = A.shape[0]
+    idx = (np.arange(1, m+1) + (m+1)*np.arange(m-1)[:, None]).reshape(m, -1)
+    return A.ravel()[idx]
+
+
+def skip_diag_strided(A):
+    m = A.shape[0]
+    strided = np.lib.stride_tricks.as_strided
+    s0, s1 = A.strides
+    return strided(A.ravel()[1:], shape=(m-1, m), strides=(s0+s1, s1)).reshape(m, -1)
+# ------------------------------------------------------------------------------------
+
+
+def test_generate_random_cluster():
+    distances = np.full(100, 3.)
+    cls = generate_random_cluster(distances)
+    dist_mat = get_distances(cls)
+    min_dist = dist_mat.min(axis=1)
+    return np.allclose(min_dist[1:], distances)
+
+
+# ------------------------ the following is deprecated!
 class Flake:
     def __init__(self):
         self.o = [[0, 0, 0]]
@@ -89,9 +170,6 @@ class ZB(Flake):
 AllMyFlakes = [SC, BCC, FCC, Hex, ZB]
 
 
-# ------------------------------------------ potentials
-
-
 def lennard_jones(xyz, sigma=1.0):
     r = np.sqrt((xyz**2).sum(axis=1)) / sigma
     pot = 4*(1/r**12 - 1/r**6).sum()
@@ -143,7 +221,7 @@ def from_flake(flake, num, eps, potential=lennard_jones):
     return xyz, energies, forces
 
 
-# ------------------------------------------ visualization
+# ------------------------------------------ visualization (mayavi)
 def show_flake(xyz, rc=3, d=0.2,  batch=True):
     if batch:
         _xyz = xyz
@@ -163,8 +241,9 @@ def show_flake(xyz, rc=3, d=0.2,  batch=True):
         mlab.show()
 
 
-# ------------------------------------------ end
 if __name__ == '__main__':
+
+    assert test_generate_random_cluster()
 
     xyz = hexagonal_flake()
     xyz, energies, forces = from_flake(xyz, 3, eps=0.1)
@@ -173,4 +252,3 @@ if __name__ == '__main__':
     xyz = cubic_flake()
     xyz, energies, forces = from_flake(xyz, 3, eps=0.1)
     #show_flake(xyz, rc=1.5, d=0.3)
-
