@@ -4,83 +4,56 @@ from numpy.linalg import norm
 import torch
 
 
-def generate_random_cluster(distances):
+def generate_random_cluster(n, d, dim=3):
     """
-    distances:
-        A list of distances with length n,
-        generates a cluster with n+1 points.
-        The first point is [0, 0, 0].
+    Generates a random cluster of n points such that
+    all nearest neighbor distances are equal to d.
 
-    The points are selected such that the nearest neighbor
-    of each point with index k > 0 is equal to distances[k-1].
-    In other words:
-
-        get_distances(cls).min(axis=0)[1:] == distances
-
-    See the test in proceeding.
+    n: number of points
+    d: nearest neighbor distances
+    dim: Cartesian dimensions
     """
-    cls = np.zeros((1, 3))
-    for dist in distances:
-        u = random_unit_vector()
-        proj = (u*cls).sum(axis=1)
-        order = np.argsort(proj)[::-1]
-        for j, k in enumerate(order):
-            x = proj[k]
-            y = norm(cls[k]-x*u)
-            if y < dist:
-                x += np.sqrt(dist**2-y**2)
+
+    def random_unit_vector(dim=3):
+        u = np.random.uniform(-1., 1., size=dim)
+        u /= norm(u)
+        return u
+
+    c = np.zeros((1, dim))
+    for _ in range(1, n):
+        # u: random direction
+        u = random_unit_vector(dim)
+        # p: projection of all points on u-axis
+        p = (u*c).sum(axis=1)
+        # first collision -> x*u
+        s = np.argsort(p)[::-1]
+        for j, k in enumerate(s):
+            # y: min distance of point k from u-axis
+            y = norm(c[k]-p[k]*u)
+            if y <= d:
+                x = p[k] + np.sqrt(d**2-y**2)
                 break
-        for k in order[j:]:
-            if x-proj[k] > dist:
+        # check the distance with other nearby points
+        for k in s[j:]:
+            if x-p[k] > d:
                 break
-            y = norm(cls[k]-x*u)
-            if y < dist:
-                z = norm(cls[k]-proj[k]*u)
-                x = proj[k] + np.sqrt(dist**2-z**2)
-        cls = np.r_[cls, x*u]
-    return cls
+            # y: distance of point k with the new point (x*u)
+            y = norm(c[k]-x*u)
+            if y < d:
+                z = norm(c[k]-p[k]*u)
+                x = p[k] + np.sqrt(d**2-z**2)
+        # append x*u to the cluster
+        c = np.r_[c, x*u.reshape(1, dim)]
+    return c
 
 
-def random_unit_vector(n=1):
-    u = np.random.uniform(-1., 1., size=(n, 3))
-    u /= norm(u, axis=1, keepdims=True)
-    return u
-
-
-def get_distances(cls):
-    """
-    Returns the distance matrix with diagonal elements (=0) eliminated.
-    """
-    d = np.linalg.norm(cls[None]-cls[:, None], axis=-1)
-    return skip_diag_strided(d)
-
-
-# -----------------------------------------------------------------------------------
-# See: https://stackoverflow.com/questions/46736258/deleting-diagonal-elements-of-a-numpy-array
-def skip_diag_masking(A):
-    return A[~np.eye(A.shape[0], dtype=bool)].reshape(A.shape[0], -1)
-
-
-def skip_diag_broadcasting(A):
-    m = A.shape[0]
-    idx = (np.arange(1, m+1) + (m+1)*np.arange(m-1)[:, None]).reshape(m, -1)
-    return A.ravel()[idx]
-
-
-def skip_diag_strided(A):
-    m = A.shape[0]
-    strided = np.lib.stride_tricks.as_strided
-    s0, s1 = A.strides
-    return strided(A.ravel()[1:], shape=(m-1, m), strides=(s0+s1, s1)).reshape(m, -1)
-# ------------------------------------------------------------------------------------
-
-
-def test_generate_random_cluster():
-    distances = np.full(100, 3.)
-    cls = generate_random_cluster(distances)
-    dist_mat = get_distances(cls)
-    min_dist = dist_mat.min(axis=1)
-    return np.allclose(min_dist[1:], distances)
+def test_generate_random_cluster(n=1000, d=1., dim=3):
+    cls = generate_random_cluster(n, d, dim=dim)
+    dmat = np.linalg.norm(cls[None]-cls[:, None], axis=-1)
+    # replace diganal zeros with a large number
+    dmat += np.eye(n)*(dmat.max() + 1.)
+    dmin = dmat.min(axis=1)
+    return np.allclose(dmin, d)
 
 
 # ------------------------ the following is deprecated!
