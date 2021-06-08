@@ -76,7 +76,7 @@ class ActiveCalculator(Calculator):
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol,
-                 max_data=inf, max_inducing=inf, kernel_kw=None, include_params=None):
+                 max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -102,6 +102,7 @@ class ActiveCalculator(Calculator):
 
         control:
             kernel_kw:       kwargs passed when default_kernel is called
+            veto:            dict, for vetoing ML updates e.g. {'forces': 5.}
             include_params:  used when include_data, include_tape is called
 
         callables:
@@ -197,7 +198,13 @@ class ActiveCalculator(Calculator):
             equivalent to {'lmax': 3, 'nmax': 3, 'exponent': 4, 'cutoff': 6.}.
             e.g. kernel_kw = {'cutoff': 7.0} changes the cutoff to 7.
 
-        include_params:
+        veto:
+            e.g. {'forces': 5.} -> do not try ML update if forces > 5.
+            This is usefull for algorithms such as random structure search where
+            many high energy stuctures maybe generated. With vetoing ML updates
+            for these structures the computational cost is reduced.
+
+        include_params (deprecated in favor of veto):
             This applies some constraints for sampling data when include_data/-tape are called.
             e.g. {'fmax': 5.0}, etc.
         """
@@ -233,6 +240,7 @@ class ActiveCalculator(Calculator):
         self.normalized = None
         self.updated = False
         self._update_args = {}
+        self._veto = {} if veto is None else veto
         self.include_params = {'fmax': float('inf')}
         if include_params:
             self.include_params.update(include_params)
@@ -305,7 +313,7 @@ class ActiveCalculator(Calculator):
         # active learning
         self.deltas = None
         self.covlog = ''
-        if self.active:
+        if self.active and not self.veto():
             pre = self.results.copy()
             m, n = self.update(**self._update_args)
             if n > 0 or m > 0:
@@ -337,6 +345,17 @@ class ActiveCalculator(Calculator):
 
         # needed for self.calculate_numerical_stress
         self.results['free_energy'] = self.results['energy']
+
+    def veto(self):
+        if self.size[0] < 2:
+            return False
+        if 'forces' in self._veto:
+            c1 = abs(self.results['forces']).max() >= self._veto['forces']
+        else:
+            c1 = False
+        if c1:
+            self.log('an update is vetoed!')
+        return c1
 
     def update_results(self, retain_graph=False):
         energies = self.cov@self.model.mu

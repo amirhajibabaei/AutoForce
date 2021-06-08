@@ -57,6 +57,7 @@ fdiff:           forces sensitivity for sampling DFT data
 noise_f:         bias noise for forces
 max_data:        maximum number of ab initio data
 max_inducing:    maximum number of reference/inducing LCEs
+veto:            for vetoing some ML updates
 ```
 
 #### covariance, kernel_kw
@@ -214,6 +215,18 @@ will be dumped.
 If n.o. inducing > `max_inducing`, those LCEs
 which have the maximum cumulative covariance with
 the remaining LCEs will be eliminated.
+
+#### veto
+If `veto = {'forces': 8.}`, every time the predicted
+forces become larger than `8.` (except the first step),
+ML update is skipped.
+This can be useful for algorithms such as random
+structure search where many (useless) high energy
+structures maybe generated during the search.
+Learning these structures can be time consuming
+and increases the computational cost for future force
+predictions.
+Using `veto` one can bypass these structures.
 
 ### Training with existing data
 If some DFT data already exists, one can train a 
