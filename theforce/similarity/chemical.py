@@ -2,7 +2,7 @@
 import torch
 from theforce.similarity.universal import UniversalSoapKernel, Chemical
 from theforce.util.util import iterable
-from theforce.util.data import atom_embeddings
+from theforce.similarity.data import atom_embeddings
 
 
 class ChemRBF(Chemical):

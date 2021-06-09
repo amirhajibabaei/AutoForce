@@ -12,7 +12,7 @@ visual.show_trajectory('md.traj')
 
 # +
 # mean squared displacement of atom 0
-from theforce.util.analysis import TrajAnalyser
+from theforce.analysis.analysis import TrajAnalyser
 import pylab as plt
 
 ana = TrajAnalyser('md.traj')

@@ -1,5 +1,5 @@
 # +
-from theforce.util.simplesim import SimpleSim
+from theforce.analysis.simplesim import SimpleSim
 import datetime
 import itertools
 import numpy as np

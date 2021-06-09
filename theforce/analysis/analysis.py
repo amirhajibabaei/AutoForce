@@ -4,7 +4,7 @@ from ase.io import read, Trajectory
 from ase.neighborlist import NeighborList, natural_cutoffs
 from theforce.descriptor.atoms import AtomsData, TorchAtoms
 from theforce.util.util import iterable
-from theforce.util.rdf import rdf
+from theforce.analysis.rdf import rdf
 from theforce.descriptor.sphcart import cart_coord_to_sph, sph_coord_to_cart
 from scipy.stats import bayes_mvs as stats
 

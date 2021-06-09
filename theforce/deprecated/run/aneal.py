@@ -3,7 +3,7 @@ from theforce.run.fly import fly, default_kernel, numpy_same_random_seed
 from theforce.similarity.universal import UniversalSoapKernel
 from theforce.calculator.posterior import SocketCalculator
 from theforce.util.aseutil import get_repeat_reciprocal
-from theforce.util.pmgen import standard_cell
+from theforce.deprecated.util.pmgen import standard_cell
 from theforce.util.util import date
 from ase.units import Pascal, GPa
 import torch.distributed as dist
