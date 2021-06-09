@@ -39,7 +39,7 @@ test:            integer; single-point testing intervals (default=None)
 
 # sampling and optimization
 ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
-fdiff:    (eV/A) forces sensitivity for sampling DFT data (default ~ 3 kcal/mol)
+fdiff:    (eV/A) forces sensitivity for sampling Ab initio data (default ~ 3 kcal/mol)
 noise_f:  (ev/A) bias noise for forces (default ~ 1 kcal/mol)
 max_data:        max data size (default=inf)
 max_inducing:    max inducing size (default=inf)
@@ -184,19 +184,20 @@ of ML updates is too much.
 It can be deactivated by setting it to `0.` or `None`.
 
 #### Parameters for structure relaxation (file=`ARGS`)
-The parameters for structure relaxation (minimization of forces) 
+The parameters for structure relaxation (minimization of forces)
 are also set in the `ARGS` file. The following tags are available
 ```
 fmax:         maximum forces (default=0.01)
 cell:         if True, minimize stress too (default=False)
 mask:         stress components for relaxation (default=None)
-algo:         algo from ase.optimize (default='LBFGS')
+algo:         algo from ase.optimize (default='BFGS')
 trajectory:   traj file name (default='relax.traj')
 rattle:       rattle atoms at initial step (default=0.02)
-confirm:      if True, test DFT for the final state (default=True)
+clear_hist:   if true, clear optimizer history when ML model is updated (default=True)
+confirm:      if True, Ab initio for the last step and potentially reoptimize (default=True)
 ```
 
-Other possible entries for `algo` are: `'BFGS', 'GPMin', 'FIRE', 'MDMin'`
+Other possible entries for `algo` are: `'LBFGS', 'GPMin', 'FIRE', 'MDMin'`
 (see [this](https://wiki.fysik.dtu.dk/ase/ase/optimize.html)).
 
 `rattle` is the stdev for random displacement of atoms
@@ -205,6 +206,11 @@ This is extremely beneficial for ML if the initial
 structure is ordered and the local environments of 
 many atoms are identical.
 `rattle` causes some disorder/variance in these environments.
+
+It should be noted that, although the final structure is
+fully relaxed according to ML, residual Ab initio
+forces will probably be (slightly) larger than `fmax`
+(due to ML errors).
 
 #### Run
 Lets assume that 20 cores are available.
@@ -263,7 +269,7 @@ This time all 20 cores are used for ML and we can simulate
 much bigger systems.
 
 ### Training with existing data
-A utility command is provided for training with existing DFT data.
+A utility command is provided for training with existing Ab initio data.
 For this, set the appropriate parameters for ML in `ARGS`.
 Then refer to the following patterns.
 ```sh

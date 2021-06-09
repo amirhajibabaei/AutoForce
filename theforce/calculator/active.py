@@ -73,7 +73,7 @@ class ActiveCalculator(Calculator):
     implemented_properties = ['energy', 'forces', 'stress', 'free_energy']
 
     def __init__(self, covariance='pckl', calculator=None, process_group=None, meta=None,
-                 logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None,
+                 logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None, stdout=False,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol,
                  max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None):
@@ -89,6 +89,7 @@ class ActiveCalculator(Calculator):
             pckl:            string | None, folder for pickling the model
             tape:            string (with suffix .sgpr), the file used for saving updates
             test:            None | integer for independent testing intervals
+            stdout:          bool, if True prints the log also to stdout
 
         optimization and sampling:
             ediff:           local energy sensitivity (eV)
@@ -224,7 +225,7 @@ class ActiveCalculator(Calculator):
         self.max_inducing = max_inducing
         self.meta = meta
         self.logfile = logfile
-        self.stdout = True
+        self.stdout = stdout
         self.step = 0
         self.log('active calculator says Hello!', mode='w')
         self.log(f'kernel: {self.model.descriptors}')

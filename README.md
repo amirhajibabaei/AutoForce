@@ -85,8 +85,7 @@ during MD. Using more processes can only speed-up the ML updates.
 * <ins>CUDA</ins>:
 Currently no GPU acceleration is implemented.
 * <ins>Species</ins>:
-Presence of more atomic species makes the simulation slower.
-The computational cost is roughly proportional to $s^2$.
+Presence of more atomic species makes the simulation slower (often exponentially).
 
 ### Citation
 ```

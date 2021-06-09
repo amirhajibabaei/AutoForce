@@ -38,7 +38,6 @@ active_kwargs = {'calculator': abinitio,
                  'process_group': process_group
                  }
 calc = ActiveCalculator(**active_kwargs)
-calc.stdout = False  # do not print active.log to stdout
 atoms.calc = calc
 
 
@@ -64,6 +63,7 @@ dyn.run(fmax=maxforce)
 # the proximity to the actual minima).
 while True:
     if calc.update_data(try_fake=False):
+        calc.update(data=False)
         calc.results.clear()
         dyn.initialize()
         dyn.run(fmax=maxforce)

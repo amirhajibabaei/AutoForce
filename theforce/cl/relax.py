@@ -9,7 +9,8 @@ import numpy as np
 import os
 
 
-def relax(atoms, fmax=0.01, cell=False, mask=None, algo='LBFGS', trajectory='relax.traj', rattle=0.02, confirm=True):
+def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='relax.traj', rattle=0.02,
+          clear_hist=True, confirm=True):
     """
     atoms:        ASE atoms
     fmax:         maximum forces
@@ -18,10 +19,12 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='LBFGS', trajectory='rel
     algo:         algo from ase.optimize
     trajectory:   traj file name
     rattle:       rattle atoms at initial step
-    confirm:      if True, test DFT for the final state
+    clear_hist:   clear optimizer histtory if ML model is updated
+    confirm:      if True, do ab initio for the last step
     """
 
     calc = cline.gen_active_calc()
+    load1 = calc.size[0]
     master = calc.rank == 0
     atoms.rattle(rattle, rng=np.random)
     atoms.set_calculator(calc)
@@ -34,24 +37,40 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='LBFGS', trajectory='rel
     Min = getattr(optimize, algo)
     dyn = Min(filtered, trajectory=trajectory, master=master)
     for _ in dyn.irun(fmax):
-        if calc.updated:
+        if calc.updated and clear_hist:
             dyn.initialize()
+
+    load2 = calc.size[0]
 
     # confirm:
     if calc.active and confirm:
-        e, f = calc._test()
-        err = abs(f).max()
-        if err > fmax:
-            u = calc.update_data(try_fake=False)
-            if u > 0:
-                calc.log('relax: ML model is updated at the last step!')
+
+        while True:
+            load2 += 1
+            if calc.update_data(try_fake=False):
+                calc.update(data=False)
+                calc.results.clear()
+                dyn.initialize()
+                dyn.run(fmax=fmax)
             else:
-                calc.log('relax: desired accuracy could not be reached')
-                calc.log('relax: try reducing ediff and then fdiff')
-            calc.log(f"relax: run again by setting covariance = '{calc.pckl}' in ARGS")
-        else:
-            calc.log('relax: truly converged!')
-        calc.log(f'relax: exact fmax: {err}')
+                break
+
+        ML = ('ML', calc.results['energy'], calc.results['forces'])
+        Ab = ('Ab initio', *calc._test())
+        for method, energy, forces in [ML, Ab]:
+            f_rms = np.sqrt(np.mean(forces**2))
+            f_max = abs(forces).max()
+            report = f"""
+                relaxation result ({method}):
+                energy:      {energy}
+                force (rms): {f_rms}
+                force (max): {f_max}
+            """
+            if master:
+                print(report)
+
+    if master:
+        print(f'\tTotal number of Ab initio calculations: {load2-load1}\n')
 
 
 if __name__ == '__main__':
@@ -71,7 +90,7 @@ if __name__ == '__main__':
         atoms.write(args.output)
     except:
         import warnings
-        alt = 'relax.final.xyz'
+        alt = 'active_optimized.xyz'
         msg = f'writing to {args.output} failed -> wrote {alt}'
         warnings.warn(msg)
-        atoms.write(alt)
+        atoms.write(alt, format='extxyz')
