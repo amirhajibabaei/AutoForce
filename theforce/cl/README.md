@@ -190,13 +190,14 @@ are also set in the `ARGS` file. The following tags are available
 fmax:         maximum forces (default=0.01)
 cell:         if True, minimize stress too (default=False)
 mask:         stress components for relaxation (default=None)
-algo:         algo from ase.optimize (default='LBFGS')
+algo:         algo from ase.optimize (default='BFGS')
 trajectory:   traj file name (default='relax.traj')
 rattle:       rattle atoms at initial step (default=0.02)
+clear_hist:   if true, clear optimizer history when ML model is updated (default=True)
 confirm:      if True, Ab initio for the last step and potentially reoptimize (default=True)
 ```
 
-Other possible entries for `algo` are: `'BFGS', 'GPMin', 'FIRE', 'MDMin'`
+Other possible entries for `algo` are: `'LBFGS', 'GPMin', 'FIRE', 'MDMin'`
 (see [this](https://wiki.fysik.dtu.dk/ase/ase/optimize.html)).
 
 `rattle` is the stdev for random displacement of atoms

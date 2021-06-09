@@ -9,7 +9,8 @@ import numpy as np
 import os
 
 
-def relax(atoms, fmax=0.01, cell=False, mask=None, algo='LBFGS', trajectory='relax.traj', rattle=0.02, confirm=True):
+def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='relax.traj', rattle=0.02,
+          clear_hist=True, confirm=True):
     """
     atoms:        ASE atoms
     fmax:         maximum forces
@@ -18,6 +19,7 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='LBFGS', trajectory='rel
     algo:         algo from ase.optimize
     trajectory:   traj file name
     rattle:       rattle atoms at initial step
+    clear_hist:   clear optimizer histtory if ML model is updated
     confirm:      if True, do ab initio for the last step
     """
 
@@ -35,7 +37,7 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='LBFGS', trajectory='rel
     Min = getattr(optimize, algo)
     dyn = Min(filtered, trajectory=trajectory, master=master)
     for _ in dyn.irun(fmax):
-        if calc.updated:
+        if calc.updated and clear_hist:
             dyn.initialize()
 
     load2 = calc.size[0]
