@@ -1,7 +1,8 @@
-
+# +
 import torch
 from torch.nn import Module, Parameter
 from theforce.regression.algebra import free_form, positive
+
 
 """ 
 1. The kernels are defined such that they return derivatives
@@ -120,7 +121,7 @@ class Stationary(Module):
         self.params = [self.r._scale, self._signal]
 
     def forward(self, x=None, xx=None, operation='func'):
-        return positive(self._signal).pow(2)*getattr(self, operation)(self.r(x=x, xx=xx))             / self.r.divide(operation)
+        return positive(self._signal).pow(2)*getattr(self, operation)(self.r(x=x, xx=xx)) / self.r.divide(operation)
 
     def diag(self, x=None, operation='func'):
         if x is None:
@@ -198,4 +199,3 @@ def test():
 
 if __name__ == '__main__':
     test()
-

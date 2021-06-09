@@ -1,3 +1,4 @@
+# +
 import functools
 from theforce.util.util import iterable
 
@@ -105,4 +106,3 @@ def example():
 
 if __name__ == '__main__':
     example()
-

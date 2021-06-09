@@ -1,4 +1,4 @@
-
+# +
 import torch
 from torch.nn import Module, Parameter
 from theforce.regression.algebra import free_form, positive
@@ -125,4 +125,3 @@ def example_optim():
 
 if __name__ == '__main__':
     example_optim()
-

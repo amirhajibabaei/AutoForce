@@ -1,4 +1,4 @@
-
+# +
 import torch
 from torch.nn import Module, Parameter
 from theforce.regression.algebra import positive, free_form
@@ -513,13 +513,14 @@ def test_kernel_gradients(kern, dim=3):
 
 
 def example():
-    polynomial = Positive(requires_grad=True) *         (DotProd() + Positive(1e-4, requires_grad=True))**2
+    polynomial = Positive(requires_grad=True) * \
+        (DotProd() + Positive(1e-4, requires_grad=True))**2
     squaredexp = (SqD()*Real(-0.5)).exp()
 
 
 def test():
     from theforce.regression.core import SquaredExp
-    from theforce.regression.gp import Covariance
+    from theforce.deprecated.regression.gp import Covariance
 
     x = torch.rand(23, 7)
     xx = torch.rand(19, 7)
@@ -549,4 +550,3 @@ def test():
 
 if __name__ == '__main__':
     test()
-

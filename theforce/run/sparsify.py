@@ -1,3 +1,4 @@
+# +
 from theforce.regression.algebra import sparser_projection
 from theforce.regression.gppotential import PosteriorPotentialFromFolder
 import os
@@ -56,4 +57,3 @@ def sparsify_saved_model(input_model, alpha=1.0, sweeps=10, output_model=None, r
         plt.legend()
         plt.savefig(os.path.join(output_model, '_sparse.eps'))
         plt.savefig(os.path.join(output_model, '_sparse.png'))
-

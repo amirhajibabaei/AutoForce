@@ -1,4 +1,4 @@
-
+# +
 import torch
 from torch.nn.modules import Module
 from math import pi as math_pi
@@ -249,4 +249,3 @@ def compare_grads_with_autograd():
 if __name__ == '__main__':
     compare_with_numpy_version()
     compare_grads_with_autograd()
-

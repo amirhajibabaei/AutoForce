@@ -1,3 +1,4 @@
+# +
 import numpy as np
 from ase.io import read, Trajectory
 from ase.neighborlist import NeighborList, natural_cutoffs
@@ -303,4 +304,3 @@ def mean_squared_displacement(traj, start=0, stop=-1, step=1, origin=None, numbe
     D = ((xyz - xyz0)**2).sum(axis=-1)
     msd = [(D[:, atoms.numbers == number]).mean(axis=1) for number in numbers]
     return numbers, msd
-

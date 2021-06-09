@@ -1,4 +1,4 @@
-
+# +
 import torch
 from torch.nn import Parameter
 from theforce.regression.kernel import Kernel
@@ -96,7 +96,7 @@ class RBF(Stationary):
 
 def test():
     from theforce.regression.core import SquaredExp
-    from theforce.regression.gp import Covariance
+    from theforce.deprecated.regression.gp import Covariance
 
     x = torch.rand(23, 7)
     xx = torch.rand(19, 7)
@@ -117,6 +117,6 @@ def test():
     # test if backward works
     new(x, xx).sum().backward()
 
+
 if __name__ == '__main__':
     test()
-

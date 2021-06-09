@@ -65,6 +65,7 @@ class SimilarityKernel(Module):
     def saved(self, atoms_or_loc, key):
         attr = self.name+'_'+key
         try:
+            # BUG: torch.epmpty(0) causes the entire (even if int) tensor to be converted to float
             return torch.cat([loc.__dict__[attr] for loc in atoms_or_loc] + [torch.empty(0)])
         except TypeError:
             return atoms_or_loc.__dict__[attr]

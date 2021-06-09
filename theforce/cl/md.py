@@ -28,7 +28,7 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     rattle:       rattle atoms at initial step (recommended ~0.05)
     tdamp:        temperature damping time (fs)
     pdamp:        pressure damping time (fs)
-    frinction:    for Langevin dynamics
+    friction:     for Langevin dynamics
     ml_filter:    filters force discontinuities due to ML updates range(0, 1)
     """
 
