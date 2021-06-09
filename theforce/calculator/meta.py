@@ -1,6 +1,6 @@
 # +
 from theforce.analysis.kde import Gaussian_kde
-from theforce.math.ql import Ql
+from theforce.descriptor.ql import Ql
 import torch
 import numpy as np
 from ase.units import kB

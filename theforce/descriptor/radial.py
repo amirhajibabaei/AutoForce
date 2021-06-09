@@ -105,7 +105,7 @@ class Product(Module):
 
 
 def example_optim():
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     cut = 1.63
     d = torch.linspace(0.1, cut*1.3, 50).view(-1, 1)
     Y = (3.7/d**2.4)*(1-d/cut)**2

@@ -1,10 +1,10 @@
 # +
 from theforce.similarity.universal import UniversalSoapKernel
 from theforce.similarity.heterosoap import HeterogeneousSoapKernel
-from theforce.math.sesoap import SeSoap, SubSeSoap
+from theforce.descriptor.sesoap import SeSoap, SubSeSoap
 from theforce.util.util import EqAll
 from theforce.regression.kernel import DotProd
-from theforce.math.cutoff import PolyCut
+from theforce.descriptor.cutoff import PolyCut
 
 
 class SeSoapKernel(UniversalSoapKernel):
@@ -93,7 +93,7 @@ def test_SeSoapKernel():
 
 def test_SubSeSoapKernel():
     from theforce.descriptor.atoms import namethem
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     from theforce.regression.kernel import Positive, DotProd, Normed
     from theforce.regression.stationary import RBF
     from theforce.descriptor.atoms import TorchAtoms, AtomsData

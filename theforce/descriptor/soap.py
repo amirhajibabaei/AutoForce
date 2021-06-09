@@ -1,11 +1,11 @@
 # +
 from theforce.util.util import iterable
 import torch
-from theforce.math.ylm import Ylm
+from theforce.descriptor.ylm import Ylm
 from torch.nn import Module, Parameter
 from math import factorial as fac
 from theforce.regression.algebra import positive, free_form
-from theforce.math.func import I, Exp
+from theforce.descriptor.func import I, Exp
 
 
 class HeteroSoap(Module):
@@ -418,7 +418,7 @@ class SeriesSoap(Module):
 
 def test_validity():
     import torch
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
 
     xyz = torch.tensor([[0.175, 0.884, -0.87, 0.354, -0.082, 3.1],
                         [-0.791, 0.116, 0.19, -0.832, 0.184, 0.],
@@ -461,7 +461,7 @@ def test_validity():
 
 
 def test_units():
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     xyz = torch.tensor([[0.175, 0.884, -0.87, 0.354, -0.082, 3.1],
                         [-0.791, 0.116, 0.19, -0.832, 0.184, 0.],
                         [0.387, 0.761, 0.655, -0.528, 0.973, 0.]]).t()
@@ -477,7 +477,7 @@ def test_units():
 
 
 def test_speed(N=100):
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     import time
     s = AbsSeriesSoap(5, 5, PolyCut(3.0))
     start = time.time()
@@ -490,7 +490,7 @@ def test_speed(N=100):
 
 
 def example():
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
 
     lengthscale = 2.
     cutoff = 8.
@@ -504,7 +504,7 @@ def example():
 
 
 def test_realseriessoap():
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     xyz = torch.tensor([[0.175, 0.884, -0.87, 0.354, -0.082, 3.1],
                         [-0.791, 0.116, 0.19, -0.832, 0.184, 0.],
                         [0.387, 0.761, 0.655, -0.528, 0.973, 0.]]).t()
@@ -525,7 +525,7 @@ def test_realseriessoap():
 
 
 def test_multisoap():
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     from torch import tensor
     xyz = torch.tensor([[0.175, 0.884, -0.87, 0.354, -0.082, 3.1],
                         [-0.791, 0.116, 0.19, -0.832, 0.184, 0.],
@@ -551,7 +551,7 @@ def test_multisoap():
 
 def test_heterosoap():
     import torch
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
 
     xyz = (torch.rand(10, 3) - 0.5) * 5
     xyz.requires_grad = True
@@ -685,8 +685,8 @@ class UniversalSoap(Module):
 
 def test_UniversalSoap():
     import torch
-    from theforce.math.cutoff import PolyCut
-    from theforce.math.soap import RealSeriesSoap
+    from theforce.descriptor.cutoff import PolyCut
+    from theforce.descriptor.soap import RealSeriesSoap
 
     xyz = (torch.rand(10, 3) - 0.5) * 5
     xyz.requires_grad = True

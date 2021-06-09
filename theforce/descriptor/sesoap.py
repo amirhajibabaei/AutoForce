@@ -1,6 +1,6 @@
 # +
 from theforce.util.util import iterable
-from theforce.math.ylm import Ylm
+from theforce.descriptor.ylm import Ylm
 from torch.nn import Module
 import torch
 from math import factorial as fac
@@ -324,8 +324,8 @@ class SubSeSoap(Module):
 
 def test_SeSoap():
     import torch
-    from theforce.math.cutoff import PolyCut
-    from theforce.math.soap import RealSeriesSoap
+    from theforce.descriptor.cutoff import PolyCut
+    from theforce.descriptor.soap import RealSeriesSoap
 
     xyz = (torch.rand(10, 3) - 0.5) * 5
     xyz.requires_grad = True
@@ -349,8 +349,8 @@ def test_SeSoap():
 
 def test_SubSeSoap():
     import torch
-    from theforce.math.cutoff import PolyCut
-    from theforce.math.soap import RealSeriesSoap
+    from theforce.descriptor.cutoff import PolyCut
+    from theforce.descriptor.soap import RealSeriesSoap
 
     xyz = (torch.rand(10, 3) - 0.5) * 5
     xyz.requires_grad = True

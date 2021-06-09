@@ -1,6 +1,6 @@
 # +
-from theforce.math.ylm import Ylm
-from theforce.math.cutoff import PolyCut
+from theforce.descriptor.ylm import Ylm
+from theforce.descriptor.cutoff import PolyCut
 import torch
 from math import pi
 

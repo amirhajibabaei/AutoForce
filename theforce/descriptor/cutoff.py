@@ -1,6 +1,6 @@
 # +
 import torch
-from theforce.math.func import Func
+from theforce.descriptor.func import Func
 
 
 class PairCut(Func):
