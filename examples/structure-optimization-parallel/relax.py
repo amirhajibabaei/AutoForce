@@ -38,7 +38,6 @@ active_kwargs = {'calculator': abinitio,
                  'process_group': process_group
                  }
 calc = ActiveCalculator(**active_kwargs)
-calc.stdout = False  # do not print active.log to stdout
 atoms.calc = calc
 
 

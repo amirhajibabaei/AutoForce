@@ -50,6 +50,7 @@ logfile:         file name for logging
 pckl:            folder-name for pickling the ML model
 tape:            for saving all of the model updates
 test:            intervals for single point tests during MD
+stdout:          if True, prints the log also to stdout
 
 # sampling and optimization
 ediff:           energy sensitivity for sampling LCEs

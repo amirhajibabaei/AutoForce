@@ -31,7 +31,6 @@ active_kwargs = {'calculator': abinitio,
                  # 'veto': {'forces': 8.}  # for vetoing ML updates for very high energy structures
                  }
 calc = ActiveCalculator(**active_kwargs)
-calc.stdout = False  # do not print active.log to stdout
 atoms.calc = calc
 
 
