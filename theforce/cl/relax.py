@@ -48,6 +48,7 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='rela
         while True:
             load2 += 1
             if calc.update_data(try_fake=False):
+                calc.update(data=False)
                 calc.results.clear()
                 dyn.initialize()
                 dyn.run(fmax=fmax)

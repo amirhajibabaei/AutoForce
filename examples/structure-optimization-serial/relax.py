@@ -52,6 +52,7 @@ dyn.run(fmax=maxforce)
 # the proximity to the actual minima).
 while True:
     if calc.update_data(try_fake=False):
+        calc.update(data=False)
         calc.results.clear()
         dyn.initialize()
         dyn.run(fmax=maxforce)
