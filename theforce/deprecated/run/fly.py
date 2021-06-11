@@ -92,7 +92,7 @@ def default_au(n):
 def default_kernel(numbers, cutoff=6., au=None, exponent=4, lmax=3, nmax=3, noise=0.01):
     from theforce.regression.gppotential import GaussianProcessPotential
     from theforce.similarity.heterosoap import HeterogeneousSoapKernel as SOAP
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     from theforce.regression.kernel import White, Positive, DotProd
     from theforce.util.util import date
     kerns = [SOAP(DotProd()**exponent, a, numbers, lmax, nmax,

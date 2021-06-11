@@ -1,8 +1,8 @@
 # +
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.regression.kernel import Kernel
-from theforce.math.cutoff import PolyCut
-from theforce.math.soap import UniversalSoap
+from theforce.descriptor.cutoff import PolyCut
+from theforce.descriptor.soap import UniversalSoap
 from theforce.util.util import iterable
 import torch
 

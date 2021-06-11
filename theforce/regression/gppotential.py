@@ -8,7 +8,6 @@ from theforce.regression.scores import coeff_of_determination
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
-from theforce.optimize.optimizers import ClampedSGD
 from collections import Counter
 from scipy.optimize import minimize
 from math import pi
@@ -1253,7 +1252,8 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group
                 self.data.distribute_(group)
         else:
             if hasattr(self, '_raw_data'):
-                self.data = AtomsData(self._raw_data, convert=True, group=group)
+                self.data = AtomsData(
+                    self._raw_data, convert=True, group=group)
                 del self._raw_data
             else:  # for backward compatibility
                 self.data = AtomsData(traj=os.path.join(folder, 'data.traj'),
@@ -1262,48 +1262,3 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group
                 self.data.update(
                     cutoff=self.cutoff, descriptors=self.gp.kern.kernels)
     return self
-
-
-def train_gpp(gp, X, inducing=None, steps=10, lr=0.1, Y=None, logprob_loss=True, cov_loss=False,
-              move=0.1, shake=0):
-    if not logprob_loss and not cov_loss:
-        raise RuntimeError('both loss terms are ignored!')
-
-    if not hasattr(gp, 'optimizer'):
-        gp.optimizer = torch.optim.Adam([{'params': gp.params}], lr=lr)
-        if inducing is not None and inducing.trainable and not hasattr(inducing, 'optimizer'):
-            inducing.optimizer = ClampedSGD(
-                [{'params': inducing.params}], lr=move)
-
-    caching_status = gp.method_caching
-    gp.method_caching = False
-    gp.clear_cached()
-
-    for _ in range(steps):
-        if inducing is not None and inducing.trainable:
-            if shake > 0:
-                inducing.shake(update=False)
-            inducing.optimizer.zero_grad()
-            inducing.update_nl_if_requires_grad(descriptors=gp.kern.kernels)
-        gp.optimizer.zero_grad()
-        loss = gp.loss(X, Y, inducing, logprob_loss, cov_loss)
-        loss.backward()
-        gp.optimizer.step()
-        if inducing is not None and inducing.trainable:
-            inducing.optimizer.step()
-
-    gp.method_caching = caching_status
-
-    report = []
-    if inducing is None:
-        report += ['Full']
-    else:
-        report += ['Sparse']
-        if cov_loss:
-            report += ['Variational-ELBO']
-            if not logprob_loss:
-                report += ['~only trace of Gram matrix considered']
-        else:
-            report += ['Projected-Process']
-    report = ' '.join(report)
-    print('trained for {} steps ({})'.format(steps, report))

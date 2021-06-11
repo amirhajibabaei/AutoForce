@@ -67,7 +67,7 @@ def get_kernel(params):
     from theforce.similarity.soap import SoapKernel, NormedSoapKernel
     from theforce.similarity.heterosoap import HeterogeneousSoapKernel
     from theforce.regression.stationary import RBF
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     from theforce.regression.kernel import White, Positive, DotProd, Normed, Mul, Pow, Add
     from torch import tensor
 
@@ -131,7 +131,7 @@ def kernel_from_state(state):
     from theforce.similarity.pair import PairKernel
     from theforce.similarity.soap import SoapKernel
     from theforce.regression.stationary import RBF
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     from theforce.regression.kernel import White, Positive, DotProd, Normed, Mul, Pow, Add
     from torch import tensor
     return eval(state)

@@ -1,6 +1,7 @@
-
+# +
 import torch
-from theforce.math.func import Func
+from theforce.descriptor.func import Func
+
 
 class PairCut(Func):
 
@@ -55,4 +56,3 @@ def test():
 
 if __name__ == '__main__':
     test()
-

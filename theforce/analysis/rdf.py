@@ -1,3 +1,4 @@
+# +
 from math import pi
 import torch
 import numpy as np
@@ -109,7 +110,3 @@ def _rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
          for pair in pairs}
 
     return r, g
-
-
-# TODO: write an rdf using nl
-

@@ -1,9 +1,11 @@
+# +
 from math import pi
 import torch
 _2pi = torch.tensor(2*pi)
 
-
 # general ---------------------------------------
+
+
 def positive(x):
     return torch.log(1. + torch.exp(x))
 
@@ -17,8 +19,9 @@ def sum_packed_dim(packed, sizes, dim=-1):
                           for piece in torch.split(packed, sizes, dim=dim)], dim=dim)
     return result
 
-
 # decompositions ---------------------------------------------
+
+
 def jitcholesky(A, jit=1e-6, jitbase=2):
     ridge = 0
     try:
@@ -142,8 +145,9 @@ def projected_process_auxiliary_matrices_D(K, M, Y, D, chol_inverse=False):
     else:
         return mu, nu, ridge
 
-
 # greedy algorithms ------------------------------------------------------------
+
+
 def sparser_projection(K, M, Y, D, alpha=1., sweeps=1, indices=None, deleted=None):
     mu, _, _ = projected_process_auxiliary_matrices_D(K, M, Y, D)
     delta = K@mu-Y
@@ -193,8 +197,9 @@ def select_greedy_simple(T, num, Z=None):
         X = torch.cat([X[:arg], X[arg+1:]])
     return Z
 
-
 # examples ---------------------------------------------------------------------
+
+
 def example_sum_packed_dim():
     sizes = torch.randint(1, 10, (100,))
     Y = [torch.ones(7, size) for size in sizes]
@@ -203,8 +208,9 @@ def example_sum_packed_dim():
     #print(Y.size(), P.size())
     print('sum_packed_dim works: {}'.format(P.size() == torch.Size([7, 100])))
 
-
 # tests ------------------------------------------------------------------------
+
+
 def test(n=1000):
 
     # test cholesky
@@ -265,4 +271,3 @@ if __name__ == '__main__':
     test()
     test_iulrf()
     test_PP()
-

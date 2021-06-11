@@ -1,9 +1,10 @@
+# +
 import numpy as np
 from ase.io import read, Trajectory
 from ase.neighborlist import NeighborList, natural_cutoffs
 from theforce.descriptor.atoms import AtomsData, TorchAtoms
 from theforce.util.util import iterable
-from theforce.util.rdf import rdf
+from theforce.analysis.rdf import rdf
 from theforce.descriptor.sphcart import cart_coord_to_sph, sph_coord_to_cart
 from scipy.stats import bayes_mvs as stats
 
@@ -303,4 +304,3 @@ def mean_squared_displacement(traj, start=0, stop=-1, step=1, origin=None, numbe
     D = ((xyz - xyz0)**2).sum(axis=-1)
     msd = [(D[:, atoms.numbers == number]).mean(axis=1) for number in numbers]
     return numbers, msd
-

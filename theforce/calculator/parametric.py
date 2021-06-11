@@ -1,8 +1,9 @@
+# +
 import torch
 from torch.nn import Module
 from theforce.util.util import iterable
-from theforce.math.func import Negative, Positive, Real, Pow, Param, I
-from theforce.math.cutoff import PolyCut
+from theforce.descriptor.func import Negative, Positive, Real, Pow, Param, I
+from theforce.descriptor.cutoff import PolyCut
 from torch.autograd import grad
 from ase.calculators.calculator import Calculator, all_changes
 import itertools
@@ -231,7 +232,7 @@ class ParametricCalculator(Calculator):
 
 def test():
     from theforce.descriptor.atoms import TorchAtoms
-    from theforce.math.radial import RepulsiveCore
+    from theforce.descriptor.radial import RepulsiveCore
     torch.set_default_tensor_type(torch.DoubleTensor)
 
     V = PairPot(55, 55, RepulsiveCore()) + PairPot(55, 55, RepulsiveCore())
@@ -248,4 +249,3 @@ def test():
 
 if __name__ == '__main__':
     test()
-

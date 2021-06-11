@@ -1,4 +1,4 @@
-
+# +
 import numpy as np
 import torch
 from torch.nn import Module, Parameter
@@ -41,4 +41,3 @@ class LJ(PairPotential):
         x = self.sigma**2/d2[d2 < self.rc**2]
         e = 4*(self.eps*(x**6 - x**3 - self.e0)).sum()
         return e
-

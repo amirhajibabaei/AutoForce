@@ -1,3 +1,4 @@
+# +
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.regression.algebra import positive, free_form
 from torch import zeros, cat, stack
@@ -77,8 +78,8 @@ class PairSimilarityKernel(SimilarityKernel):
     def get_leftgrad(self, p, q):
         d = self.saved(p, 'value')
         grad = self.saved(p, 'grad')
-        i = self.saved(p, 'i')
-        j = self.saved(p, 'j')
+        i = self.saved(p, 'i').int()
+        j = self.saved(p, 'j').int()
         dd = self.saved(q, 'value')
         c = self.kern.leftgrad(d, dd).squeeze(0)
         if self.has_factor:
@@ -97,8 +98,8 @@ class PairSimilarityKernel(SimilarityKernel):
         d = self.saved(p, 'value')
         dd = self.saved(q, 'value')
         grad = self.saved(q, 'grad')
-        i = self.saved(q, 'i')
-        j = self.saved(q, 'j')
+        i = self.saved(q, 'i').int()
+        j = self.saved(q, 'j').int()
         c = self.kern.rightgrad(d, dd).squeeze(0)
         if self.has_factor:
             self.recalculate(p)
@@ -115,12 +116,12 @@ class PairSimilarityKernel(SimilarityKernel):
     def get_gradgrad(self, p, q):
         d1 = self.saved(p, 'value')
         g1 = self.saved(p, 'grad')
-        i1 = self.saved(p, 'i')
-        j1 = self.saved(p, 'j')
+        i1 = self.saved(p, 'i').int()
+        j1 = self.saved(p, 'j').int()
         d2 = self.saved(q, 'value')
         g2 = self.saved(q, 'grad')
-        i2 = self.saved(q, 'i')
-        j2 = self.saved(q, 'j')
+        i2 = self.saved(q, 'i').int()
+        j2 = self.saved(q, 'j').int()
         c = self.kern.gradgrad(d1, d2)
         if self.has_factor:
             self.recalculate(p)
@@ -209,7 +210,7 @@ class PairKernel(DistanceKernel):
 
 def test():
     from theforce.descriptor.atoms import namethem
-    from theforce.math.cutoff import PolyCut
+    from theforce.descriptor.cutoff import PolyCut
     from theforce.regression.kernel import Positive, DotProd, Normed
     from theforce.regression.stationary import RBF
     from theforce.descriptor.atoms import TorchAtoms, AtomsData
@@ -277,8 +278,8 @@ def test():
 def example():
     from torch import tensor
     from theforce.regression.stationary import RBF
-    from theforce.math.cutoff import PolyCut
-    from theforce.math.radial import Product, ParamedRepulsiveCore
+    from theforce.descriptor.cutoff import PolyCut
+    from theforce.descriptor.radial import Product, ParamedRepulsiveCore
 
     factor = Product(PolyCut(1.0), ParamedRepulsiveCore())
     kern = PairKernel(RBF(), 1, 1, factor=factor)
@@ -295,4 +296,3 @@ def example():
 if __name__ == '__main__':
     test()
     example()
-
