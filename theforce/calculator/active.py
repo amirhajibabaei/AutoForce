@@ -262,7 +262,7 @@ class ActiveCalculator(Calculator):
         self._ready = True
         if type(model) == str:
             self.model = PosteriorPotentialFromFolder(
-                model, load_data=True, update_data=self.active, group=self.process_group)
+                model, load_data=True, update_data=False, group=self.process_group)
             self._ready = False
         elif type(model) == PosteriorPotential:
             self.model = model
@@ -713,6 +713,8 @@ class ActiveCalculator(Calculator):
             data = ase.io.read(data, '::')
         tune_for_md = self.tune_for_md
         self.tune_for_md = False
+        self.get_ready()
+
         _calc = self._calc
         for atoms in data:
             if abs(atoms.get_forces()).max() > self.include_params['fmax']:
@@ -730,6 +732,7 @@ class ActiveCalculator(Calculator):
         _calc = self._calc
         tune_for_md = self.tune_for_md
         self.tune_for_md = False
+        self.get_ready()
 
         def _save():
             if added_lce[0] > 0:
