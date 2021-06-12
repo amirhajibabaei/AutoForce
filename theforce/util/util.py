@@ -2,7 +2,6 @@
 import re
 import datetime
 import os
-import psutil
 import inspect
 
 
@@ -63,6 +62,7 @@ def safe_dirname(d, append='x'):
 
 
 def meminfo():
+    import psutil
     return os.getpid(), psutil.Process(os.getpid()).memory_info().rss
 
 

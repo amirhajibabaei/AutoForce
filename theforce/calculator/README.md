@@ -56,6 +56,7 @@ stdout:          if True, prints the log also to stdout
 ediff:           energy sensitivity for sampling LCEs
 fdiff:           forces sensitivity for sampling DFT data
 noise_f:         bias noise for forces
+ioptim:          for controlling the hyper-parameter optimization
 max_data:        maximum number of ab initio data
 max_inducing:    maximum number of reference/inducing LCEs
 veto:            for vetoing some ML updates
@@ -204,6 +205,16 @@ cause more sampling of DFT data without a
 significant increase in accuracy of predictions.
 But the value of 0 maybe used for fitting a 
 static data set without any issues.
+
+#### ioptim
+For setting the hyper-parameter optimization (HPO) frequency.
+* -1 -> no HPO
+* 0 -> once for every LCE/data sampled
+* 1 -> only if n.o. LCE + n.o. data sampled > 0 (in 1 MD step)
+* 2 -> only if new data are sampled
+
+Frequency of HPOs decrease dramatically with increasing ioptim:
+0 >> 1 >> 2. Default is ioptim = 1.
 
 #### max_data, max_inducing
 These flags can be used for increasing the speed.

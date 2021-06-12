@@ -11,13 +11,18 @@ In principle, all the calculators supported by the atomic simulation environment
 ([ASE](https://wiki.fysik.dtu.dk/ase/)) can be modeled.
 
 ### Dependencies
-* <ins>Main</ins>: numpy, scipy, pytorch, atomic simulation environment (ASE), psutil
+* <ins>Main</ins>: numpy, scipy, pytorch, atomic simulation environment (ASE)
 * <ins>Recommended</ins>: message passing interface (MPI enabled pytorch) for distributed computation.
-* <ins>Optional</ins>: pymatgen, spglib, mendeleev, matplotlib, nglview
+* <ins>Optional</ins>: pymatgen, spglib, mendeleev, matplotlib, nglview, psutil
 
 For enabling distributed computation with MPI,
 pytorch needs to be installed from source
 (see [this](https://github.com/pytorch/pytorch)).
+This package is regularly synced with the latest
+versions of ASE and pytorch.
+Additional setting maybe needed for linking
+the ab initio calculators (VASP, GAUSSIAN, etc.)
+with ASE ([see this](https://wiki.fysik.dtu.dk/ase/ase/calculators/calculators.html#module-ase.calculators)).
 
 ### Installation
 Clone the source code by
