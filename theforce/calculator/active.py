@@ -75,7 +75,7 @@ class ActiveCalculator(Calculator):
     def __init__(self, covariance='pckl', calculator=None, process_group=None, meta=None,
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None, stdout=False,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
-                 ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol,
+                 ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol, ioptim=1,
                  max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None):
         """
         inputs:
@@ -103,6 +103,7 @@ class ActiveCalculator(Calculator):
 
         control:
             kernel_kw:       kwargs passed when default_kernel is called
+            ioptim:          0 | 1 | 2, a tag for hyper-parameter optimization
             veto:            dict, for vetoing ML updates e.g. {'forces': 5.}
             include_params:  used when include_data, include_tape is called
 
@@ -199,6 +200,21 @@ class ActiveCalculator(Calculator):
             equivalent to {'lmax': 3, 'nmax': 3, 'exponent': 4, 'cutoff': 6.}.
             e.g. kernel_kw = {'cutoff': 7.0} changes the cutoff to 7.
 
+        ioptim:
+            For setting the hyper-parameter optimization (HPO) frequency. In 1 MD step,
+            potentially several LCEs can be sampled as the inducing/reference set.
+            If at least 1 LCE is sampled, then a single-point ab initio calculation
+            maybe performed and the configuration sampled as additional data for the
+            regression. Depending on ioptim tag, HPO can be invoked with different
+            frequencies
+               -1 -> no HPO
+                0 -> once for every LCE/data sampled
+                1 -> only if n.o. LCE + n.o. data sampled > 0
+                2 -> only if new data are sampled
+            Frequency of HPOs decrease dramatically with increasing ioptim:
+                0 >> 1 >> 2
+            Default is ioptim = 1.
+
         veto:
             e.g. {'forces': 5.} -> do not try ML update if forces > 5.
             This is usefull for algorithms such as random structure search where
@@ -221,6 +237,7 @@ class ActiveCalculator(Calculator):
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
         self.noise_f = noise_f
+        self.ioptim = ioptim
         self.max_data = max_data
         self.max_inducing = max_inducing
         self.meta = meta
@@ -606,7 +623,8 @@ class ActiveCalculator(Calculator):
                 added = 0
             else:
                 self.tape.write(loc)
-                self.optimize()
+                if self.ioptim == 0:
+                    self.optimize()
         return added
 
     def update_inducing(self):
@@ -673,7 +691,8 @@ class ActiveCalculator(Calculator):
                 self.head()
             self.log('added data: {} -> size: {} {}'.format(
                 added, *self.size))
-            self.optimize()
+            if self.ioptim in [0, 2]:
+                self.optimize()
         return added
 
     def optimize(self):
@@ -690,13 +709,15 @@ class ActiveCalculator(Calculator):
             update_data = self.get_covloss().max() > self.ediff
         n = self.update_data(try_fake=not try_real) if update_data else 0
         if m > 0 or n > 0:
+            # TODO: if threshold is reached -> downsizes every time! fix this!
             ch1, ch2 = self.model.downsize(
                 self.max_data, self.max_inducing, first=True, lii=True)
             if ch1 or ch2:
-                self.optimize()
                 self.log('downsized -> size: {} {}'.format(*self.size))
             if ch2:
                 self.cov = self.cov.index_select(1, torch.as_tensor(ch2))
+            if self.ioptim == 1:
+                self.optimize()
             self.log('fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
                 *(float(v) for v in self.model._stats)))
             if self.rank == 0:
@@ -736,10 +757,15 @@ class ActiveCalculator(Calculator):
 
         def _save():
             if added_lce[0] > 0:
+                if self.ioptim == 1:
+                    self.optimize()
                 if self.pckl:
                     self.model.to_folder(self.pckl)
                 self.log('added lone indus: {}/{} -> size: {} {}'.format(
                     *added_lce, *self.size))
+                self.log('fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
+                    *(float(v) for v in self.model._stats)))
+
         #
         added_lce = [0, 0]
         for cls, obj in tape.read():
