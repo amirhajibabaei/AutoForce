@@ -16,8 +16,9 @@ def truncate_sgpr(infile, outfile, ndat, nlce):
         elif a == 'local':
             mm.write(b)
             c_nlce += 1
-        if c_ndat == ndat and c_nlce == nlce:
+        if c_ndat >= ndat and c_nlce >= nlce:
             break
+    print(f"truncated to {c_ndat} data and {c_nlce} inducing")
 
 
 if __name__ == '__main__':
