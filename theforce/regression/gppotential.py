@@ -7,6 +7,7 @@ from theforce.regression.algebra import jitcholesky, projected_process_auxiliary
 from theforce.regression.scores import coeff_of_determination
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
+from theforce.util.parallel import use_max_threads
 from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
 from collections import Counter
 from scipy.optimize import minimize
@@ -1108,6 +1109,7 @@ def kldiv_normal(y, sigma):
     return loss
 
 
+@use_max_threads
 def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=True, wjac=True):
 
     if self.ignore_forces:

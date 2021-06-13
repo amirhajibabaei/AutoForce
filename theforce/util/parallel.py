@@ -40,6 +40,23 @@ def index_gather(x, index, size=None):
     return _x
 
 
+def use_max_threads(func):
+
+    @functools.wraps(func)
+    def _func(*args, **kwargs):
+        if dist.is_initialized():
+            processes = dist.get_world_size()
+        else:
+            processes = 1
+        nthreads = torch.get_num_threads()
+        torch.set_num_threads(nthreads*processes)
+        out = func(*args, **kwargs)
+        torch.set_num_threads(nthreads)
+        return out
+
+    return _func
+
+
 def balance_work(size, workers):
     # sizes
     a = size//workers
