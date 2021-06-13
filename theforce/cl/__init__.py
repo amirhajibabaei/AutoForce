@@ -5,6 +5,8 @@ from theforce.calculator.socketcalc import SocketCalculator
 from theforce.calculator.active import ActiveCalculator, kcal_mol, inf, SeSoapKernel, DefaultRadii, ActiveMeta
 from theforce.calculator.meta import Meta, Posvar, Qlvar, Catvar
 import os
+import time
+import atexit
 
 
 def strip(line):
@@ -42,6 +44,16 @@ def gen_active_calc(**over):
     return ActiveCalculator(**kwargs)
 
 
+def print_stop_time():
+    stop_time = time.time() - start_time
+    print(f'\n\tstopwatch: \t {stop_time} seconds')
+
+
+# at exit
+start_time = time.time()
+atexit.register(print_stop_time)
+
+# ARGS
 ARGS = {}
 if os.path.isfile('ARGS'):
     lines = [strip(line) for line in
