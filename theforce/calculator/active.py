@@ -593,6 +593,7 @@ class ActiveCalculator(Calculator):
         return beta*vscale
 
     def update_lce(self, loc, beta=None):
+        k = None
         if beta is None:
             k = self.model.gp.kern(loc, self.model.X)
             b = self.model.choli@k.detach().t()
@@ -602,15 +603,16 @@ class ActiveCalculator(Calculator):
             else:
                 vscale = float('inf')
             beta = ((1-c)*vscale).clamp(min=0.).sqrt()
+            k = k.detach().t()
         added = 0
         m = self.model.indu_counts[loc.number]
         if loc.number in self.model.gp.species:
             if beta >= self.ediff_ub:
-                self.model.add_inducing(loc)
+                self.model.add_inducing(loc, col=k)
                 added = -1 if m < 2 else 1
             elif beta < self.ediff_lb:
                 if m < 2 and beta > torch.finfo().eps:
-                    self.model.add_inducing(loc)
+                    self.model.add_inducing(loc, col=k)
                     added = -1
             else:
                 ediff = (self.ediff if m > 1

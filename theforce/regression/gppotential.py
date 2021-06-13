@@ -671,7 +671,7 @@ class PosteriorPotential(Module):
             self.make_munu()
 
     @context_setting
-    def add_inducing(self, X, remake=True):
+    def add_inducing(self, X, col=None, remake=True):
         assert X.number in self.gp.species
         Ke = self.gp.kern(self.data, X, cov='energy_energy')
         Kf = self.gp.kern(self.data, X, cov='forces_energy')
@@ -684,7 +684,10 @@ class PosteriorPotential(Module):
         else:
             self.Ke = Ke
             self.Kf = Kf
-        a = self.gp.kern(self.X, X, cov='energy_energy')
+        if col is None:
+            a = self.gp.kern(self.X, X, cov='energy_energy')
+        else:
+            a = col
         b = self.gp.kern(X, X, cov='energy_energy')
         self.M = torch.cat(
             [torch.cat([self.M, a.t()]), torch.cat([a, b])], dim=1)
