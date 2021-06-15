@@ -86,8 +86,8 @@ def method_forker(method):
             size = max(shape)
             dim = shape.index(size)
             workers = dist.get_world_size(group=self.process_group)
-            if size < workers:  # TODO: warn or error?
-                warnings.warn('size ({}) < workers ({})'.format(size, workers))
+            # if size < workers:  # TODO: warn or error?
+            #    warnings.warn('size ({}) < workers ({})'.format(size, workers))
             indices = balance_work(size, workers)
             rank = dist.get_rank(group=self.process_group)
             start, end = indices[rank]
@@ -104,7 +104,7 @@ def method_forker(method):
                 dist.broadcast(pieces[k], k, group=self.process_group)
 
             # concat
-            out = torch.cat(pieces, dim=dim)
+            out = torch.cat([p for p in pieces if p.numel() > 0], dim=dim)
             return out
         else:
             return method(self, *args, **kwargs)
