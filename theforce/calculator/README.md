@@ -212,6 +212,7 @@ For setting the hyper-parameter optimization (HPO) frequency.
 * 0 -> once for every LCE/data sampled
 * 1 -> only if n.o. LCE + n.o. data sampled > 0 (in 1 MD step)
 * 2 -> only if new data are sampled
+* i>2 -> only when n.o. sampled data is divisible by (i-1)
 
 Frequency of HPOs decrease dramatically with increasing ioptim:
 0 >> 1 >> 2. Default is ioptim = 1.

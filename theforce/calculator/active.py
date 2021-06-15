@@ -103,7 +103,7 @@ class ActiveCalculator(Calculator):
 
         control:
             kernel_kw:       kwargs passed when default_kernel is called
-            ioptim:          0 | 1 | 2, a tag for hyper-parameter optimization
+            ioptim:          a tag for hyper-parameter optimization
             veto:            dict, for vetoing ML updates e.g. {'forces': 5.}
             include_params:  used when include_data, include_tape is called
 
@@ -207,10 +207,13 @@ class ActiveCalculator(Calculator):
             maybe performed and the configuration sampled as additional data for the
             regression. Depending on ioptim tag, HPO can be invoked with different
             frequencies
+
                -1 -> no HPO
                 0 -> once for every LCE/data sampled
                 1 -> only if n.o. LCE + n.o. data sampled > 0
                 2 -> only if new data are sampled
+            i > 2 -> only when n.o. sampled data is divisible by (i-1)
+
             Frequency of HPOs decrease dramatically with increasing ioptim:
                 0 >> 1 >> 2
             Default is ioptim = 1.
@@ -238,6 +241,7 @@ class ActiveCalculator(Calculator):
         self.fdiff = fdiff
         self.noise_f = noise_f
         self.ioptim = ioptim
+        self._ioptim = 0
         self.max_data = max_data
         self.max_inducing = max_inducing
         self.meta = meta
@@ -695,6 +699,11 @@ class ActiveCalculator(Calculator):
                 added, *self.size))
             if self.ioptim in [0, 2]:
                 self.optimize()
+            elif self.ioptim > 2:
+                self._ioptim += 1
+                if self._ioptim % (self.ioptim-1) == 0:
+                    self.optimize()
+                    self._ioptim = 0
         return added
 
     def optimize(self):
