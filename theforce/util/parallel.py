@@ -41,6 +41,10 @@ def index_gather(x, index, size=None):
 
 
 def use_max_threads(func):
+    """
+    This is only experimental.
+    May cause severe performance issues!
+    """
 
     @functools.wraps(func)
     def _func(*args, **kwargs):
