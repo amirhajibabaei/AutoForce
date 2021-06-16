@@ -7,6 +7,7 @@ from theforce.regression.algebra import jitcholesky, projected_process_auxiliary
 from theforce.regression.scores import coeff_of_determination
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
+from theforce.util.parallel import if_master
 from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
 from collections import Counter
 from scipy.optimize import minimize
@@ -987,13 +988,12 @@ class PosteriorPotential(Module):
         self.data = data
         self.gp.cahced = cached
 
+    @if_master
     def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=False,
                   to_traj=False):
         if pickle_data and self.data.is_distributed:
             raise NotImplementedError(
                 'trying to pickle data which is distributed! call gathere_() first!')
-        if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
-            return
         if not overwrite:
             folder = safe_dirname(folder)
         mkdir_p(folder)

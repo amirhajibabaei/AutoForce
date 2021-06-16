@@ -61,9 +61,11 @@ class SocketCalculator(Calculator):
             s.send(self.message.encode())
             ierr = int(s.recv(1024).decode('utf-8'))
             s.close()
-        assert ierr == 0
         if self.is_distributed:
+            ierr = torch.tensor(ierr)
+            torch.distributed.broadcast(ierr, 0)
             torch.distributed.barrier()
+        assert ierr == 0
         self.log('e')
         # read
         atms = read('socket_recv.xyz')
