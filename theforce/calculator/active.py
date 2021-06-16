@@ -252,8 +252,8 @@ class ActiveCalculator(Calculator):
         self.log(f'kernel: {self.model.descriptors}')
         self.log_settings()
         self.log('model size: {} {}'.format(*self.size))
-        self.tape = SgprIO(tape)
-        # if self.active:
+        self.tape = None if tape is None else SgprIO(tape)
+        # if self.active and self.tape:
         #    self.tape.write_params(ediff=self.ediff, ediff_tot=self.ediff_tot,
         #                           fdiff=self.fdiff)
         self.test = test
@@ -446,8 +446,9 @@ class ActiveCalculator(Calculator):
         inducing = LocalsData([self.atoms.local(j, detach=True) for j in i])
         self.model.set_data(data, inducing)
         # data is stored in _exact, thus we only store the inducing
-        for loc in inducing:
-            self.tape.write(loc)
+        if self.tape:
+            for loc in inducing:
+                self.tape.write(loc)
         details = [(j, self.atoms.numbers[j]) for j in i]
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
@@ -519,7 +520,8 @@ class ActiveCalculator(Calculator):
         tmp.set_calculator(self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
-        self.tape.write(tmp)
+        if self.tape:
+            self.tape.write(tmp)
         self.log('exact energy: {}'.format(energy))
         #
         if self.model.ndata > 0:
@@ -628,7 +630,8 @@ class ActiveCalculator(Calculator):
                 self.model.pop_1inducing(clear_cached=True)
                 added = 0
             else:
-                self.tape.write(loc)
+                if self.tape:
+                    self.tape.write(loc)
                 if self.ioptim == 0:
                     self.optimize()
         return added
