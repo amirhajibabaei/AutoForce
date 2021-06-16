@@ -4,6 +4,8 @@ from theforce.util.parallel import mpi_init
 from theforce.calculator.socketcalc import SocketCalculator
 from theforce.calculator.active import ActiveCalculator, kcal_mol, inf, SeSoapKernel, DefaultRadii, ActiveMeta
 from theforce.calculator.meta import Meta, Posvar, Qlvar, Catvar
+import torch
+import torch.distributed as dist
 import os
 import time
 import atexit
@@ -45,8 +47,13 @@ def gen_active_calc(**over):
 
 
 def print_stop_time():
+    dist.barrier()
+    rank = dist.get_rank()
+    world = dist.get_world_size()
+    threads = torch.get_num_threads()
     stop_time = time.time() - start_time
-    print(f'\n\tstopwatch: \t {stop_time} seconds')
+    print(
+        f'\n\tstopwatch (process: {rank}/{world}, threads: {threads}): \t {stop_time} seconds')
 
 
 # at exit
