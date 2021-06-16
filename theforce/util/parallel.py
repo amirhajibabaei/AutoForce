@@ -39,7 +39,8 @@ def if_master(func):
         else:
             out = None
         ierr = torch.tensor(ierr)
-        dist.broadcast(ierr, 0)
+        if dist.is_initialized():
+            dist.broadcast(ierr, 0)
         if ierr:
             raise RuntimeError(f'{func.__name__} failed at master')
         return out
