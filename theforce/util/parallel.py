@@ -26,6 +26,27 @@ def rank():
         return 0
 
 
+def if_master(func):
+
+    @functools.wraps(func)
+    def _func(*args, **kwargs):
+        ierr = 0
+        if rank() == 0:
+            try:
+                out = func(*args, **kwargs)
+            except:
+                ierr = 1
+        else:
+            out = None
+        ierr = torch.tensor(ierr)
+        dist.broadcast(ierr, 0)
+        if ierr:
+            raise RuntimeError(f'{func.__name__} failed at master')
+        return out
+
+    return _func
+
+
 def index_gather(x, index, size=None):
     """currently only along dim 0 -> TODO: general dim"""
     if size is None:
