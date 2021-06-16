@@ -9,9 +9,14 @@ def train(*args, r=None):
     for arg in args:
         if arg.endswith('.sgpr'):
             if r is not None and r != '::':
-                w = f'-r {r} option is ignored for {arg}'
-                warnings.warn(w)
-            calc.include_tape(arg)
+                try:
+                    ndata = int(r)
+                except:
+                    raise RuntimeError(
+                        'For .sgpr files use -r with an integer (e.g. -r 100)')
+            else:
+                ndata = None
+            calc.include_tape(arg, ndata=ndata)
         else:
             data = read(arg) if r is None else read(arg, r)
             calc.include_data(data)

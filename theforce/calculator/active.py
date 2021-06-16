@@ -761,7 +761,7 @@ class ActiveCalculator(Calculator):
         self._calc = _calc
         self.tune_for_md = tune_for_md
 
-    def include_tape(self, tape):
+    def include_tape(self, tape, ndata=None):
         if type(tape) == str:
             tape = SgprIO(tape)
         _calc = self._calc
@@ -782,6 +782,7 @@ class ActiveCalculator(Calculator):
 
         #
         added_lce = [0, 0]
+        cdata = 0
         for cls, obj in tape.read():
             if cls == 'atoms':
                 if abs(obj.get_forces()).max() > self.include_params['fmax']:
@@ -793,6 +794,9 @@ class ActiveCalculator(Calculator):
                 obj.set_calculator(self)
                 obj.get_potential_energy()
                 obj.set_calculator(self._calc)
+                cdata += 1
+                if ndata and cdata >= ndata:
+                    break
                 added_lce = [0, 0]
             elif cls == 'local':
                 obj.stage(self.model.descriptors, True)
