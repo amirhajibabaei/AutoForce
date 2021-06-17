@@ -259,6 +259,7 @@ class TorchAtoms(Atoms):
 
         # ------------------------------- ----------
         if type(ranks) == Distributer:
+            self.ranks = None
             ranks(self)
         else:
             self.ranks = ranks
