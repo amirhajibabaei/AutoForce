@@ -448,10 +448,11 @@ class TorchAtoms(Atoms):
         new = TorchAtoms(positions=self.positions.copy(),
                          cell=self.cell.copy(),
                          numbers=self.numbers.copy(),
-                         pbc=self.pbc.copy())
+                         pbc=self.pbc.copy(),
+                         ranks=self.ranks)
         if group and self.is_distributed:
             new.attach_process_group(self.process_group)
-            new.indices = self.indices  # TODO: ignore?
+            assert new.indices == self.indices  # TODO: ignore?
         if update:
             new.update(cutoff=self.cutoff, descriptors=self.descriptors)
         vel = self.get_velocities()
