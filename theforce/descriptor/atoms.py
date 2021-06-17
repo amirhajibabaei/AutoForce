@@ -219,6 +219,35 @@ class AtomsChanges:
         return [c != r.state for c, r in zip(*[self._descriptors, self._ref.descriptors])]
 
 
+class Distributer:
+
+    def __init__(self, world_size):
+        self.world_size = world_size
+        self.ranks = list(range(world_size))
+        self.loads = {}
+        self.total = self.world_size*[0]
+
+    def __call__(self, atoms):
+        if atoms.ranks is None:
+            ranks = []
+            for z in atoms.numbers:
+                if z not in self.loads:
+                    self.loads[z] = self.world_size*[0]
+                keys = list(zip(self.total, self.loads[z], self.ranks))
+                rank = sorted(keys)[0][2]
+                ranks.append(rank)
+                self.loads[z][rank] += 1
+                self.total[rank] += 1
+            atoms.ranks = ranks
+
+    def unload(self, atoms):
+        if atoms.ranks is not None:
+            for z, rank in zip(atoms.numbers, atoms.ranks):
+                self.loads[z][rank] -= 1
+                self.total[rank] -= 1
+            atoms.ranks = None
+
+
 class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
