@@ -1,6 +1,6 @@
 # +
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
-from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
+from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData, Distributer
 from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
 from theforce.descriptor.sesoap import DefaultRadii
 from theforce.util.tensors import padded, nan_to_num
@@ -232,6 +232,7 @@ class ActiveCalculator(Calculator):
         Calculator.__init__(self)
         self._calc = calculator
         self.process_group = process_group
+        self.distrib = Distributer(torch.distributed.get_world_size())
         self.pckl = pckl
         self.get_model(covariance, kernel_kw or {})
         self.ediff = ediff
@@ -306,7 +307,7 @@ class ActiveCalculator(Calculator):
             raise RuntimeError('you forgot to assign a DFT calculator!')
 
         if type(_atoms) == ase.atoms.Atoms:
-            atoms = TorchAtoms(ase_atoms=_atoms)
+            atoms = TorchAtoms(ase_atoms=_atoms, ranks=self.distrib)
             uargs = {'cutoff': self.model.cutoff,
                      'descriptors': self.model.gp.kern.kernels}
             self.to_ase = True
@@ -317,6 +318,7 @@ class ActiveCalculator(Calculator):
         if _atoms is not None and self.process_group is not None:
             atoms.attach_process_group(self.process_group)
         Calculator.calculate(self, atoms, properties, system_changes)
+        dat1 = self.size[0]
         self.atoms.update(posgrad=True, cellgrad=True,
                           forced=True, dont_save_grads=True, **uargs)
 
@@ -344,6 +346,8 @@ class ActiveCalculator(Calculator):
                     self.deltas = {}
                     for quant in ['energy', 'forces', 'stress']:
                         self.deltas[quant] = self.results[quant] - pre[quant]
+            if self.size[0] == dat1:
+                self.distrib.unload(atoms)
         else:
             self.covlog = f'{float(self.get_covloss().max())}'
         energy = self.results['energy']
@@ -367,6 +371,12 @@ class ActiveCalculator(Calculator):
 
         # needed for self.calculate_numerical_stress
         self.results['free_energy'] = self.results['energy']
+
+        # debug tests:
+        if False:
+            counts = self.model.data.counts(total=False)
+            assert counts == {
+                k: self.distrib.loads[k][self.rank] for k in counts.keys()}
 
     def veto(self):
         if self.size[0] < 2:
