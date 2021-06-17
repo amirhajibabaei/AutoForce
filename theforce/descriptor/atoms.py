@@ -251,13 +251,17 @@ class Distributer:
 class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
-                 descriptors=[], group=None, **kwargs):
+                 descriptors=[], group=None, ranks=None, **kwargs):
         super().__init__(**kwargs)
 
         if ase_atoms:
             self.__dict__ = ase_atoms.__dict__
 
         # ------------------------------- ----------
+        if type(ranks) == Distributer:
+            ranks(self)
+        else:
+            self.ranks = ranks
         if group is not None:
             self.attach_process_group(group)
         else:
@@ -292,18 +296,24 @@ class TorchAtoms(Atoms):
 
     def index_distribute(self, randomize=True):
         if self.is_distributed:
-            workers = torch.distributed.get_world_size(
-                group=self.process_group)
-            indices = balance_work(self.natoms, workers)
             rank = torch.distributed.get_rank(group=self.process_group)
-            if randomize:
-                # reproducibility issue: rnd sequence becomes workers dependent
-                # w = np.random.permutation(workers)
-                w = (np.arange(workers) + np.random.randint(1024)) % workers
-                j = np.random.permutation(self.natoms)
-                self.indices = j[range(*indices[w[rank]])].tolist()
+            if self.ranks:
+                self.indices = []
+                for i, j in enumerate(self.ranks):
+                    if j == rank:
+                        self.indices.append(i)
             else:
-                self.indices = range(*indices[rank])
+                workers = torch.distributed.get_world_size(
+                    group=self.process_group)
+                indices = balance_work(self.natoms, workers)
+                if randomize:
+                    # reproducibility issue: rnd sequence becomes workers dependent
+                    # w = np.random.permutation(workers)
+                    w = (np.arange(workers) + np.random.randint(1024)) % workers
+                    j = np.random.permutation(self.natoms)
+                    self.indices = j[range(*indices[w[rank]])].tolist()
+                else:
+                    self.indices = range(*indices[rank])
         else:
             self.indices = range(self.natoms)
 
