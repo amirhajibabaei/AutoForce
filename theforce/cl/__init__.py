@@ -52,8 +52,11 @@ def print_stop_time():
     world = dist.get_world_size()
     threads = torch.get_num_threads()
     stop_time = time.time() - start_time
-    print(
-        f'\n\tstopwatch (process: {rank}/{world}, threads: {threads}): \t {stop_time} seconds')
+    for i in range(world):
+        if rank == i:
+            print(
+                f'\tstopwatch (process: {rank}/{world}, threads: {threads}): \t {stop_time} seconds')
+        dist.barrier()
 
 
 # at exit
