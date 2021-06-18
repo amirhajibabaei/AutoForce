@@ -219,16 +219,56 @@ class AtomsChanges:
         return [c != r.state for c, r in zip(*[self._descriptors, self._ref.descriptors])]
 
 
+class Distributer:
+
+    def __init__(self, world_size):
+        self.world_size = world_size
+        self.ranks = list(range(world_size))
+        self.loads = {}
+        self.total = self.world_size*[0]
+
+    def __call__(self, atoms):
+        if atoms.ranks is None:
+            ranks = []
+            for z in atoms.numbers:
+                if z not in self.loads:
+                    self.loads[z] = self.world_size*[0]
+                keys = list(zip(self.total, self.loads[z], self.ranks))
+                rank = sorted(keys)[0][2]
+                ranks.append(rank)
+                self.loads[z][rank] += 1
+                self.total[rank] += 1
+            atoms.ranks = ranks
+
+    def upload(self, atoms):
+        if atoms.ranks is not None:
+            for z, rank in zip(atoms.numbers, atoms.ranks):
+                self.loads[z][rank] += 1
+                self.total[rank] += 1
+
+    def unload(self, atoms):
+        if atoms.ranks is not None:
+            for z, rank in zip(atoms.numbers, atoms.ranks):
+                self.loads[z][rank] -= 1
+                self.total[rank] -= 1
+            atoms.ranks = None
+
+
 class TorchAtoms(Atoms):
 
     def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
-                 descriptors=[], group=None, **kwargs):
+                 descriptors=[], group=None, ranks=None, **kwargs):
         super().__init__(**kwargs)
 
         if ase_atoms:
             self.__dict__ = ase_atoms.__dict__
 
         # ------------------------------- ----------
+        if type(ranks) == Distributer:
+            self.ranks = None
+            ranks(self)
+        else:
+            self.ranks = ranks
         if group is not None:
             self.attach_process_group(group)
         else:
@@ -263,18 +303,24 @@ class TorchAtoms(Atoms):
 
     def index_distribute(self, randomize=True):
         if self.is_distributed:
-            workers = torch.distributed.get_world_size(
-                group=self.process_group)
-            indices = balance_work(self.natoms, workers)
             rank = torch.distributed.get_rank(group=self.process_group)
-            if randomize:
-                # reproducibility issue: rnd sequence becomes workers dependent
-                # w = np.random.permutation(workers)
-                w = (np.arange(workers) + np.random.randint(1024)) % workers
-                j = np.random.permutation(self.natoms)
-                self.indices = j[range(*indices[w[rank]])].tolist()
+            if self.ranks:
+                self.indices = []
+                for i, j in enumerate(self.ranks):
+                    if j == rank:
+                        self.indices.append(i)
             else:
-                self.indices = range(*indices[rank])
+                workers = torch.distributed.get_world_size(
+                    group=self.process_group)
+                indices = balance_work(self.natoms, workers)
+                if randomize:
+                    # reproducibility issue: rnd sequence becomes workers dependent
+                    # w = np.random.permutation(workers)
+                    w = (np.arange(workers) + np.random.randint(1024)) % workers
+                    j = np.random.permutation(self.natoms)
+                    self.indices = j[range(*indices[w[rank]])].tolist()
+                else:
+                    self.indices = range(*indices[rank])
         else:
             self.indices = range(self.natoms)
 
@@ -408,10 +454,11 @@ class TorchAtoms(Atoms):
         new = TorchAtoms(positions=self.positions.copy(),
                          cell=self.cell.copy(),
                          numbers=self.numbers.copy(),
-                         pbc=self.pbc.copy())
+                         pbc=self.pbc.copy(),
+                         ranks=self.ranks)
         if group and self.is_distributed:
             new.attach_process_group(self.process_group)
-            new.indices = self.indices  # TODO: ignore?
+            assert new.indices == self.indices  # TODO: ignore?
         if update:
             new.update(cutoff=self.cutoff, descriptors=self.descriptors)
         vel = self.get_velocities()

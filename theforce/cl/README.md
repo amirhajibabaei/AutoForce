@@ -41,6 +41,7 @@ test:            integer; single-point testing intervals (default=None)
 ediff:     (eV)  energy sensitivity for sampling LCEs (default ~ 2 kcal/mol)
 fdiff:    (eV/A) forces sensitivity for sampling Ab initio data (default ~ 3 kcal/mol)
 noise_f:  (ev/A) bias noise for forces (default ~ 1 kcal/mol)
+ioptim:          for hyper-parameter optimization frequency (default=1)
 max_data:        max data size (default=inf)
 max_inducing:    max inducing size (default=inf)
 ```
@@ -83,6 +84,14 @@ For this, all you need to do is to not specify any
 The other paramteres (`ediff`, `fdiff`) which control 
 the sampling and accuracy should be gradually tuned to 
 get the desired accuracy.
+
+If `ioptim = 0`, hyper-parameters are (re)optimized
+for every data/LCE increament. This can dramatically
+slow down MLMD. If `ioptim = 1` the model is
+(re)optimized once for every step that
+total increaments are nonzero. If `ioptim = i`
+where i>1, the model is (re)optimized only
+when n.o. sampled data is divisible by (i-1).
 
 If the size of accumulated data/inducing becomes too large,
 the simulation may become too slow.

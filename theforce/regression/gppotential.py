@@ -7,6 +7,7 @@ from theforce.regression.algebra import jitcholesky, projected_process_auxiliary
 from theforce.regression.scores import coeff_of_determination
 from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
+from theforce.util.parallel import if_master
 from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
 from collections import Counter
 from scipy.optimize import minimize
@@ -670,7 +671,7 @@ class PosteriorPotential(Module):
             self.make_munu()
 
     @context_setting
-    def add_inducing(self, X, remake=True):
+    def add_inducing(self, X, col=None, remake=True):
         assert X.number in self.gp.species
         Ke = self.gp.kern(self.data, X, cov='energy_energy')
         Kf = self.gp.kern(self.data, X, cov='forces_energy')
@@ -683,7 +684,10 @@ class PosteriorPotential(Module):
         else:
             self.Ke = Ke
             self.Kf = Kf
-        a = self.gp.kern(self.X, X, cov='energy_energy')
+        if col is None:
+            a = self.gp.kern(self.X, X, cov='energy_energy')
+        else:
+            a = col
         b = self.gp.kern(X, X, cov='energy_energy')
         self.M = torch.cat(
             [torch.cat([self.M, a.t()]), torch.cat([a, b])], dim=1)
@@ -984,13 +988,12 @@ class PosteriorPotential(Module):
         self.data = data
         self.gp.cahced = cached
 
+    @if_master
     def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=False,
                   to_traj=False):
         if pickle_data and self.data.is_distributed:
             raise NotImplementedError(
                 'trying to pickle data which is distributed! call gathere_() first!')
-        if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
-            return
         if not overwrite:
             folder = safe_dirname(folder)
         mkdir_p(folder)
@@ -1181,19 +1184,21 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
             return float(loss)
 
     if optimize:
-        # find approx global min on a grid
-        if same_sigma:
-            grid = torch.arange(.1, 5., 0.2).neg().exp()
-            losses = {}
-            for sig in grid:
-                self._noise['all'] = to_inf_inf(sig)
-                diff = make_mu()
-                losses[sig] = diff.abs().mean().sub(noise_f).pow(2)
-            sig = min(losses, key=losses.get)
-            self._noise['all'] = to_inf_inf(sig)
-            self._losses = losses
-        else:
-            raise NotImplementedError('implement grid search!')
+        # *** deprecated: extremely slow! ***
+        # find approx global min on a grid;
+        # if same_sigma:
+        #    grid = torch.arange(.1, 5., 0.2).neg().exp()
+        #    losses = {}
+        #    for sig in grid:
+        #        self._noise['all'] = to_inf_inf(sig)
+        #        diff = make_mu()
+        #        losses[sig] = diff.abs().mean().sub(noise_f).pow(2)
+        #    sig = min(losses, key=losses.get)
+        #    self._noise['all'] = to_inf_inf(sig)
+        #    self._losses = losses
+        # else:
+        #    raise NotImplementedError('implement grid search!')
+
         # find local min
         keys = sorted(self._noise.keys())
         x0 = [float(self._noise[key]) for key in keys]
@@ -1239,7 +1244,7 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
     make_mu(with_energies=residual)
 
 
-def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
+def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None, distrib=None):
     from theforce.descriptor.atoms import AtomsData
     from theforce.util.caching import strip_uid
     self = torch.load(os.path.join(folder, 'model'))
@@ -1253,11 +1258,11 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group
         else:
             if hasattr(self, '_raw_data'):
                 self.data = AtomsData(
-                    self._raw_data, convert=True, group=group)
+                    self._raw_data, convert=True, group=group, ranks=distrib)
                 del self._raw_data
             else:  # for backward compatibility
                 self.data = AtomsData(traj=os.path.join(folder, 'data.traj'),
-                                      group=group)
+                                      group=group, ranks=distrib)
             if update_data:
                 self.data.update(
                     cutoff=self.cutoff, descriptors=self.gp.kern.kernels)

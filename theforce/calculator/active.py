@@ -1,6 +1,6 @@
 # +
 from theforce.regression.gppotential import PosteriorPotential, PosteriorPotentialFromFolder
-from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData
+from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData, Distributer
 from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
 from theforce.descriptor.sesoap import DefaultRadii
 from theforce.util.tensors import padded, nan_to_num
@@ -103,7 +103,7 @@ class ActiveCalculator(Calculator):
 
         control:
             kernel_kw:       kwargs passed when default_kernel is called
-            ioptim:          0 | 1 | 2, a tag for hyper-parameter optimization
+            ioptim:          a tag for hyper-parameter optimization
             veto:            dict, for vetoing ML updates e.g. {'forces': 5.}
             include_params:  used when include_data, include_tape is called
 
@@ -207,10 +207,13 @@ class ActiveCalculator(Calculator):
             maybe performed and the configuration sampled as additional data for the
             regression. Depending on ioptim tag, HPO can be invoked with different
             frequencies
+
                -1 -> no HPO
                 0 -> once for every LCE/data sampled
                 1 -> only if n.o. LCE + n.o. data sampled > 0
                 2 -> only if new data are sampled
+            i > 2 -> only when n.o. sampled data is divisible by (i-1)
+
             Frequency of HPOs decrease dramatically with increasing ioptim:
                 0 >> 1 >> 2
             Default is ioptim = 1.
@@ -229,6 +232,7 @@ class ActiveCalculator(Calculator):
         Calculator.__init__(self)
         self._calc = calculator
         self.process_group = process_group
+        self.distrib = Distributer(self.world_size)
         self.pckl = pckl
         self.get_model(covariance, kernel_kw or {})
         self.ediff = ediff
@@ -238,6 +242,7 @@ class ActiveCalculator(Calculator):
         self.fdiff = fdiff
         self.noise_f = noise_f
         self.ioptim = ioptim
+        self._ioptim = 0
         self.max_data = max_data
         self.max_inducing = max_inducing
         self.meta = meta
@@ -248,8 +253,8 @@ class ActiveCalculator(Calculator):
         self.log(f'kernel: {self.model.descriptors}')
         self.log_settings()
         self.log('model size: {} {}'.format(*self.size))
-        self.tape = SgprIO(tape)
-        # if self.active:
+        self.tape = None if tape is None else SgprIO(tape)
+        # if self.active and self.tape:
         #    self.tape.write_params(ediff=self.ediff, ediff_tot=self.ediff_tot,
         #                           fdiff=self.fdiff)
         self.test = test
@@ -279,7 +284,7 @@ class ActiveCalculator(Calculator):
         self._ready = True
         if type(model) == str:
             self.model = PosteriorPotentialFromFolder(
-                model, load_data=True, update_data=False, group=self.process_group)
+                model, load_data=True, update_data=False, group=self.process_group, distrib=self.distrib)
             self._ready = False
         elif type(model) == PosteriorPotential:
             self.model = model
@@ -302,7 +307,7 @@ class ActiveCalculator(Calculator):
             raise RuntimeError('you forgot to assign a DFT calculator!')
 
         if type(_atoms) == ase.atoms.Atoms:
-            atoms = TorchAtoms(ase_atoms=_atoms)
+            atoms = TorchAtoms(ase_atoms=_atoms, ranks=self.distrib)
             uargs = {'cutoff': self.model.cutoff,
                      'descriptors': self.model.gp.kern.kernels}
             self.to_ase = True
@@ -313,6 +318,7 @@ class ActiveCalculator(Calculator):
         if _atoms is not None and self.process_group is not None:
             atoms.attach_process_group(self.process_group)
         Calculator.calculate(self, atoms, properties, system_changes)
+        dat1 = self.size[0]
         self.atoms.update(posgrad=True, cellgrad=True,
                           forced=True, dont_save_grads=True, **uargs)
 
@@ -340,6 +346,8 @@ class ActiveCalculator(Calculator):
                     self.deltas = {}
                     for quant in ['energy', 'forces', 'stress']:
                         self.deltas[quant] = self.results[quant] - pre[quant]
+            if self.size[0] == dat1:
+                self.distrib.unload(atoms)
         else:
             self.covlog = f'{float(self.get_covloss().max())}'
         energy = self.results['energy']
@@ -442,8 +450,9 @@ class ActiveCalculator(Calculator):
         inducing = LocalsData([self.atoms.local(j, detach=True) for j in i])
         self.model.set_data(data, inducing)
         # data is stored in _exact, thus we only store the inducing
-        for loc in inducing:
-            self.tape.write(loc)
+        if self.tape:
+            for loc in inducing:
+                self.tape.write(loc)
         details = [(j, self.atoms.numbers[j]) for j in i]
         self.log('seed size: {} {} details: {}'.format(
             *self.size, details))
@@ -515,7 +524,8 @@ class ActiveCalculator(Calculator):
         tmp.set_calculator(self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
-        self.tape.write(tmp)
+        if self.tape:
+            self.tape.write(tmp)
         self.log('exact energy: {}'.format(energy))
         #
         if self.model.ndata > 0:
@@ -593,6 +603,7 @@ class ActiveCalculator(Calculator):
         return beta*vscale
 
     def update_lce(self, loc, beta=None):
+        k = None
         if beta is None:
             k = self.model.gp.kern(loc, self.model.X)
             b = self.model.choli@k.detach().t()
@@ -602,15 +613,16 @@ class ActiveCalculator(Calculator):
             else:
                 vscale = float('inf')
             beta = ((1-c)*vscale).clamp(min=0.).sqrt()
+            k = k.detach().t()
         added = 0
         m = self.model.indu_counts[loc.number]
         if loc.number in self.model.gp.species:
             if beta >= self.ediff_ub:
-                self.model.add_inducing(loc)
+                self.model.add_inducing(loc, col=k)
                 added = -1 if m < 2 else 1
             elif beta < self.ediff_lb:
                 if m < 2 and beta > torch.finfo().eps:
-                    self.model.add_inducing(loc)
+                    self.model.add_inducing(loc, col=k)
                     added = -1
             else:
                 ediff = (self.ediff if m > 1
@@ -622,7 +634,8 @@ class ActiveCalculator(Calculator):
                 self.model.pop_1inducing(clear_cached=True)
                 added = 0
             else:
-                self.tape.write(loc)
+                if self.tape:
+                    self.tape.write(loc)
                 if self.ioptim == 0:
                     self.optimize()
         return added
@@ -669,7 +682,7 @@ class ActiveCalculator(Calculator):
         self.covlog = f'{float(beta[q[0]])}'
         return added
 
-    def update_data(self, try_fake=True):
+    def update_data(self, try_fake=True, internal=False):
         # try bypassing
         if self.tune_for_md and len(self.model.data) > 2:
             last = self.model.data[-1]
@@ -693,7 +706,22 @@ class ActiveCalculator(Calculator):
                 added, *self.size))
             if self.ioptim in [0, 2]:
                 self.optimize()
+            elif self.ioptim > 2:
+                self._ioptim += 1
+                if self._ioptim % (self.ioptim-1) == 0:
+                    self.optimize()
+                    self._ioptim = 0
+            if not internal:
+                self.distrib.upload(new)
+            self.sanity_check()
         return added
+
+    def sanity_check(self):
+        counts1 = self.model.data.counts(total=False)
+        counts2 = {k: self.distrib.loads[k]
+                   [self.rank] for k in counts1.keys()}
+        if counts1 != counts2:
+            raise RuntimeError(f'at rank {self.rank}, {counts1} != {counts2}')
 
     def optimize(self):
         self.model.optimize_model_parameters(noise_f=self.noise_f)
@@ -707,7 +735,10 @@ class ActiveCalculator(Calculator):
         update_data = (m > 0 and data) or not inducing
         if update_data and not inducing:  # for include_tape
             update_data = self.get_covloss().max() > self.ediff
-        n = self.update_data(try_fake=not try_real) if update_data else 0
+        if update_data:
+            n = self.update_data(try_fake=not try_real, internal=True)
+        else:
+            n = 0
         if m > 0 or n > 0:
             # TODO: if threshold is reached -> downsizes every time! fix this!
             ch1, ch2 = self.model.downsize(
@@ -747,7 +778,7 @@ class ActiveCalculator(Calculator):
         self._calc = _calc
         self.tune_for_md = tune_for_md
 
-    def include_tape(self, tape):
+    def include_tape(self, tape, ndata=None):
         if type(tape) == str:
             tape = SgprIO(tape)
         _calc = self._calc
@@ -768,6 +799,7 @@ class ActiveCalculator(Calculator):
 
         #
         added_lce = [0, 0]
+        cdata = 0
         for cls, obj in tape.read():
             if cls == 'atoms':
                 if abs(obj.get_forces()).max() > self.include_params['fmax']:
@@ -779,6 +811,9 @@ class ActiveCalculator(Calculator):
                 obj.set_calculator(self)
                 obj.get_potential_energy()
                 obj.set_calculator(self._calc)
+                cdata += 1
+                if ndata and cdata >= ndata:
+                    break
                 added_lce = [0, 0]
             elif cls == 'local':
                 obj.stage(self.model.descriptors, True)
@@ -797,6 +832,13 @@ class ActiveCalculator(Calculator):
             return torch.distributed.get_rank()
         else:
             return 0
+
+    @property
+    def world_size(self):
+        if torch.distributed.is_initialized():
+            return torch.distributed.get_world_size()
+        else:
+            return 1
 
     def log(self, mssge, mode='a'):
         if self.logfile and self.rank == 0:

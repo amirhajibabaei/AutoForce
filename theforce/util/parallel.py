@@ -26,6 +26,28 @@ def rank():
         return 0
 
 
+def if_master(func):
+
+    @functools.wraps(func)
+    def _func(*args, **kwargs):
+        ierr = 0
+        if rank() == 0:
+            try:
+                out = func(*args, **kwargs)
+            except:
+                ierr = 1
+        else:
+            out = None
+        ierr = torch.tensor(ierr)
+        if dist.is_initialized():
+            dist.broadcast(ierr, 0)
+        if ierr:
+            raise RuntimeError(f'{func.__name__} failed at master')
+        return out
+
+    return _func
+
+
 def index_gather(x, index, size=None):
     """currently only along dim 0 -> TODO: general dim"""
     if size is None:
@@ -38,6 +60,27 @@ def index_gather(x, index, size=None):
     _x[index] = x
     dist.all_reduce(_x)
     return _x
+
+
+def use_max_threads(func):
+    """
+    This is only experimental.
+    May cause severe performance issues!
+    """
+
+    @functools.wraps(func)
+    def _func(*args, **kwargs):
+        if dist.is_initialized():
+            processes = dist.get_world_size()
+        else:
+            processes = 1
+        nthreads = torch.get_num_threads()
+        torch.set_num_threads(nthreads*processes)
+        out = func(*args, **kwargs)
+        torch.set_num_threads(nthreads)
+        return out
+
+    return _func
 
 
 def balance_work(size, workers):
@@ -69,8 +112,8 @@ def method_forker(method):
             size = max(shape)
             dim = shape.index(size)
             workers = dist.get_world_size(group=self.process_group)
-            if size < workers:  # TODO: warn or error?
-                warnings.warn('size ({}) < workers ({})'.format(size, workers))
+            # if size < workers:  # TODO: warn or error?
+            #    warnings.warn('size ({}) < workers ({})'.format(size, workers))
             indices = balance_work(size, workers)
             rank = dist.get_rank(group=self.process_group)
             start, end = indices[rank]
@@ -87,7 +130,7 @@ def method_forker(method):
                 dist.broadcast(pieces[k], k, group=self.process_group)
 
             # concat
-            out = torch.cat(pieces, dim=dim)
+            out = torch.cat([p for p in pieces if p.numel() > 0], dim=dim)
             return out
         else:
             return method(self, *args, **kwargs)
