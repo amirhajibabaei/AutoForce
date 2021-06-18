@@ -232,7 +232,7 @@ class ActiveCalculator(Calculator):
         Calculator.__init__(self)
         self._calc = calculator
         self.process_group = process_group
-        self.distrib = Distributer(torch.distributed.get_world_size())
+        self.distrib = Distributer(self.world_size)
         self.pckl = pckl
         self.get_model(covariance, kernel_kw or {})
         self.ediff = ediff
@@ -832,6 +832,13 @@ class ActiveCalculator(Calculator):
             return torch.distributed.get_rank()
         else:
             return 0
+
+    @property
+    def world_size(self):
+        if torch.distributed.is_initialized():
+            return torch.distributed.get_world_size()
+        else:
+            return 1
 
     def log(self, mssge, mode='a'):
         if self.logfile and self.rank == 0:
