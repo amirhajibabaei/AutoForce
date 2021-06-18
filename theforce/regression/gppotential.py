@@ -1184,19 +1184,21 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
             return float(loss)
 
     if optimize:
-        # find approx global min on a grid
-        if same_sigma:
-            grid = torch.arange(.1, 5., 0.2).neg().exp()
-            losses = {}
-            for sig in grid:
-                self._noise['all'] = to_inf_inf(sig)
-                diff = make_mu()
-                losses[sig] = diff.abs().mean().sub(noise_f).pow(2)
-            sig = min(losses, key=losses.get)
-            self._noise['all'] = to_inf_inf(sig)
-            self._losses = losses
-        else:
-            raise NotImplementedError('implement grid search!')
+        # *** deprecated: extremely slow! ***
+        # find approx global min on a grid;
+        # if same_sigma:
+        #    grid = torch.arange(.1, 5., 0.2).neg().exp()
+        #    losses = {}
+        #    for sig in grid:
+        #        self._noise['all'] = to_inf_inf(sig)
+        #        diff = make_mu()
+        #        losses[sig] = diff.abs().mean().sub(noise_f).pow(2)
+        #    sig = min(losses, key=losses.get)
+        #    self._noise['all'] = to_inf_inf(sig)
+        #    self._losses = losses
+        # else:
+        #    raise NotImplementedError('implement grid search!')
+
         # find local min
         keys = sorted(self._noise.keys())
         x0 = [float(self._noise[key]) for key in keys]
