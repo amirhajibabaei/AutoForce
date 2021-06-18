@@ -284,7 +284,7 @@ class ActiveCalculator(Calculator):
         self._ready = True
         if type(model) == str:
             self.model = PosteriorPotentialFromFolder(
-                model, load_data=True, update_data=False, group=self.process_group)
+                model, load_data=True, update_data=False, group=self.process_group, distrib=self.distrib)
             self._ready = False
         elif type(model) == PosteriorPotential:
             self.model = model
@@ -371,12 +371,6 @@ class ActiveCalculator(Calculator):
 
         # needed for self.calculate_numerical_stress
         self.results['free_energy'] = self.results['energy']
-
-        # debug tests:
-        if False:
-            counts = self.model.data.counts(total=False)
-            assert counts == {
-                k: self.distrib.loads[k][self.rank] for k in counts.keys()}
 
     def veto(self):
         if self.size[0] < 2:
@@ -688,7 +682,7 @@ class ActiveCalculator(Calculator):
         self.covlog = f'{float(beta[q[0]])}'
         return added
 
-    def update_data(self, try_fake=True):
+    def update_data(self, try_fake=True, internal=False):
         # try bypassing
         if self.tune_for_md and len(self.model.data) > 2:
             last = self.model.data[-1]
@@ -717,7 +711,17 @@ class ActiveCalculator(Calculator):
                 if self._ioptim % (self.ioptim-1) == 0:
                     self.optimize()
                     self._ioptim = 0
+            if not internal:
+                self.distrib.upload(new)
+            self.sanity_check()
         return added
+
+    def sanity_check(self):
+        counts1 = self.model.data.counts(total=False)
+        counts2 = {k: self.distrib.loads[k]
+                   [self.rank] for k in counts1.keys()}
+        if counts1 != counts2:
+            raise RuntimeError(f'at rank {self.rank}, {counts1} != {counts2}')
 
     def optimize(self):
         self.model.optimize_model_parameters(noise_f=self.noise_f)
@@ -731,7 +735,10 @@ class ActiveCalculator(Calculator):
         update_data = (m > 0 and data) or not inducing
         if update_data and not inducing:  # for include_tape
             update_data = self.get_covloss().max() > self.ediff
-        n = self.update_data(try_fake=not try_real) if update_data else 0
+        if update_data:
+            n = self.update_data(try_fake=not try_real, internal=True)
+        else:
+            n = 0
         if m > 0 or n > 0:
             # TODO: if threshold is reached -> downsizes every time! fix this!
             ch1, ch2 = self.model.downsize(

@@ -1242,7 +1242,7 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
     make_mu(with_energies=residual)
 
 
-def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None):
+def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None, distrib=None):
     from theforce.descriptor.atoms import AtomsData
     from theforce.util.caching import strip_uid
     self = torch.load(os.path.join(folder, 'model'))
@@ -1256,11 +1256,11 @@ def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group
         else:
             if hasattr(self, '_raw_data'):
                 self.data = AtomsData(
-                    self._raw_data, convert=True, group=group)
+                    self._raw_data, convert=True, group=group, ranks=distrib)
                 del self._raw_data
             else:  # for backward compatibility
                 self.data = AtomsData(traj=os.path.join(folder, 'data.traj'),
-                                      group=group)
+                                      group=group, ranks=distrib)
             if update_data:
                 self.data.update(
                     cutoff=self.cutoff, descriptors=self.gp.kern.kernels)

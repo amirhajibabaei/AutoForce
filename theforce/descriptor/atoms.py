@@ -240,6 +240,12 @@ class Distributer:
                 self.total[rank] += 1
             atoms.ranks = ranks
 
+    def upload(self, atoms):
+        if atoms.ranks is not None:
+            for z, rank in zip(atoms.numbers, atoms.ranks):
+                self.loads[z][rank] += 1
+                self.total[rank] += 1
+
     def unload(self, atoms):
         if atoms.ranks is not None:
             for z, rank in zip(atoms.numbers, atoms.ranks):
