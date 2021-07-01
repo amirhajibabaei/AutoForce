@@ -63,6 +63,6 @@ calc = Vasp(command=command,
             setups=get_setups(),
             directory='vasp')
 if os.path.isfile('INCAR'):
-    calc.read_incar()
+    calc.read_incar('INCAR')
 if os.path.isfile('KPOINTS'):
     calc.read_kpoints()
