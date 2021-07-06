@@ -133,6 +133,7 @@ picos:        pico-seconds for md (default=100)
 bulk_modulus: bulk_modulus for NPT simulations. if None (default), NVT is performed
 stress:       external stress (GPa) for NPT (default=0.)
 mask:         see ase.npt.NPT (default=None)
+iso:          if True (or 1), keep the shape constant (default=False)
 trajectory:   traj file name (default='md.traj')
 loginterval:  for traj file (default=1)
 append:       append to traj file (default=False)

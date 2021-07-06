@@ -10,7 +10,7 @@ import numpy as np
 import os
 
 
-def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None,
+def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None, iso=False,
        trajectory='md.traj', loginterval=1, append=False, rattle=0.0, tdamp=25, pdamp=100, friction=1e-3,
        ml_filter=0.8):
     """
@@ -22,6 +22,7 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     bulk_modulus: bulk_modulus for NPT simulations. if None, NVT is performed
     stress:       external stress (GPa) for NPT
     mask:         see ase.npt.NPT
+    iso:          if True, keep the shape constant
     trajectory:   traj file name
     loginterval:  for traj file
     append:       append to traj file
@@ -50,7 +51,7 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
         md_atoms = atoms
 
     if dynamics.upper() == 'NPT':
-        dyn = npt_dynamics(md_atoms, dt, tem, bulk_modulus, stress, mask,
+        dyn = npt_dynamics(md_atoms, dt, tem, bulk_modulus, stress, mask, iso,
                            trajectory, loginterval, append, tdamp, pdamp)
     elif dynamics.upper() == 'LANGEVIN':
         dyn = langevin_dynamics(md_atoms, dt, tem, friction, trajectory,
@@ -69,7 +70,7 @@ def langevin_dynamics(atoms, dt, tem, friction, trajectory, loginterval, append)
     return dyn
 
 
-def npt_dynamics(atoms, dt, tem, bulk_modulus, stress, mask, trajectory, loginterval,
+def npt_dynamics(atoms, dt, tem, bulk_modulus, stress, mask, iso, trajectory, loginterval,
                  append, tdamp, pdamp):
     ttime = tdamp*units.fs
     ptime = pdamp*units.fs
@@ -81,6 +82,8 @@ def npt_dynamics(atoms, dt, tem, bulk_modulus, stress, mask, trajectory, loginte
     dyn = NPT(atoms, dt*units.fs, temperature_K=tem, externalstress=stress*units.GPa,
               ttime=ttime, pfactor=pfactor, mask=mask, trajectory=trajectory,
               append_trajectory=append, loginterval=loginterval)
+    if iso:
+        dyn.set_fraction_traceless(0.)
     return dyn
 
 
