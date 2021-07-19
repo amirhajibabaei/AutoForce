@@ -41,12 +41,11 @@ def get_setups():
 
 def get_xc(calc):
     gga = None
-    for line in calc.load_file('INCAR'):
+    for line in open('INCAR'):
         if '=' in line:
-            a, _, b = line.split()
-            assert _ == '='
-            if a.lower() == 'gga':
-                gga = b
+            a, b = line.strip().split('=')
+            if a.strip().lower() == 'gga':
+                gga = b.strip()
     if gga is None:
         return None
     xc = None
