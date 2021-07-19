@@ -39,6 +39,24 @@ def get_setups():
     return setups
 
 
+def get_xc(calc):
+    gga = None
+    for line in calc.load_file('INCAR'):
+        if '=' in line:
+            a, _, b = line.split()
+            assert _ == '='
+            if a.lower() == 'gga':
+                gga = b
+    if gga is None:
+        return None
+    xc = None
+    for x, y in calc.xc_defaults.items():
+        if gga in y.values():
+            xc = x
+            break
+    return xc
+
+
 def preprocess_atoms(atoms):
     if os.path.isfile('IMAG'):
         imag = {}
@@ -64,5 +82,8 @@ calc = Vasp(command=command,
             directory='vasp')
 if os.path.isfile('INCAR'):
     calc.read_incar('INCAR')
+    xc = get_xc(calc)
+    if xc is not None:
+        calc.set(xc=xc)
 if os.path.isfile('KPOINTS'):
     calc.read_kpoints('KPOINTS')
