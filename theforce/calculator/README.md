@@ -127,6 +127,12 @@ calculator or a `SocketCalculator` (see *Parallelism*).
 For using an existing ML model without further 
 training pass `calculator=None`.
 
+If `calculator=None`, the snapshots for which the uncertainty
+is large (see `ediff` in the following) will be saved
+in `active_uncertain.traj` trajectory file.
+This can be used for offline training strategy
+with more efficient use of computational resources.
+
 #### process_group
 see **Parallelism**.
 

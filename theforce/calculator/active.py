@@ -349,7 +349,12 @@ class ActiveCalculator(Calculator):
             if self.size[0] == dat1:
                 self.distrib.unload(atoms)
         else:
-            self.covlog = f'{float(self.get_covloss().max())}'
+            covloss_max = float(self.get_covloss().max())
+            self.covlog = f'{covloss_max}'
+            if covloss_max > self.ediff:
+                tmp = self.atoms.as_ase()
+                tmp.calc = None
+                ase.io.Trajectory('active_uncertain.traj', 'a').write(tmp)
         energy = self.results['energy']
 
         # test

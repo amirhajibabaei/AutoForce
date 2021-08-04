@@ -80,6 +80,10 @@ the result ML potential for fast simulations
 without further training.
 For this, all you need to do is to not specify any 
 `calculator` in `ARGS` or set `calculator=None`.
+In this case, the configurations for which
+the uncertainty is large will be saved in the
+`active_uncertain.traj` file which are excellent
+candidates for offline training.
 
 The other paramteres (`ediff`, `fdiff`) which control 
 the sampling and accuracy should be gradually tuned to 
