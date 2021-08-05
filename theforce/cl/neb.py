@@ -5,7 +5,7 @@ from ase import optimize
 from ase.io import read, Trajectory
 
 
-def nudged_elastic_band(images, fmax=0.01, algo='BFGS', trajectory='neb-path.traj'):
+def nudged_elastic_band(images, fmax=0.01, algo='BFGS', trajectory='path-neb.traj', final='neb.traj'):
 
     calc = cline.gen_active_calc()
     load1 = calc.size[0]
@@ -31,7 +31,7 @@ def nudged_elastic_band(images, fmax=0.01, algo='BFGS', trajectory='neb-path.tra
 
     # output
     if master:
-        out = Trajectory('neb.traj', 'w')
+        out = Trajectory(final, 'w')
     for image in images:
         image.get_potential_energy()
         if master:
@@ -44,8 +44,11 @@ if __name__ == '__main__':
         description='Machine Learning accelerated NEB')
     parser.add_argument('-i', '--images', default='images.traj', type=str,
                         help='initial images for NEB (ASE traj file)')
+    parser.add_argument('-o', '--output', default='neb.traj', type=str,
+                        help='traj file for the optimized band')
     args = parser.parse_args()
     images = read(args.images, ':')
     kwargs = cline.get_default_args(nudged_elastic_band)
+    kwargs['final'] = args.output
     cline.update_args(kwargs)
     nudged_elastic_band(images, **kwargs)

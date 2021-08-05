@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from ase.neb import NEBTools
 from ase.io import read
 
-images = read('neb.traj', ':')
+images = read('opt-band.traj', ':')
 nebtools = NEBTools(images)
 
 # Get the calculated barrier and the energy change of the reaction.
