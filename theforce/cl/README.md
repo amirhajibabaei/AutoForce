@@ -226,6 +226,20 @@ fully relaxed according to ML, residual Ab initio
 forces will probably be (slightly) larger than `fmax`
 (due to ML errors).
 
+#### Parameters for NEB (file=`ARGS`)
+Similar to structure relaxation: `fmax, algo, trajectory`.
+
+#### On setting constraints
+The best option for setting constraints is to use ASE's
+python inteface for `Atoms`
+(see [this](https://wiki.fysik.dtu.dk/ase/ase/constraints.html#module-ase.constraints)).
+By saving `Atoms` in `ase.io.Trajectory` files,
+the constraints will be preserved when reading.
+Thus the traj files can be used for passing initial
+coodinates (e.g. `-i ini.traj`) along with constraints
+for MD, relaxation or NEB.
+
+
 #### Run
 Lets assume that 20 cores are available.
 We split these cores to 12 for the underlying ab initio 
