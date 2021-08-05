@@ -26,6 +26,9 @@ def _calc(name):
     elif caps == 'GAUSSIAN':
         from theforce.calculator import gaussian
         calc_script = gaussian.__file__
+    elif caps == 'EMT':
+        from theforce.calculator import emt
+        calc_script = emt.__file__
     else:
         raise RuntimeError(f'calculator {caps} is not implemented')
     return calc_script
