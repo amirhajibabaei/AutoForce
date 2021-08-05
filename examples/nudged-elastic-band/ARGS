@@ -1,0 +1,6 @@
+calculator = 'EMT'
+
+# customize
+ediff = 0.01
+fdiff = 0.01
+noise_f = 0.01
