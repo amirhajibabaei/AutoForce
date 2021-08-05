@@ -354,7 +354,8 @@ class ActiveCalculator(Calculator):
             if covloss_max > self.ediff:
                 tmp = self.atoms.as_ase()
                 tmp.calc = None
-                ase.io.Trajectory('active_uncertain.traj', 'a').write(tmp)
+                if self.rank == 0:
+                    ase.io.Trajectory('active_uncertain.traj', 'a').write(tmp)
         energy = self.results['energy']
 
         # test
