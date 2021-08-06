@@ -4,9 +4,9 @@ from ase.io import read, Trajectory
 import warnings
 
 
-def test(*args, r='::', o='test.traj'):
-    if 'calculator' in cline.ARGS and cline.ARGS['calculator'] is not None:
-        raise RuntimeError('set calculator = None in ARGS!')
+def offline(*args, r=None, o='offline.traj'):
+    if 'calculator' not in cline.ARGS or cline.ARGS['calculator'] is None:
+        raise RuntimeError('set a calculator in ARGS!')
     traj = Trajectory(o, 'w')
     calc = cline.gen_active_calc()
     for arg in args:
@@ -21,12 +21,14 @@ def test(*args, r='::', o='test.traj'):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(
-        description='Test the ML potential on input data')
+        description='Train the ML potential on input configurations. '
+                    'Ab initio calculations will be performed as needed. '
+    )
     parser.add_argument('-i', '--input', nargs='*', type=str,
                         help='.traj etc. files')
     parser.add_argument('-r', '--read', type=str, default='::',
                         help='index or [start]:[stop]:[step] e.g. 0 or -1 or ::10')
-    parser.add_argument('-o', '--output', type=str, default='test.traj',
+    parser.add_argument('-o', '--output', type=str, default='offline.traj',
                         help='.traj')
     args = parser.parse_args()
-    test(*args.input, r=args.read, o=args.output)
+    offline(*args.input, r=args.read, o=args.output)
