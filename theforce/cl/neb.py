@@ -6,8 +6,17 @@ from ase import optimize
 from ase.io import read, Trajectory
 
 
-def nudged_elastic_band(images, fmax=0.01, algo='BFGS', algo_if='BFGS',
+def nudged_elastic_band(images, fmax=0.01, climb=False, algo='BFGS', algo_if='BFGS',
                         trajectory='neb-path.traj', output='neb-out.traj'):
+    """
+    images:       list of atoms objects
+    fmax:         maximum forces
+    climb:        for climbing image NEB
+    algo:         optim algo (from ase.optimize) for NEB
+    algo_if:      optim algo (from ase.optimize) for first/last images
+    trajectory:   traj file name for neb path
+    output:       traj file name for neb optimized band
+    """
 
     calc = cline.gen_active_calc()
     load1 = calc.size[0]
@@ -28,7 +37,7 @@ def nudged_elastic_band(images, fmax=0.01, algo='BFGS', algo_if='BFGS',
     # define and interpolate
     def converge(resuming):
         relax_if(confirm=not resuming)
-        neb = NEB(images, allow_shared_calculator=True)
+        neb = NEB(images, climb=climb, allow_shared_calculator=True)
         Min = getattr(optimize, algo)
         dyn = Min(neb, trajectory=trajectory, master=master)
         size1 = calc.size[0]
