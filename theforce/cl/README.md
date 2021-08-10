@@ -237,7 +237,7 @@ output:       traj file name for the optimized band (default='neb-out.traj')
 ```
 Relaxation of the first and last images is integrated with NEB.
 The in between images can be explicitly provided or generated automatically
-(see an [example]())
+(see an [example](https://github.com/amirhajibabaei/AutoForce/tree/master/examples/nudged-elastic-band))
 
 #### On setting constraints
 The best option for setting constraints is to use ASE's
