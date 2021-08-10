@@ -1,6 +1,9 @@
 calculator = 'EMT'
 
-# customize
-ediff = 0.01
-fdiff = 0.01
-noise_f = 0.01
+# ML specific (customize)
+ediff = 0.2*kcal_mol
+fdiff = 0.2*kcal_mol
+
+# NEB specific
+fmax = 0.01         # maximum residual force
+climb = True        # climbing image algorithm

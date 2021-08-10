@@ -227,7 +227,17 @@ forces will probably be (slightly) larger than `fmax`
 (due to ML errors).
 
 #### Parameters for NEB (file=`ARGS`)
-Similar to structure relaxation: `fmax, algo, trajectory`.
+```
+fmax:         maximum forces (default=0.01)
+climb:        for climbing image algorithm (default=False)
+algo:         optim algo for NEB (default='BFGS')
+algo_if:      optim algo for optimization of the first and last images (default='BFGS')
+trajectory:   traj file name for NEB path (default='neb-path.traj')
+output:       traj file name for the optimized band (default='neb-out.traj')
+```
+Relaxation of the first and last images is integrated with NEB.
+The in between images can be explicitly provided or generated automatically
+(see an [example]())
 
 #### On setting constraints
 The best option for setting constraints is to use ASE's
