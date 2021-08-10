@@ -10,7 +10,7 @@ import os
 
 
 def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='relax.traj', rattle=0.02,
-          clear_hist=True, confirm=True):
+          clear_hist=True, confirm=True, calc=None):
     """
     atoms:        ASE atoms
     fmax:         maximum forces
@@ -23,7 +23,8 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='rela
     confirm:      if True, do ab initio for the last step
     """
 
-    calc = cline.gen_active_calc()
+    if calc is None:
+        calc = cline.gen_active_calc()
     load1 = calc.size[0]
     master = calc.rank == 0
     atoms.rattle(rattle, rng=np.random)
