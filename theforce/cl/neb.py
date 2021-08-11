@@ -6,13 +6,14 @@ from ase import optimize
 from ase.io import read, Trajectory
 
 
-def nudged_elastic_band(images, fmax=0.01, climb=False, algo='BFGS', algo_if='BFGS',
+def nudged_elastic_band(images, fmax=0.01, climb=False, algo='BFGS', rel_if=1, algo_if='BFGS',
                         trajectory='neb-path.traj', output='neb-out.traj'):
     """
     images:       list of atoms objects
     fmax:         maximum forces
     climb:        for climbing image NEB
     algo:         optim algo (from ase.optimize) for NEB
+    rel_if:       relax initial and final images: 0 (no), 1 (once), 2 (every)
     algo_if:      optim algo (from ase.optimize) for first/last images
     trajectory:   traj file name for neb path
     output:       traj file name for neb optimized band
@@ -24,6 +25,7 @@ def nudged_elastic_band(images, fmax=0.01, climb=False, algo='BFGS', algo_if='BF
 
     for image in images:
         image.calc = calc
+        image.get_potential_energy()
 
     def relax_if(confirm=False):
         suff = {0: 'first', -1: 'last'}
@@ -31,12 +33,21 @@ def nudged_elastic_band(images, fmax=0.01, climb=False, algo='BFGS', algo_if='BF
             label = suff[i]
             if master:
                 print(f"Relaxing the {label} image  ... ")
-            relax(images[i], fmax=fmax, calc=calc, confirm=confirm,
+            relax(images[i], fmax=fmax, calc=calc, rattle=0., confirm=confirm,
                   algo=algo_if, trajectory=f'relax_{label}.traj')
 
+    def relax_is_allowed():
+        if rel_if == 0:
+            return False
+        elif rel_if == 1:
+            return not resuming
+        else:
+            return True
+
     # define and interpolate
-    def converge(resuming):
-        relax_if(confirm=not resuming)
+    def converge():
+        if relax_is_allowed():
+            relax_if(confirm=not resuming)
         neb = NEB(images, climb=climb, allow_shared_calculator=True)
         Min = getattr(optimize, algo)
         dyn = Min(neb, trajectory=trajectory, master=master)
@@ -51,7 +62,7 @@ def nudged_elastic_band(images, fmax=0.01, climb=False, algo='BFGS', algo_if='BF
         return True
 
     resuming = False
-    while not converge(resuming):
+    while not converge():
         resuming = True
 
     load2 = calc.size[0]
