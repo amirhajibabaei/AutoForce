@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name="theforce",
-    version="v2021.05",
+    version="v2021.09",
     author="Amir Hajibabaei",
     author_email="a.hajibabaei.86@gmail.com",
     description="machine learning of the ab initio potential energy surface",
