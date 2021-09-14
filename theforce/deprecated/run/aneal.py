@@ -6,7 +6,7 @@ from theforce.util.aseutil import get_repeat_reciprocal
 from theforce.deprecated.util.pmgen import standard_cell
 from theforce.util.util import date
 from ase.units import Pascal, GPa
-import torch.distributed as dist
+import theforce.distributed as dist
 from ase.io import read
 import numpy as np
 from string import ascii_lowercase as letters

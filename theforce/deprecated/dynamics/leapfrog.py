@@ -129,8 +129,8 @@ class Leapfrog:
 
     @property
     def rank(self):
-        if torch.distributed.is_initialized():
-            return torch.distributed.get_rank()
+        if distrib.is_initialized():
+            return distrib.get_rank()
         else:
             return 0
 

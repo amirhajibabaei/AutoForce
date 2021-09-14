@@ -1,6 +1,6 @@
 # +
 from theforce.util.util import iterable
-import torch.distributed as dist
+import theforce.distributed as dist
 import torch
 import numpy as np
 import functools

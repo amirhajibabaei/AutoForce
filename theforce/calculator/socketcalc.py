@@ -2,6 +2,7 @@
 from ase.calculators.calculator import Calculator, all_changes
 from ase.io import read
 from theforce.util.util import date
+import theforce.distributed as distrib
 import torch
 import socket
 import os
@@ -32,12 +33,12 @@ class SocketCalculator(Calculator):
 
     @property
     def is_distributed(self):
-        return torch.distributed.is_initialized()
+        return distrib.is_initialized()
 
     @property
     def rank(self):
         if self.is_distributed:
-            return torch.distributed.get_rank()
+            return distrib.get_rank()
         else:
             return 0
 
@@ -63,8 +64,8 @@ class SocketCalculator(Calculator):
             s.close()
         if self.is_distributed:
             ierr = torch.tensor(ierr)
-            torch.distributed.broadcast(ierr, 0)
-            torch.distributed.barrier()
+            distrib.broadcast(ierr, 0)
+            distrib.barrier()
         assert ierr == 0
         self.log('e')
         # read
@@ -74,7 +75,7 @@ class SocketCalculator(Calculator):
         self.results['stress'] = atms.get_stress()
         # delete files
         if self.is_distributed:
-            torch.distributed.barrier()
+            distrib.barrier()
         if self.rank == 0:
             os.system('rm -f socket_send.xyz socket_recv.xyz')
 

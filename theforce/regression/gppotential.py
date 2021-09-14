@@ -9,6 +9,7 @@ from theforce.similarity.similarity import SimilarityKernel
 from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.util.parallel import if_master
 from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
+import theforce.distributed as distrib
 from collections import Counter
 from scipy.optimize import minimize
 from math import pi
@@ -194,7 +195,7 @@ class AutoMean:
 
     def sync_params(self):
         for k in sorted(self.weights.keys()):
-            torch.distributed.broadcast(self.weights[k], 0)
+            distrib.broadcast(self.weights[k], 0)
 
     def set_data(self, data):
         # self._weights = mean_energy_per_atom_type(data) # unstable?
@@ -362,7 +363,7 @@ class GaussianProcessPotential(Module):
             if hasattr(kern, 'cached'):
                 del kern.cached
 
-    def attach_process_group(self, group=torch.distributed.group.WORLD):
+    def attach_process_group(self, group=distrib.group.WORLD):
         for kern in self.kern.kernels:
             kern.process_group = group
 
@@ -452,8 +453,8 @@ class PosteriorPotential(Module):
             self.Ke = self.gp.kern(data, X, cov='energy_energy')
             self.Kf = self.gp.kern(data, X, cov='forces_energy')
             if data.is_distributed:
-                torch.distributed.all_reduce(self.Ke)
-                torch.distributed.all_reduce(self.Kf)
+                distrib.all_reduce(self.Ke)
+                distrib.all_reduce(self.Kf)
             self.M = self.gp.kern(X, X, cov='energy_energy')
             self.X = X
             self.make_munu()
@@ -502,9 +503,9 @@ class PosteriorPotential(Module):
         if not isinstance(self.mean, AutoMean):
             self.mean = AutoMean()  # xxxMean -> AutoMean
         self.mean.set_data(self.data)
-        parallel = torch.distributed.is_initialized()
+        parallel = distrib.is_initialized()
         if parallel:
-            rank = torch.distributed.get_rank()
+            rank = distrib.get_rank()
         else:
             rank = 0
         if rank == 0:
@@ -536,9 +537,9 @@ class PosteriorPotential(Module):
             self.mu = torch.zeros_like(self.M[0])
             self.choli = torch.zeros_like(self.M)
         if parallel:
-            torch.distributed.broadcast(self.ridge, 0)
-            torch.distributed.broadcast(self.mu, 0)
-            torch.distributed.broadcast(self.choli, 0)
+            distrib.broadcast(self.ridge, 0)
+            distrib.broadcast(self.mu, 0)
+            distrib.broadcast(self.choli, 0)
             self.mean.sync_params()
         if not noisegrad and (self.mu.requires_grad or self.choli.requires_grad):
             warnings.warn('mu or choli requires grad!')
@@ -662,8 +663,8 @@ class PosteriorPotential(Module):
         Ke = self.gp.kern(data, self.X, cov='energy_energy')
         Kf = self.gp.kern(data, self.X, cov='forces_energy')
         if (data[0].is_distributed if type(data) == list else data.is_distributed):
-            torch.distributed.all_reduce(Ke)
-            torch.distributed.all_reduce(Kf)
+            distrib.all_reduce(Ke)
+            distrib.all_reduce(Kf)
         self.Ke = torch.cat([self.Ke, Ke], dim=0)
         self.Kf = torch.cat([self.Kf, Kf], dim=0)
         self.data += data
@@ -676,8 +677,8 @@ class PosteriorPotential(Module):
         Ke = self.gp.kern(self.data, X, cov='energy_energy')
         Kf = self.gp.kern(self.data, X, cov='forces_energy')
         if self.data.is_distributed:
-            torch.distributed.all_reduce(Ke)
-            torch.distributed.all_reduce(Kf)
+            distrib.all_reduce(Ke)
+            distrib.all_reduce(Kf)
         if self.Ke.numel() > 0:
             self.Ke = torch.cat([self.Ke, Ke], dim=1)
             self.Kf = torch.cat([self.Kf, Kf], dim=1)
@@ -833,11 +834,11 @@ class PosteriorPotential(Module):
         if e2.grad_fn and use_forces:
             f2 = -torch.autograd.grad(e2, xyz, retain_graph=True)[0]
         if is_distributed:
-            torch.distributed.all_reduce(e1)
-            torch.distributed.all_reduce(e2)
+            distrib.all_reduce(e1)
+            distrib.all_reduce(e2)
             if use_forces:
-                torch.distributed.all_reduce(f1)
-                torch.distributed.all_reduce(f2)
+                distrib.all_reduce(f1)
+                distrib.all_reduce(f2)
         #
         de = abs(e1-e2)
         df = 0.
@@ -925,8 +926,8 @@ class PosteriorPotential(Module):
         elif type(_obj) == TorchAtoms:
             obj = _obj
         else:
-            if group is None and torch.distributed.is_initialized():
-                group = torch.distributed.group.WORLD
+            if group is None and distrib.is_initialized():
+                group = distrib.group.WORLD
             obj = TorchAtoms(ase_atoms=_obj, cutoff=self.cutoff,
                              descriptors=self.descriptors, group=group)
         return obj
@@ -945,7 +946,7 @@ class PosteriorPotential(Module):
             if atoms.is_distributed:
                 leaks = torch.zeros(atoms.natoms)
                 leaks[atoms.indices] = self.leakages(atoms.loc)
-                torch.distributed.all_reduce(leaks)
+                distrib.all_reduce(leaks)
             else:
                 leaks = None
             locs = atoms.gathered()
@@ -1039,7 +1040,7 @@ class PosteriorPotential(Module):
                           dim=1)
         out = (A @ self.mu).view(*shape[quant])
         if all_reduce:
-            torch.distributed.all_reduce(out)
+            distrib.all_reduce(out)
         # mean is not distributed!
         if quant == 'energy':
             mean = self.mean(test, forces=False)
