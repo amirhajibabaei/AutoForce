@@ -1,5 +1,8 @@
 # +
-import torch.distributed as _dist
+if True:
+    import torch.distributed as _dist
+else:
+    import theforce._mpi4py as _dist
 
 
 group = _dist.group
@@ -10,3 +13,4 @@ get_world_size = _dist.get_world_size
 get_rank = _dist.get_rank
 barrier = _dist.barrier
 all_reduce = _dist.all_reduce
+ReduceOp = _dist.ReduceOp

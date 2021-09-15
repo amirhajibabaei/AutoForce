@@ -543,7 +543,7 @@ class TorchAtoms(Atoms):
     def gathered(self, folder='atoms'):
         if self.is_distributed and len(self.loc) < self.natoms:
             self.pickle_locals(folder=folder)
-            dist.barrier(self.process_group)
+            dist.barrier()  # barrier(self.process_group) changed for _mpi4py
             loc = self.pickles()
         else:
             loc = self.loc
