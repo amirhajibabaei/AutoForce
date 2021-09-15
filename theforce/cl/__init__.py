@@ -5,7 +5,7 @@ from theforce.calculator.socketcalc import SocketCalculator
 from theforce.calculator.active import ActiveCalculator, kcal_mol, inf, SeSoapKernel, DefaultRadii, ActiveMeta
 from theforce.calculator.meta import Meta, Posvar, Qlvar, Catvar
 import torch
-import torch.distributed as dist
+import theforce.distributed as dist
 import os
 import time
 import atexit

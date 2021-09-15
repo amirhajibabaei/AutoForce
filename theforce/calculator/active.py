@@ -6,6 +6,7 @@ from theforce.descriptor.sesoap import DefaultRadii
 from theforce.util.tensors import padded, nan_to_num
 from theforce.util.util import date, timestamp
 from theforce.io.sgprio import SgprIO
+import theforce.distributed as distrib
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.constraints import Filter
@@ -401,7 +402,7 @@ class ActiveCalculator(Calculator):
     def reduce(self, local_energies, op='=', retain_graph=False, reduced=False, is_meta=False):
         energy = local_energies.sum()
         if self.atoms.is_distributed and not reduced:
-            torch.distributed.all_reduce(energy)
+            distrib.all_reduce(energy)
         forces, stress = self.grads(energy, retain_graph=retain_graph)
         if is_meta:
             forces = nan_to_num(forces, 0.)
@@ -437,8 +438,8 @@ class ActiveCalculator(Calculator):
             forces = torch.zeros_like(self.atoms.xyz)
             cellgrad = torch.zeros_like(self.atoms.lll)
         if self.atoms.is_distributed:
-            torch.distributed.all_reduce(forces)
-            torch.distributed.all_reduce(cellgrad)
+            distrib.all_reduce(forces)
+            distrib.all_reduce(cellgrad)
         # stress
         stress1 = -(forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
         stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
@@ -577,7 +578,7 @@ class ActiveCalculator(Calculator):
             size[0] = self.atoms.natoms
             _x = torch.zeros(*size)
             _x[self.atoms.indices] = x
-            torch.distributed.all_reduce(_x)
+            distrib.all_reduce(_x)
             return _x
         else:
             return x
@@ -834,15 +835,15 @@ class ActiveCalculator(Calculator):
 
     @property
     def rank(self):
-        if torch.distributed.is_initialized():
-            return torch.distributed.get_rank()
+        if distrib.is_initialized():
+            return distrib.get_rank()
         else:
             return 0
 
     @property
     def world_size(self):
-        if torch.distributed.is_initialized():
-            return torch.distributed.get_world_size()
+        if distrib.is_initialized():
+            return distrib.get_world_size()
         else:
             return 1
 

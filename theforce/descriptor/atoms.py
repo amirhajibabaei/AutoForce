@@ -2,7 +2,7 @@
 import numpy as np
 import torch
 from torch import ones_like, as_tensor, from_numpy, cat
-import torch.distributed as dist
+import theforce.distributed as dist
 from ase.atoms import Atoms
 from ase.neighborlist import NeighborList
 from ase.calculators.singlepoint import SinglePointCalculator
@@ -10,6 +10,7 @@ import copy
 import warnings
 from theforce.util.util import iterable, mkdir_p
 from theforce.util.parallel import balance_work
+import theforce.distributed as distrib
 from collections import Counter
 import random
 import itertools
@@ -303,14 +304,14 @@ class TorchAtoms(Atoms):
 
     def index_distribute(self, randomize=True):
         if self.is_distributed:
-            rank = torch.distributed.get_rank(group=self.process_group)
+            rank = distrib.get_rank(group=self.process_group)
             if self.ranks:
                 self.indices = []
                 for i, j in enumerate(self.ranks):
                     if j == rank:
                         self.indices.append(i)
             else:
-                workers = torch.distributed.get_world_size(
+                workers = distrib.get_world_size(
                     group=self.process_group)
                 indices = balance_work(self.natoms, workers)
                 if randomize:
@@ -542,7 +543,7 @@ class TorchAtoms(Atoms):
     def gathered(self, folder='atoms'):
         if self.is_distributed and len(self.loc) < self.natoms:
             self.pickle_locals(folder=folder)
-            dist.barrier(self.process_group)
+            dist.barrier()  # barrier(self.process_group) changed for _mpi4py
             loc = self.pickles()
         else:
             loc = self.loc

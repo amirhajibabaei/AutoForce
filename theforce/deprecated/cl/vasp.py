@@ -1,5 +1,5 @@
 # +
-import torch.distributed as dist
+import theforce.distributed as dist
 from theforce.util.parallel import mpi_init
 from theforce.cl.mlmd import mlmd, read_md
 from theforce.cl import ARGS

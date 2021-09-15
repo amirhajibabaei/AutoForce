@@ -1,6 +1,6 @@
 from theforce.regression.gppotential import PosteriorPotentialFromFolder
 from theforce.calculator.posterior import AutoForceCalculator
-import torch.distributed as dist
+import theforce.distributed as dist
 
 
 def extremum(e):

@@ -68,7 +68,7 @@ def clear_all():
 
 def numpy_same_random_seed():
     seed = torch.tensor(np.random.randint(2**32))
-    torch.distributed.broadcast(seed, 0)
+    distrib.broadcast(seed, 0)
     np.random.seed(seed.numpy())
 
 
@@ -156,5 +156,5 @@ def fly(temperature, updates, atoms=None, cutoff=None, au=None, calc=None, kern=
     if calc is None:
         clean_vasp()
     if group is not None:
-        torch.distributed.barrier()
+        distrib.barrier()
     return dyn.model
