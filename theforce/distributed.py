@@ -1,5 +1,5 @@
 # +
-if True:
+if False:
     import torch.distributed as _dist
 else:
     import theforce._mpi4py as _dist
