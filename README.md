@@ -62,7 +62,7 @@ For detailed information see
 For usage examples, see the [examples/](https://github.com/amirhajibabaei/AutoForce/tree/master/examples) folder.
 
 ### Coupling with LAMMPS
-See the [examples/](https://github.com/amirhajibabaei/AutoForce/tree/master/examples/LAMMPS) folder.
+See the [examples/LAMMPS](https://github.com/amirhajibabaei/AutoForce/tree/lmp/examples/LAMMPS) folder.
 
 ### Practical notes
 
