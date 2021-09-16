@@ -1,0 +1,25 @@
+#Example with Airebo potential
+
+units              real
+dimension          3
+boundary           p p p
+atom_style         full
+read_data          data.Ethane
+
+#AutoForce         atomic_numbers = {1:6, 2:1}
+fix                AutoForce all external pf/callback 1 1
+fix_modify         AutoForce energy yes virial yes
+
+neighbor           2.0 bin
+neigh_modify       delay 0 every 1 check yes
+
+velocity           all create 50.0 761341
+
+dump d1 all custom 10 dump.Ethane id mol element x y z 
+dump_modify d1 element C H
+ 
+fix                 1 all nve
+timestep            1.0   
+
+thermo              100
+run                 1000
