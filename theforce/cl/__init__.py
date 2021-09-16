@@ -29,6 +29,9 @@ def _calc(name):
     elif caps == 'EMT':
         from theforce.calculator import emt
         calc_script = emt.__file__
+    elif caps == 'ZERO':
+        from theforce.calculator import zero
+        calc_script = zero.__file__
     else:
         raise RuntimeError(f'calculator {caps} is not implemented')
     return calc_script

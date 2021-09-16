@@ -13,7 +13,7 @@ In principle, all the calculators supported by the atomic simulation environment
 ### Dependencies
 * <ins>required</ins>: `numpy`, `scipy`, `pytorch`, `ase`, `mpi`
 * <ins>conditional</ins>: `mpi4py` (see below)
-* <ins>optional</ins>: `pymatgen`, `spglib`, `mendeleev`, `matplotlib`, `nglview`, `psutil`
+* <ins>optional</ins>: `pymatgen`, `spglib`, `mendeleev`, `matplotlib`, `nglview`, `psutil`, `LAMMPS`
 
 `mpi4py` is only required if `pytorch` is not directly linked
 with `mpi` (i.e. `torch.distributed.is_mpi_available() == False`).
@@ -60,6 +60,9 @@ For detailed information see
 
 ### Examples
 For usage examples, see the [examples/](https://github.com/amirhajibabaei/AutoForce/tree/master/examples) folder.
+
+### Coupling with LAMMPS
+See the [examples/LAMMPS](https://github.com/amirhajibabaei/AutoForce/tree/lmp/examples/LAMMPS) folder.
 
 ### Practical notes
 

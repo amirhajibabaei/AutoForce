@@ -1,0 +1,23 @@
+
+units               real
+dimension           3
+boundary            p p p
+atom_style          full
+read_data           data.Ethane
+
+#AutoForce          atomic_numbers = {1:6, 2:1}
+fix                 AutoForce all external pf/callback 1 1
+fix_modify          AutoForce energy yes virial yes
+
+neighbor            2.0 bin
+neigh_modify        delay 0 every 1 check yes
+
+velocity            all create 50.0 761341
+timestep            0.25
+fix                 1 all nvt temp 300.0 300.0 $(100.0*dt)
+
+dump d1             all custom 4 dump.Ethane id mol element x y z
+dump_modify         d1 element C H
+thermo              40
+
+run                 4000
