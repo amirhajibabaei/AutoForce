@@ -47,9 +47,10 @@ def callback(caller, ntimestep, nlocal, tag, pos, fext):
     # build atoms
     cell, pbc = get_cell()
     cell = convert(cell, 'distance', units, 'ASE')
-    positions = convert(pos, 'distance', units, 'ASE')
+    xyz = np.array(lmp.gather_atoms('x', 1, 3)).reshape(-1, 3)
+    positions = convert(xyz, 'distance', units, 'ASE')
     if atoms is None:
-        numbers = lmp.numpy.extract_atom('type')
+        numbers = np.array(lmp.gather_atoms('type', 0, 1))
         numbers = list(map(map_numbers.get, numbers))
         atoms = Atoms(numbers=numbers, positions=positions, pbc=pbc, cell=cell)
         atoms.calc = calc
@@ -58,7 +59,7 @@ def callback(caller, ntimestep, nlocal, tag, pos, fext):
         atoms.positions = positions
 
     # calculate energy, force, and virial
-    f = atoms.get_forces()
+    f = atoms.get_forces()[tag-1]
     e = atoms.get_potential_energy()
     fext[:] = convert(f, 'force', 'ASE', units)
     e = convert(e, 'energy', 'ASE', units)
@@ -92,7 +93,7 @@ if __name__ == '__main__':
                         help='LAMMPS input script')
     args = parser.parse_args()
 
-    # main:
+    # setup
     import theforce.cl as cline
     calc = cline.gen_active_calc()
     atoms = None
@@ -100,4 +101,10 @@ if __name__ == '__main__':
     lmp = lammps()
     lmp.commands_list(commands)
     lmp.set_fix_external_callback(fixID, callback)
+
+    # hide mpi4py from ase! very ugly (see theforce._mpi4py)! TODO: fix this!
+    import sys
+    del sys.modules['mpi4py']
+
+    # run
     lmp.command(run)

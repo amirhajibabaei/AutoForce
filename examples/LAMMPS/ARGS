@@ -1,4 +1,4 @@
-calculator = 'ZERO'
+calculator = 'VASP'
 
 # ML
 ediff = 1*kcal_mol      # LCE sampling threshold
