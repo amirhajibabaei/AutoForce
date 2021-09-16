@@ -61,11 +61,11 @@ def callback(caller, ntimestep, nlocal, tag, pos, fext):
     f = atoms.get_forces()
     e = atoms.get_potential_energy()
     fext[:] = convert(f, 'force', 'ASE', units)
-    e = convert(energy, 'energy', 'ASE', units)
+    e = convert(e, 'energy', 'ASE', units)
     lmp.fix_external_set_energy_global(fixID, e)
     if 'stress' in atoms.calc.implemented_properties:
         v = atoms.get_stress()
-        v = convert(vir, 'pressure', 'ASE', units)
+        v = convert(v, 'pressure', 'ASE', units)
         vol = atoms.get_volume()
         v = -v / (nktv2p[units]/vol)
         v[3:] = v[3:][::-1]
