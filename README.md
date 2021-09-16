@@ -17,12 +17,12 @@ In principle, all the calculators supported by the atomic simulation environment
 
 `mpi4py` is only required if `pytorch` is not directly linked
 with `mpi` (i.e. `torch.distributed.is_mpi_available() == False`).
-Note that coupling `pytorch` with `mpi` needs compilation from the source.
+Note that for coupling `pytorch` with `mpi` it should be compiled from the source.
 This package is regularly synced with the latest
-versions of ASE and pytorch.
+versions of `ase` and `pytorch`.
 Additional setting maybe needed for linking
 the ab initio calculators (VASP, GAUSSIAN, etc.)
-with ASE ([see this](https://wiki.fysik.dtu.dk/ase/ase/calculators/calculators.html#module-ase.calculators)).
+with `ase` ([see this](https://wiki.fysik.dtu.dk/ase/ase/calculators/calculators.html#module-ase.calculators)).
 
 ### Installation
 Clone the source code by
