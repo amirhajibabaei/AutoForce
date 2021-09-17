@@ -37,7 +37,7 @@ Then:
 mpirun -np 20 python -m theforce.cl.lmp -i in.lammps
 ```
 This time all 20 CPUs are used for LAMMPS+AutoForce
-since no on-the-fly training is performed.
-This is also possible by setting `calculator = None`
-
+since no on-the-fly training with VASP is performed.
+This is also possible just by setting `calculator = None`
+in `ARGS`.
 
