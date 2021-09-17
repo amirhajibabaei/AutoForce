@@ -57,12 +57,12 @@ atoms.set_calculator(calc)
 For detailed information see 
 [theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/calculator).
 
+### Optional coupling with LAMMPS
+For running LAMMPS dynamics, it's python package should be installed.
+See the [examples/LAMMPS](https://github.com/amirhajibabaei/AutoForce/tree/master/examples/LAMMPS) folder.
 
 ### Examples
 For usage examples, see the [examples/](https://github.com/amirhajibabaei/AutoForce/tree/master/examples) folder.
-
-### Coupling with LAMMPS
-See the [examples/LAMMPS](https://github.com/amirhajibabaei/AutoForce/tree/master/examples/LAMMPS) folder.
 
 ### Practical notes
 
