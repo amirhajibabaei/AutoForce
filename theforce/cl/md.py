@@ -12,7 +12,7 @@ import os
 
 def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None, iso=False,
        trajectory='md.traj', loginterval=1, append=False, rattle=0.0, tdamp=25, pdamp=100, friction=1e-3,
-       ml_filter=0.8, eps_pos=0.1, eps_cell=0.05):
+       ml_filter=0.8, eps_pos=0.05, eps_cell=0.05):
     """
     atoms:        ASE atoms
     dynamics:     'NPT'
@@ -103,9 +103,10 @@ def manual_steps(atoms, eps, eps2, npt=False):
     calc.log('manual steps:')
     calc.log(f'rattle: {eps}')
     positions = atoms.positions.copy()
-    atoms.rattle(eps, rng=np.random)
-    atoms.get_potential_energy()
-    if npt:
+    if eps > 0.:
+        atoms.rattle(eps, rng=np.random)
+        atoms.get_potential_energy()
+    if npt and eps2 > 0.:
         cell = atoms.cell.copy()
         calc.log(f'expand: {(1.+eps2)}*cell')
         atoms.set_cell((1.+eps2)*cell, scale_atoms=True)
