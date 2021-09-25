@@ -12,7 +12,7 @@ import os
 
 def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, stress=0., mask=None, iso=False,
        trajectory='md.traj', loginterval=1, append=False, rattle=0.0, tdamp=25, pdamp=100, friction=1e-3,
-       ml_filter=0.8):
+       ml_filter=0.8, eps_pos=0.1, eps_cell=0.05):
     """
     atoms:        ASE atoms
     dynamics:     'NPT'
@@ -34,10 +34,14 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     """
 
     calc = cline.gen_active_calc()
-    atoms.rattle(rattle, rng=np.random)
     atoms.set_calculator(calc)
-    atoms.get_potential_energy()
+    if calc.active:
+        manual_steps(atoms, eps_pos, eps_cell, npt=bulk_modulus)
+    atoms.rattle(rattle, rng=np.random)
     init_velocities(atoms, tem)
+    atoms.get_potential_energy()
+    if calc.deltas:
+        calc.results.clear()
 
     if dt is None:
         if (atoms.numbers == 1).any():
@@ -91,6 +95,27 @@ def configure_cell(atoms):
     if np.allclose(atoms.cell, 0.):
         atoms.center(vacuum=6.)
     make_cell_upper_triangular(atoms)
+
+
+def manual_steps(atoms, eps, eps2, npt=False):
+    calc = atoms.calc
+    calc._logpref = '#'
+    calc.log('manual steps:')
+    calc.log(f'rattle: {eps}')
+    positions = atoms.positions.copy()
+    atoms.rattle(eps, rng=np.random)
+    atoms.get_potential_energy()
+    if npt:
+        cell = atoms.cell.copy()
+        calc.log(f'expand: {(1.+eps2)}*cell')
+        atoms.set_cell((1.+eps2)*cell, scale_atoms=True)
+        atoms.get_potential_energy()
+        calc.log(f'shrink: {(1.-eps2)}*cell')
+        atoms.set_cell((1.-eps2)*cell, scale_atoms=True)
+        atoms.get_potential_energy()
+        atoms.set_cell(cell, scale_atoms=True)
+    atoms.positions = positions
+    calc._logpref = ''
 
 
 if __name__ == '__main__':

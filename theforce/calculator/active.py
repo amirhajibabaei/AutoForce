@@ -248,6 +248,7 @@ class ActiveCalculator(Calculator):
         self.max_inducing = max_inducing
         self.meta = meta
         self.logfile = logfile
+        self._logpref = ''
         self.stdout = stdout
         self.step = 0
         self.log('active calculator says Hello!', mode='w')
@@ -850,9 +851,11 @@ class ActiveCalculator(Calculator):
     def log(self, mssge, mode='a'):
         if self.logfile and self.rank == 0:
             with open(self.logfile, mode) as f:
-                f.write('{} {} {}\n'.format(date(), self.step, mssge))
+                f.write('{}{} {} {}\n'.format(
+                    self._logpref, date(), self.step, mssge))
                 if self.stdout:
-                    print('{} {} {}'.format(date(), self.step, mssge))
+                    print('{}{} {} {}'.format(
+                        self._logpref, date(), self.step, mssge))
             # cov log
             if mode == 'w' and False:
                 with open('cov.log', mode) as f:
@@ -924,6 +927,10 @@ def parse_logfile(file='active.log', window=(None, None)):
     fit = []
     meta = []
     for line in open(file):
+
+        if line.startswith('#'):
+            continue
+
         s = line.split()
         ts = timestamp(' '.join(s[:2]))
         if start is None:

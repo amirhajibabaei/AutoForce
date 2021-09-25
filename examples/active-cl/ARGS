@@ -1,0 +1,13 @@
+calculator = 'EMT'
+
+ediff = 0.01 #0.5*kcal_mol
+fdiff = 0.01 #0.5*kcal_mol
+
+tem = 1000.
+stress = 0.0
+bulk_modulus = 137.
+
+rattle = 0.1   # critical
+dt = 1
+picos = 1
+test = 50
