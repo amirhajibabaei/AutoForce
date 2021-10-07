@@ -7,6 +7,7 @@
 * Water-dimer relaxation: `GAUSSIAN-relax_water-dimer/`
 * NEB example: `nudged-elastic-band/`
 * LAMMPS dynamics: `LAMMPS/`
+* Learning multiple PES with 1 MD: `multi-learning/`
 
 In all of the above examples `run.sh` can be used for execution.
 `structure-optimization-serial` is a good first example for getting started.
