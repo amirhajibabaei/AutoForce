@@ -56,7 +56,7 @@ def convert_block(typ, blk):
 class SgprIO:
 
     def __init__(self, path):
-        self.path = path
+        self.path = abspath(path)
 
     def write(self, obj):
         if type(obj) == Local:
@@ -91,21 +91,25 @@ class SgprIO:
 
     def read(self, exclude=None):
         if not os.path.isfile(self.path):
+            print(f'{self.path} does not exist! -> []')
             return []
 
         # skip recursive includes of the same file
         if exclude is None:
             exclude = []
-        apath = abspath(self.path)
-        if apath in exclude:
+        elif type(exclude) == str:
+            exclude = [abspath(exclude)]
+        elif type(exclude) == SgprIO:
+            exclude = [exclude.path]
+        if self.path in exclude:
             if rank() == 0:
                 print(f'skipping {self.path} (already included)')
             return []
         else:
             print(f'including {self.path}')
-            exclude.append(apath)
+            exclude.append(self.path)
 
-        with open(apath, 'r') as f:
+        with open(self.path, 'r') as f:
             lines = f.readlines()
         on = False
         data = []
@@ -119,7 +123,8 @@ class SgprIO:
                 elif line.startswith('include:'):
                     incpath = line.split()[-1]
                     if not os.path.isabs(incpath):
-                        incpath = os.path.join(os.path.dirname(apath), incpath)
+                        incpath = os.path.join(
+                            os.path.dirname(self.path), incpath)
                     incdata = SgprIO(incpath).read(exclude=exclude)
                     data.extend(incdata)
             else:
@@ -132,5 +137,5 @@ class SgprIO:
                 else:
                     blk.append(line)
         if rank() == 0:
-            print(f'included {apath} {c}')
+            print(f'included {self.path} {c}')
         return data

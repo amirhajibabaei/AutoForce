@@ -4,7 +4,7 @@ from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData, Distrib
 from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
 from theforce.descriptor.sesoap import DefaultRadii
 from theforce.util.tensors import padded, nan_to_num
-from theforce.util.util import date, timestamp
+from theforce.util.util import date, timestamp, abspath
 from theforce.io.sgprio import SgprIO
 import theforce.distributed as distrib
 from ase.calculators.calculator import Calculator, all_changes
