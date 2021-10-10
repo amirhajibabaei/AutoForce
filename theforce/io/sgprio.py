@@ -1,6 +1,7 @@
 # +
 from theforce.descriptor.atoms import Local
 from theforce.util.parallel import rank
+from theforce.util.util import abspath
 from ase.io import read
 from ase.atoms import Atoms
 import torch
@@ -88,10 +89,23 @@ class SgprIO:
                     f.write(f'{a} {b}\n')
                 f.write('end: params\n')
 
-    def read(self):
+    def read(self, exclude=None):
         if not os.path.isfile(self.path):
             return []
-        with open(self.path, 'r') as f:
+
+        # skip recursive includes of the same file
+        if exclude is None:
+            exclude = []
+        apath = abspath(self.path)
+        if apath in exclude:
+            if rank() == 0:
+                print(f'skipping {self.path} (already included)')
+            return []
+        else:
+            print(f'including {self.path}')
+            exclude.append(apath)
+
+        with open(apath, 'r') as f:
             lines = f.readlines()
         on = False
         data = []
@@ -103,7 +117,11 @@ class SgprIO:
                     typ = line.split()[-1]
                     blk = []
                 elif line.startswith('include:'):
-                    data = data + SgprIO(line.split()[-1]).read()
+                    incpath = line.split()[-1]
+                    if not os.path.isabs(incpath):
+                        incpath = os.path.join(os.path.dirname(apath), incpath)
+                    incdata = SgprIO(incpath).read(exclude=exclude)
+                    data.extend(incdata)
             else:
                 if line.startswith('end:'):
                     assert line.split()[-1] == typ
@@ -114,5 +132,5 @@ class SgprIO:
                 else:
                     blk.append(line)
         if rank() == 0:
-            print(f'included {self.path} {c}')
+            print(f'included {apath} {c}')
         return data
