@@ -61,6 +61,14 @@ def safe_dirname(d, append='x'):
     return dd
 
 
+def abspath(f):
+    """
+    It is canonical because:
+        canonical_abspath('y/../y/x') == canonical_abspath('y/x')
+    """
+    return os.path.abspath(os.path.expanduser(os.path.expandvars(f)))
+
+
 def meminfo():
     import psutil
     return os.getpid(), psutil.Process(os.getpid()).memory_info().rss
