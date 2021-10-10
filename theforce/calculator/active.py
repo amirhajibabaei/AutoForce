@@ -787,7 +787,11 @@ class ActiveCalculator(Calculator):
         self.tune_for_md = tune_for_md
 
     def include_tape(self, tape, ndata=None):
+
         if type(tape) == str:
+            if abspath(tape) == self.tape.path:
+                raise RuntimeError(
+                    'ActiveCalculator can not include it own .sgpr tape!')
             tape = SgprIO(tape)
         _calc = self._calc
         tune_for_md = self.tune_for_md
@@ -808,7 +812,7 @@ class ActiveCalculator(Calculator):
         #
         added_lce = [0, 0]
         cdata = 0
-        for cls, obj in tape.read():
+        for cls, obj in tape.read(exclude=self.tape):
             if cls == 'atoms':
                 if abs(obj.get_forces()).max() > self.include_params['fmax']:
                     if len(self.model.data) > 0:
