@@ -838,6 +838,49 @@ class ActiveCalculator(Calculator):
         self._calc = _calc
         self.tune_for_md = tune_for_md
 
+    def build(self):
+        if self.pckl and os.path.isdir(self.pckl):
+            raise RuntimeError(f'{self.pckl} already exists'
+                               ' and can not be overwritten by build!'
+                               ' remove this file and try again.'
+                               )
+
+        # read
+        data = []
+        lce = []
+        for cls, obj in self.tape.read():
+            if cls == 'atoms':
+                data.append(obj)
+            elif cls == 'local':
+                lce.append(obj)
+
+        # descriptors
+        data = AtomsData(data, convert=True,
+                         ranks=self.distrib,
+                         group=self.process_group)
+        data.update(cutoff=self.model.cutoff,
+                    descriptors=self.model.descriptors,
+                    posgrad=True,
+                    cellgrad=True,
+                    forced=True,
+                    )
+        lce = LocalsData(lce)
+        lce.stage(self.model.descriptors)
+
+        # build
+        self.model.set_data(data, lce)
+        self.sanity_check()
+        self.optimize()
+
+        # log
+        self.log('built from tape {} {} -> size: {} {}'.format(
+            len(data), len(lce), *self.size))
+        self.log('fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
+            *(float(v) for v in self.model._stats)))
+
+        if self.pckl:
+            self.model.to_folder(self.pckl)
+
     @property
     def rank(self):
         if distrib.is_initialized():

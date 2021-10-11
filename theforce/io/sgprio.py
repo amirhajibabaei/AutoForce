@@ -91,7 +91,8 @@ class SgprIO:
 
     def read(self, exclude=None):
         if not os.path.isfile(self.path):
-            print(f'{self.path} does not exist! -> []')
+            if rank() == 0:
+                print(f'{self.path} does not exist! -> []')
             return []
 
         # skip recursive includes of the same file
@@ -106,7 +107,8 @@ class SgprIO:
                 print(f'skipping {self.path} (already included)')
             return []
         else:
-            print(f'including {self.path}')
+            #if rank() == 0:
+            #    print(f'including {self.path}')
             exclude.append(self.path)
 
         with open(self.path, 'r') as f:

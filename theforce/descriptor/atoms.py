@@ -282,10 +282,10 @@ class TorchAtoms(Atoms):
             self.update(forced=True)
         # ------------------------------------------
 
-        try:
+        if energy is not None and forces is not None:
             self.target_energy = as_tensor(energy)
             self.target_forces = as_tensor(forces)
-        except RuntimeError:
+        else:
             if ase_atoms is not None and ase_atoms.get_calculator() is not None:
                 if 'energy' in ase_atoms.calc.results:
                     self.target_energy = as_tensor(
