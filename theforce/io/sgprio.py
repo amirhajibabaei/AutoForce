@@ -1,6 +1,7 @@
 # +
 from theforce.descriptor.atoms import Local
 from theforce.util.parallel import rank
+from theforce.util.util import abspath
 from ase.io import read
 from ase.atoms import Atoms
 import torch
@@ -55,7 +56,7 @@ def convert_block(typ, blk):
 class SgprIO:
 
     def __init__(self, path):
-        self.path = path
+        self.path = abspath(path)
 
     def write(self, obj):
         if type(obj) == Local:
@@ -88,9 +89,28 @@ class SgprIO:
                     f.write(f'{a} {b}\n')
                 f.write('end: params\n')
 
-    def read(self):
+    def read(self, exclude=None):
         if not os.path.isfile(self.path):
+            if rank() == 0:
+                print(f'{self.path} does not exist! -> []')
             return []
+
+        # skip recursive includes of the same file
+        if exclude is None:
+            exclude = []
+        elif type(exclude) == str:
+            exclude = [abspath(exclude)]
+        elif type(exclude) == SgprIO:
+            exclude = [exclude.path]
+        if self.path in exclude:
+            if rank() == 0:
+                print(f'skipping {self.path} (already included)')
+            return []
+        else:
+            #if rank() == 0:
+            #    print(f'including {self.path}')
+            exclude.append(self.path)
+
         with open(self.path, 'r') as f:
             lines = f.readlines()
         on = False
@@ -103,7 +123,12 @@ class SgprIO:
                     typ = line.split()[-1]
                     blk = []
                 elif line.startswith('include:'):
-                    data = data + SgprIO(line.split()[-1]).read()
+                    incpath = line.split()[-1]
+                    if not os.path.isabs(incpath):
+                        incpath = os.path.join(
+                            os.path.dirname(self.path), incpath)
+                    incdata = SgprIO(incpath).read(exclude=exclude)
+                    data.extend(incdata)
             else:
                 if line.startswith('end:'):
                     assert line.split()[-1] == typ

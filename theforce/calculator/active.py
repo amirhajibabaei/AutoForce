@@ -4,7 +4,7 @@ from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData, Distrib
 from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
 from theforce.descriptor.sesoap import DefaultRadii
 from theforce.util.tensors import padded, nan_to_num
-from theforce.util.util import date, timestamp
+from theforce.util.util import date, timestamp, abspath
 from theforce.io.sgprio import SgprIO
 import theforce.distributed as distrib
 from ase.calculators.calculator import Calculator, all_changes
@@ -787,7 +787,11 @@ class ActiveCalculator(Calculator):
         self.tune_for_md = tune_for_md
 
     def include_tape(self, tape, ndata=None):
+
         if type(tape) == str:
+            if abspath(tape) == self.tape.path:
+                raise RuntimeError(
+                    'ActiveCalculator can not include it own .sgpr tape!')
             tape = SgprIO(tape)
         _calc = self._calc
         tune_for_md = self.tune_for_md
@@ -808,7 +812,7 @@ class ActiveCalculator(Calculator):
         #
         added_lce = [0, 0]
         cdata = 0
-        for cls, obj in tape.read():
+        for cls, obj in tape.read(exclude=self.tape):
             if cls == 'atoms':
                 if abs(obj.get_forces()).max() > self.include_params['fmax']:
                     if len(self.model.data) > 0:
@@ -833,6 +837,49 @@ class ActiveCalculator(Calculator):
         #
         self._calc = _calc
         self.tune_for_md = tune_for_md
+
+    def build(self):
+        if self.pckl and os.path.isdir(self.pckl):
+            raise RuntimeError(f'{self.pckl} already exists'
+                               ' and can not be overwritten by build!'
+                               ' remove this file and try again.'
+                               )
+
+        # read
+        data = []
+        lce = []
+        for cls, obj in self.tape.read():
+            if cls == 'atoms':
+                data.append(obj)
+            elif cls == 'local':
+                lce.append(obj)
+
+        # descriptors
+        data = AtomsData(data, convert=True,
+                         ranks=self.distrib,
+                         group=self.process_group)
+        data.update(cutoff=self.model.cutoff,
+                    descriptors=self.model.descriptors,
+                    posgrad=True,
+                    cellgrad=True,
+                    forced=True,
+                    )
+        lce = LocalsData(lce)
+        lce.stage(self.model.descriptors)
+
+        # build
+        self.model.set_data(data, lce)
+        self.sanity_check()
+        self.optimize()
+
+        # log
+        self.log('built from tape {} {} -> size: {} {}'.format(
+            len(data), len(lce), *self.size))
+        self.log('fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
+            *(float(v) for v in self.model._stats)))
+
+        if self.pckl:
+            self.model.to_folder(self.pckl)
 
     @property
     def rank(self):

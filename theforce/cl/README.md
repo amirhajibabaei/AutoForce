@@ -324,4 +324,62 @@ Similarly, for testing
 mpirun -n 20 python -m theforce.cl.test -i dft.traj -o ml.traj # optionally -r ::
 python -m theforce.regression.scores ml.traj dft.traj          # prints a description of errors   
 ```
+
+### On `.sgpr`, `.pckl` files and checkpointing
+
+During on-the-fly training, ML updates are saved in two forms:
+`model.pckl` and `model.sgpr`. 
+One can change the names of these files in `ARGS` via `pckl` 
+and `tape` keywords.
+These two files contain essentially the same information 
+with a difference that `.sgpr` contains only the minimal
+raw data in textual form while `.pckl` contains the 
+calculated descriptors, regression matrices, etc.
+as well in the binary format.
+If one deletes a `.pckl` file since it uses a lot of memory, 
+it can easily be regenerated from `.sgpr` via the `build` 
+command (non-default filenames should be specified in `ARGS`):
+```sh
+[mpirun -np ...] python -m theforce.cl.build
+```
+Thereforce `.sgpr` files are suitable for sharing
+SGPR models and long-term storage.
+
+Additionally, a functionality is built into `.sgpr` files
+which allows them to import other `.sgpr` files using
+the `include` keyword.
+A line like
+```
+include: path/to/another/x.sgpr
+```
+in `.sgpr` has the same effect as copying the content of
+`x.sgpr` here where the path can be either relative or absolute.
+Note that it is allowed for `x.sgpr` to import other `.sgpr` 
+files recursively.
+In recursive imports,
+one does not need to worry about duplicate imports
+since a list of absolute paths for the imported files
+are stored internally and duplicate occurrences of
+a file are eliminated.
+This allows modular storage of training stages which
+can be extreemly usefull for complex projects.
+For instance if there is a list of trained models
+stored in `~/.sgpr/` folder (which can be linked to 
+each other by `include` commands), one can create
+`model.sgpr` in the working directory and input
+```
+include: ~/.sgpr/a.sgpr
+include: ~/.sgpr/b.sgpr
+include: ~/.sgpr/c.sgpr
+...
+```
+Then a `.pckl` can be generated using the `build` command
+which can be used a the initial model for other training steps.
+
+In addition to `build`, such `.sgpr` files can be used
+by the `train` command.
+The difference is that `build` includes all of the data
+which are read from `.sgpr` files while `train` only
+samples from those data where the sampling can be controlled
+using the `ediff` and `fdiff` keywords.
 <!-- #endregion -->
