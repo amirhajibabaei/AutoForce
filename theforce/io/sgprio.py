@@ -124,6 +124,7 @@ class SgprIO:
                     blk = []
                 elif line.startswith('include:'):
                     incpath = line.split()[-1]
+                    incpath = os.path.expanduser(os.path.expandvars(incpath))
                     if not os.path.isabs(incpath):
                         incpath = os.path.join(
                             os.path.dirname(self.path), incpath)
