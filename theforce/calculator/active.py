@@ -77,7 +77,8 @@ class ActiveCalculator(Calculator):
                  logfile='active.log', pckl='model.pckl', tape='model.sgpr', test=None, stdout=False,
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol, ioptim=1,
-                 max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None):
+                 max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None,
+                 ignore=None):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -270,6 +271,7 @@ class ActiveCalculator(Calculator):
         if include_params:
             self.include_params.update(include_params)
         self.tune_for_md = True
+        self.ignore = [] if ignore is None else ignore
 
     @property
     def active(self):
@@ -659,7 +661,7 @@ class ActiveCalculator(Calculator):
             beta = self.get_covloss()
             q = torch.argsort(beta, descending=True)
             for k in q.tolist():
-                if k not in added_indices:
+                if k not in added_indices and k not in self.ignore:
                     break
             if beta[k].isclose(torch.ones([])):
                 self.blind = True
