@@ -78,7 +78,7 @@ class ActiveCalculator(Calculator):
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol, ioptim=1,
                  max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None,
-                 ignore=None):
+                 eps_dr=0.1, ignore=None):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -271,6 +271,7 @@ class ActiveCalculator(Calculator):
         if include_params:
             self.include_params.update(include_params)
         self.tune_for_md = True
+        self.eps_dr = eps_dr
         self.ignore = [] if ignore is None else ignore
 
     @property
@@ -698,7 +699,7 @@ class ActiveCalculator(Calculator):
             last = self.model.data[-1]
             if last.natoms == self.atoms.natoms:
                 if (last.numbers == self.atoms.numbers).all():
-                    if (abs(last.positions-self.atoms.positions) < 0.1).all():
+                    if (abs(last.positions-self.atoms.positions) < self.eps_dr).all():
                         return 0
 
         #
@@ -774,7 +775,7 @@ class ActiveCalculator(Calculator):
         if type(data) == str:
             data = ase.io.read(data, '::')
         tune_for_md = self.tune_for_md
-        self.tune_for_md = False
+        #self.tune_for_md = False
         self.get_ready()
 
         _calc = self._calc
@@ -786,7 +787,7 @@ class ActiveCalculator(Calculator):
             atoms.get_potential_energy()
             atoms.set_calculator(self._calc)
         self._calc = _calc
-        self.tune_for_md = tune_for_md
+        #self.tune_for_md = tune_for_md
 
     def include_tape(self, tape, ndata=None):
 
