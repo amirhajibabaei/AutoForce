@@ -34,6 +34,7 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     """
 
     calc = cline.gen_active_calc()
+    calc_obs = cline.gen_active_calc_obs()
     atoms.set_calculator(calc)
     if calc.active:
         manual_steps(atoms, eps_pos, eps_cell, npt=bulk_modulus)
@@ -64,9 +65,13 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     if calc.meta is not None:
         dyn.attach(calc.meta.update)
 
-    steps = int(picos*1000/dt) if picos > 0 else -picos
-    dyn.run(steps)
+    def observe(atoms=atoms):
+        calc_obs.calculate(atoms)
 
+    steps = int(picos*1000/dt) if picos > 0 else -picos
+    dyn.attach(observe)
+    print("Hi")
+    dyn.run(steps)
 
 def langevin_dynamics(atoms, dt, tem, friction, trajectory, loginterval, append):
     dyn = Langevin(atoms, dt*units.fs, temperature_K=tem, friction=friction, rng=np.random,

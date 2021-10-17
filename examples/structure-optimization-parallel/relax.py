@@ -23,9 +23,9 @@ atoms.center(vacuum=5.)
 atoms.pbc = True
 
 
-# Ab initio calculator; for now we just use EMT instead of vasp
-# abinitio = SocketCalculator(script='calc_vasp.py')
-abinitio = SocketCalculator(script='calc_emt.py')
+## Ab initio calculator; for now we just use EMT instead of vasp
+abinitio = SocketCalculator(script='calc_vasp.py')
+#abinitio = SocketCalculator(script='calc_emt.py')
 
 
 # ML calculator

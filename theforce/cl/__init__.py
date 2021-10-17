@@ -45,10 +45,25 @@ def update_args(kwargs, source=None):
             kwargs[kw] = source[kw]
 
 
+def update_args_obs(kwargs, source=None):
+    if source is None:
+        source = ARGS_obs
+    for kw in kwargs:
+        if kw in source:
+            kwargs[kw] = source[kw]
+
+
 def gen_active_calc(**over):
     kwargs = get_default_args(ActiveCalculator.__init__)
     update_args(kwargs)
     update_args(kwargs, source=over)
+    return ActiveCalculator(**kwargs)
+
+
+def gen_active_calc_obs(**over):
+    kwargs = get_default_args(ActiveCalculator.__init__)
+    update_args_obs(kwargs)
+    update_args_obs(kwargs, source=over)
     return ActiveCalculator(**kwargs)
 
 
@@ -71,6 +86,8 @@ atexit.register(print_stop_time)
 
 # ARGS
 ARGS = {}
+ARGS_obs = {}
+
 if os.path.isfile('ARGS'):
     lines = [strip(line) for line in
              open('ARGS').readlines()]
@@ -80,4 +97,14 @@ if os.path.isfile('ARGS'):
         calc_script = _calc(ARGS['calculator'])
         ARGS['calculator'] = SocketCalculator(script=calc_script)
 seed = ARGS['seed'] if 'seed' in ARGS else None
-ARGS['process_group'] = mpi_init(seed=seed)
+ARGS['process_group'] = ARGS_obs['process_group'] = mpi_init(seed=seed)
+
+if os.path.isfile('ARGS_obs'):
+    lines = [strip(line) for line in
+             open('ARGS_obs').readlines()]
+    lines = ','.join(filter(''.__ne__, lines))
+    ARGS_obs.update(eval(f'dict({lines})'))
+    if 'calculator' in ARGS_obs and ARGS_obs['calculator'] is not None:
+        calc_script = _calc(ARGS_obs['calculator'])
+        ARGS_obs['calculator'] = SocketCalculator(script=calc_script)
+

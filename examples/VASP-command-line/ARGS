@@ -1,10 +1,12 @@
-calculator = 'VASP'
-
+calculator = 'EMT'
 
 # ML:
 ediff = 1.5*kcal_mol
 fdiff = 1.5*kcal_mol
 
+logfile='active_2.log'
+pckl='model_2.pckl/'
+tape='model_2.sgpr'
 
 # MD:
 rattle = 0.05           # randomly displace positions before starting MD (so that forces != 0)
