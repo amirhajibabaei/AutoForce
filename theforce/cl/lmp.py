@@ -9,7 +9,7 @@ def read_lammps_file(file):
     commands = []
     units = None
     fixID = None
-    run = None
+    fixIndex = None
     scope = {}
     for line in open(file):
         if line.lower().startswith('#autoforce'):
@@ -24,12 +24,12 @@ def read_lammps_file(file):
             units = line.split()[1]
         if line.lower().startswith('fix autoforce'):
             fixID = line.split()[1]
-        if line.startswith('run'):
-            run = line
-        else:
-            commands.append(line)
+            fixIndex = len(commands)
+        commands.append(line)
     map_numbers = scope['atomic_numbers']
-    return units, map_numbers, fixID, commands, run
+    if fixID is None:
+        raise RuntimeError('no fix autoforce!')
+    return units, map_numbers, fixID, fixIndex, commands
 
 
 def get_cell():
@@ -93,18 +93,21 @@ if __name__ == '__main__':
                         help='LAMMPS input script')
     args = parser.parse_args()
 
-    # setup
+    # setup lammps
+    units, map_numbers, fixID, fixIndex, commands = read_lammps_file(
+        args.input)
+    lmp = lammps()
+
+    # setup calc
     import theforce.cl as cline
     calc = cline.gen_active_calc()
     atoms = None
-    units, map_numbers, fixID, commands, run = read_lammps_file(args.input)
-    lmp = lammps()
-    lmp.commands_list(commands)
-    lmp.set_fix_external_callback(fixID, callback)
 
     # hide mpi4py from ase! very ugly (see theforce._mpi4py)! TODO: fix this!
     import sys
     del sys.modules['mpi4py']
 
     # run
-    lmp.command(run)
+    lmp.commands_list(commands[:fixIndex+1])
+    lmp.set_fix_external_callback(fixID, callback)
+    lmp.commands_list(commands[fixIndex+1:])
