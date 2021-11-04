@@ -17,6 +17,11 @@ The input files for ab initio calculations depend on the software:
 
 Note that these files should be prepared only for single-point energy and force calculations.
 
+Alternatively, one can define a custom calculator using a python script.
+In that case, a variable named `calc` should be defined
+(see [theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/blob/master/theforce/calculator/README.md), 
+section *Parallelism*).
+
 #### Parameters for ML (file=`ARGS`)
 The parameters for ML should be provided in a file named `ARGS`. 
 This group of parameters are used for setting up the machine
@@ -29,7 +34,7 @@ The following tags are available
 # inputs
 covariance:      'pckl', None, a kernal, folder-name for loading a pickled model (default='pckl')
 kernel_kw:       e.g. {'cutoff': 6.}
-calculator:      None, 'VASP', 'Gaussian' (default=None)
+calculator:      None, 'VASP', 'Gaussian' , or a custom python script (default=None)
 
 # outputs
 logfile:         file name for logging (default='active.log')
