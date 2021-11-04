@@ -40,7 +40,8 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     atoms.rattle(rattle, rng=np.random)
 
     Ts = get_temperatures(tem)
-    calc.log(f'MD: {Ts}')
+    if calc.rank == 0:
+        print(f'MD temperatures: {Ts}')
     init_velocities(atoms, Ts[0])
     atoms.get_potential_energy()
     if calc.deltas:
