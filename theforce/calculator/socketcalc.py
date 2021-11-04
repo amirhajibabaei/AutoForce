@@ -6,6 +6,7 @@ import theforce.distributed as distrib
 import torch
 import socket
 import os
+import sys
 
 
 class SocketCalculator(Calculator):
@@ -66,7 +67,14 @@ class SocketCalculator(Calculator):
             ierr = torch.tensor(ierr)
             distrib.broadcast(ierr, 0)
             distrib.barrier()
-        assert ierr == 0
+        if ierr != 0:
+            if self.rank == 0:
+                raise RuntimeError('SocketCalculator failed! '
+                                   'Check if the ab initio calculator '
+                                   'works properly.'
+                                   )
+            else:
+                sys.exit()
         self.log('e')
         # read
         atms = read('socket_recv.xyz')
