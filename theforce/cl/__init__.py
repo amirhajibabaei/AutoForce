@@ -20,6 +20,10 @@ def strip(line):
 
 
 def _calc(name):
+    # input script
+    if name.endswith('.py'):
+        return name
+    # pre-defined scripts
     caps = name.upper()
     if caps == 'VASP':
         from theforce.calculator import vasp
