@@ -38,7 +38,10 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     if calc.active:
         manual_steps(atoms, eps_pos, eps_cell, npt=bulk_modulus)
     atoms.rattle(rattle, rng=np.random)
-    init_velocities(atoms, tem)
+
+    Ts = get_temperatures(tem)
+    calc.log(f'MD: {Ts}')
+    init_velocities(atoms, Ts[0])
     atoms.get_potential_energy()
     if calc.deltas:
         calc.results.clear()
@@ -54,18 +57,27 @@ def md(atoms, dynamics='NPT', dt=None, tem=300., picos=100, bulk_modulus=None, s
     else:
         md_atoms = atoms
 
-    if dynamics.upper() == 'NPT':
-        dyn = npt_dynamics(md_atoms, dt, tem, bulk_modulus, stress, mask, iso,
-                           trajectory, loginterval, append, tdamp, pdamp)
-    elif dynamics.upper() == 'LANGEVIN':
-        dyn = langevin_dynamics(md_atoms, dt, tem, friction, trajectory,
-                                loginterval, append)
+    for T in Ts:
+        if dynamics.upper() == 'NPT':
+            dyn = npt_dynamics(md_atoms, dt, T, bulk_modulus, stress, mask, iso,
+                               trajectory, loginterval, append, tdamp, pdamp)
+        elif dynamics.upper() == 'LANGEVIN':
+            dyn = langevin_dynamics(md_atoms, dt, T, friction, trajectory,
+                                    loginterval, append)
 
-    if calc.meta is not None:
-        dyn.attach(calc.meta.update)
+        if calc.meta is not None:
+            dyn.attach(calc.meta.update)
 
-    steps = int(picos*1000/dt) if picos > 0 else -picos
-    dyn.run(steps)
+        steps = int(picos*1000/dt) if picos > 0 else -picos
+        dyn.run(steps)
+        append = True
+
+
+def get_temperatures(tem):
+    if hasattr(tem, '__iter__'):
+        return tem
+    else:
+        return [tem]
 
 
 def langevin_dynamics(atoms, dt, tem, friction, trajectory, loginterval, append):
