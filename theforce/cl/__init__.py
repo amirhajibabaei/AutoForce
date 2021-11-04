@@ -4,6 +4,7 @@ from theforce.util.parallel import mpi_init
 from theforce.calculator.socketcalc import SocketCalculator
 from theforce.calculator.active import ActiveCalculator, kcal_mol, inf, SeSoapKernel, DefaultRadii, ActiveMeta
 from theforce.calculator.meta import Meta, Posvar, Qlvar, Catvar
+from numpy import arange, linspace
 import torch
 import theforce.distributed as dist
 import os

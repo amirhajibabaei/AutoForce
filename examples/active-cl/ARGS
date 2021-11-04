@@ -4,10 +4,18 @@ ediff = 0.01 #0.5*kcal_mol
 fdiff = 0.01 #0.5*kcal_mol
 
 tem = 1000.
-# stress = 0.0              # uncomment for NPT, although NPT
-# bulk_modulus = 137.       # is better a quick NVT
 
-rattle = 0.1            # critical
+### temperature range is also accepted:
+# tem = [1000., 1100., 1200., 1300., 1400., 1500.]
+# tem = arange(1000., 1500., 100.)
+# tem = linspace(1000., 1500., 6)
+
+### NPT: more robust after a short NVT
+# stress = 0.0
+# bulk_modulus = 137.
+
+rattle = 0.1                # critical
 dt = 1
 picos = 1
 test = 50
+stdout = True
