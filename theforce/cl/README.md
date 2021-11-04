@@ -165,6 +165,15 @@ Smaller `dt` increases the stability in these cases.
 If the ML model is mature, larger `dt` can be used
 (even larger than AIMD).
 
+A temperature list is also accepted in which
+case the MD will be continued at all given
+temperatures. For example
+```
+tem = [1000., 1100., 1200., 1300., 1400., 1500.]
+# or tem = arange(1000., 1500., 100.)
+# or tem = linspace(1000., 1500., 6)
+```
+
 If `bulk_modulus` is given, NPT simulation
 will be performed (with cell fluctuations).
 It is recommended to first perform a NVT
