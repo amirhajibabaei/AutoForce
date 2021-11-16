@@ -2,6 +2,7 @@
 import numpy as np
 import torch
 import ase
+from autoforce.typeinfo import float_t
 from typing import Union, Optional
 
 
@@ -11,7 +12,7 @@ class AutoAtoms:
     from an ase.Atoms object and stores them in appropriate
     types for descriptor calculations:
         1) torch.Tensor instead of np.ndarray (for autograd).
-        2) float32 instead of float64 (for memory efficiency).
+        2) float32 (=float_t) instead of float64 (for memory efficiency).
     All the descriptors are essentially derived from "positions" 
     and "cell". Thus their datatype will be automatically 
     propagated through descriptor transformations.
@@ -35,8 +36,8 @@ class AutoAtoms:
                                                  atoms.cell,
                                                  pbc=atoms.pbc)
         # Use float32 for memory efficiency
-        self.positions = torch.from_numpy(wraped).to(torch.float32)
-        self.cell = torch.from_numpy(atoms.cell.array).to(torch.float32)
+        self.positions = torch.from_numpy(wraped).to(float_t)
+        self.cell = torch.from_numpy(atoms.cell.array).to(float_t)
         self.requires_grad = requires_grad
 
     @property
