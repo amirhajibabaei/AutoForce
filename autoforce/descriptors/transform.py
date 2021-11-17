@@ -1,5 +1,21 @@
 # +
+import numpy as np
 from torch import Tensor
+
+
+def r_theta_phi(v: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+    """
+    v:
+        (n, 3)-shaped array of Cartesian coordinates
+    returns:
+        r(n), theta(n), phi(n) of spherical coordinates
+    """
+    x, y, z = v.T
+    rxy_sq = x*x + y*y
+    r = np.sqrt(rxy_sq + z*z)
+    theta = np.arctan2(np.sqrt(rxy_sq), z)
+    phi = np.arctan2(y, x)
+    return r, theta, phi
 
 
 def spherical_vector_to_cartesian(sin_theta: Tensor,
