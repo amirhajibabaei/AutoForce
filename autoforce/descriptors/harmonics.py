@@ -1,9 +1,8 @@
 # +
-import numpy as np
-from math import sqrt
 import torch
 from autoforce.typeinfo import float_t, pi, eps
 from autoforce.descriptors import Descriptor
+from math import sqrt
 
 
 class Harmonics(Descriptor):
@@ -153,7 +152,7 @@ def _l_m_s(lmax: int) -> (torch.Tensor, torch.Tensor):
     return l, m, s
 
 
-def _scipy_harmonics(rij: np.ndarray, lmax: int) -> np.ndarray:
+def _scipy_harmonics(rij: torch.Tensor, lmax: int) -> torch.Tensor:
     """
     Same functionality as Harmonics implemented
     with scipy for testing.
@@ -163,14 +162,15 @@ def _scipy_harmonics(rij: np.ndarray, lmax: int) -> np.ndarray:
     from autoforce.descriptors.transform import r_theta_phi
     from scipy.special import sph_harm
 
-    rlm = np.empty((lmax+1, lmax+1, rij.shape[0]))
     r, theta, phi = r_theta_phi(rij)
+    rlm = torch.empty((lmax+1, lmax+1, rij.shape[0]))
     for l in range(0, lmax+1):
         for m in range(0, l+1):
             val = r**l*sph_harm(m, l, phi, theta)
             rlm[l, l-m] = val.real
             if m > 0:
                 rlm[l-m, l] = val.imag
+
     return rlm
 
 
@@ -190,9 +190,9 @@ def test_Harmonics_scipy(lmax: int = 10) -> float:
 
     error = []
     for r in [x, y, z]:
-        a = _scipy_harmonics(r.numpy(), lmax)
-        b = rlm(r).numpy()
-        error.append(abs(a-b).max())
+        a = _scipy_harmonics(r, lmax)
+        b = rlm(r)
+        error.append((a-b).abs().max())
 
     return float(max(error))
 
