@@ -187,6 +187,52 @@ def test_Overlaps_backward():
     return True
 
 
+def test_Overlaps_rotational_invariance():
+    """
+    Test if Overlaps is rotationally invariant.
+
+    """
+
+    from autoforce.descriptors import CosineCut
+    from autoforce.descriptors import transform as trans
+    from autoforce.typeinfo import pi
+
+    # 1. Setup
+    cutoff = 6.
+    lmax = 6
+    nmax = 6
+    nj = 40
+    type1 = 25
+    type2 = nj - type1
+    soap = Overlaps(lmax, nmax)
+    cut = CosineCut()
+    species = torch.tensor(type1*[1]+type2*[2])
+    r = torch.rand(nj, dtype=float_t)*cutoff + 0.5
+    theta = torch.rand(nj, dtype=float_t)*pi
+    phi = torch.rand(nj, dtype=float_t)*2*pi
+    rij = trans.cartesian(r, theta, phi)
+    wj = cut(r, cutoff)
+    R_z = trans.rotation_matrix([0., 0., 1.], pi/18)
+    R_y = trans.rotation_matrix([0., 1., 0.], pi/18)
+
+    # 2. Test
+    y0 = None
+    errors = []
+    for _ in range(18):
+        rij = trans.rotate(rij, R_y)
+        for __ in range(36):
+            rij = trans.rotate(rij, R_z)
+            _, y = soap(rij, species, wj=wj)
+            if y0 is None:
+                y0 = y
+                norm = y0.norm()
+            else:
+                errors.append((y-y0).norm()/norm)
+
+    return max(errors)
+
+
 if __name__ == '__main__':
     test_Overlaps_perm()
     test_Overlaps_backward()
+    test_Overlaps_rotational_invariance()
