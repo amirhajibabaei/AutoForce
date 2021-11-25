@@ -22,6 +22,19 @@ def r_theta_phi(v: Tensor) -> (Tensor, Tensor, Tensor):
     return r, theta, phi
 
 
+def cartesian(r: torch.Tensor, theta: torch.Tensor, phi: torch.Tensor) -> torch.Tensor:
+    """
+    Inverse of r_theta_phi function.
+
+    """
+
+    x = r*theta.sin()*phi.cos()
+    y = r*theta.sin()*phi.sin()
+    z = r*theta.cos()
+
+    return torch.stack([x, y, z]).T
+
+
 def rotation_matrix(axis: Union[torch.Tensor, Sequence[float]],
                     theta: Union[torch.Tensor, float]
                     ) -> torch.Tensor:
