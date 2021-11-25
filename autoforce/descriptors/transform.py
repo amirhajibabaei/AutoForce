@@ -1,6 +1,7 @@
 # +
 import torch
 from torch import Tensor
+from typing import Union, Sequence
 
 
 def r_theta_phi(v: Tensor) -> (Tensor, Tensor, Tensor):
@@ -19,6 +20,31 @@ def r_theta_phi(v: Tensor) -> (Tensor, Tensor, Tensor):
     phi = torch.atan2(y, x)
 
     return r, theta, phi
+
+
+def rotation_matrix(axis: Union[torch.Tensor, Sequence[float]],
+                    theta: Union[torch.Tensor, float]
+                    ) -> torch.Tensor:
+    """
+    axis: rotation axis (length 3)
+
+    theta: rotation angle in Radians
+
+    returns: a (3, 3)-shaped rotation matrix
+
+    """
+
+    axis = torch.as_tensor(axis)
+    axis = axis/axis.norm()
+    a = torch.as_tensor(theta/2).cos()
+    b, c, d = -axis*torch.as_tensor(theta/2).sin()
+    aa, bb, cc, dd = a*a, b*b, c*c, d*d
+    bc, ad, ac, ab, bd, cd = b*c, a*d, a*c, a*b, b*d, c*d
+    rot = torch.tensor([[aa+bb-cc-dd, 2*(bc+ad), 2*(bd-ac)],
+                        [2*(bc-ad), aa+cc-bb-dd, 2*(cd+ab)],
+                        [2*(bd+ac), 2*(cd-ab), aa+dd-bb-cc]])
+
+    return rot
 
 
 def spherical_vector_to_cartesian(sin_theta: Tensor,
