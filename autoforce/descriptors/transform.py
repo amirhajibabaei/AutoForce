@@ -60,6 +60,18 @@ def rotation_matrix(axis: Union[torch.Tensor, Sequence[float]],
     return rot
 
 
+def rotate(xyz: torch.Tensor, R: torch.Tensor) -> torch.Tensor:
+    """
+    xyz: (n, 3)-shaped Cartesian coordinates
+
+    R: (3, 3)-shaped rotation matrix
+
+    returns rotated coordinates.
+
+    """
+    return xyz@R.T
+
+
 def spherical_vector_to_cartesian(sin_theta: Tensor,
                                   cos_theta: Tensor,
                                   sin_phi: Tensor,
