@@ -3,6 +3,7 @@ import torch
 from autoforce.descriptors import Descriptor, Harmonics
 from autoforce.typeinfo import float_t
 from math import sqrt, factorial as fac
+from itertools import product
 from typing import Optional
 
 
@@ -72,14 +73,42 @@ class Overlaps(Descriptor):
 
     def forward(self, rij: torch.Tensor,
                 species: torch.Tensor,
-                wj: Optional[torch.Tensor] = None
-                ) -> (torch.Tensor, torch.Tensor):
+                wj: Optional[torch.Tensor] = None,
+                compress: Optional[bool] = True
+                ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         """
-        * rij: a float tensor with shape [:, 3] (displacement vectors).
+        * rij: A float tensor with shape [:, 3] (displacement vectors).
 
-        * species: an int tensor (1D) with the same length as rij (atomic numbers).
+        * species: An int tensor (1D) with the same length as rij (atomic numbers).
 
-        * wj: an optional float tensor (1D) with the same length as rij (weights).
+        * wj: An optional float tensor (1D) with the same length as rij (weights).
+
+
+        * Returns:
+
+            s_a, s_b, X
+
+            Where, if ns is the number of unique species,
+            the shape of X is
+
+                compress = True -> [ns^2, (nmax+1)*(nmax+2)*(lmax+1)/2]
+
+                compress = False -> [ns^2, nmax+1, nmax+1, lmax+1]
+
+            and X[j, ...] is the joint descriptor for species
+            of types (s_a[j], s_b[j]).
+
+            Without compression components of X are symmetric
+            wrt double permutations of axis:
+
+                Y = X.reshape(ns, ns, nmax+1, nmax+1, lmax+1)
+                0 = Y.permute(1, 0, 3, 2, 4) - Y
+
+            and thus contain redundent numbers.
+
+            After compression some components are multiplied
+            by 2, so that the norm of the descriptor remains
+            the same.
 
         """
 
@@ -114,7 +143,17 @@ class Overlaps(Descriptor):
         _ssnnl = torch.zeros_like(_ssnnlm[..., 0]
                                   ).index_add(-1, self._l, tmp)*self._nnl
 
-        return unique, _ssnnl.flatten(0, 1)
+        # 6. Compress
+        if compress:
+            ui, uj = torch.triu_indices(self.nmax+1, self.nmax+1)
+            _1_2 = 2-torch.eye(self.nmax+1, dtype=torch.int)
+            _ssnnl = _ssnnl[:, :, ui, uj, :]*_1_2[ui, uj, None]
+            _ssnnl = _ssnnl.flatten(-2, -1)
+
+        # 7. Bcast Species
+        s_a, s_b = torch.tensor([x for x in product(unique, unique)]).T
+
+        return s_a, s_b, _ssnnl.flatten(0, 1)
 
 
 def _nnl(lmax, nmax):
@@ -149,9 +188,9 @@ def test_Overlaps_perm():
     # 2. Test
     dij = rij.norm(dim=1)
     wj = cut(dij, cutoff)
-    q, y = soap(rij, species, wj)
+    _, _, y = soap(rij, species, wj)
     perm = torch.randperm(nj)
-    _, y2 = soap(rij[perm], species[perm], wj[perm])
+    _, _, y2 = soap(rij[perm], species[perm], wj[perm])
 
     return y2.allclose(y)
 
@@ -181,7 +220,7 @@ def test_Overlaps_backward():
     rij.requires_grad = True
     dij = rij.norm(dim=1)
     wj = cut(dij, cutoff)
-    q, y = soap(rij, species, wj)
+    _, _, y = soap(rij, species, wj)
     y.sum().backward()
 
     return True
@@ -222,7 +261,7 @@ def test_Overlaps_rotational_invariance():
         rij = trans.rotate(rij, R_y)
         for __ in range(36):
             rij = trans.rotate(rij, R_z)
-            _, y = soap(rij, species, wj=wj)
+            _, _, y = soap(rij, species, wj=wj)
             if y0 is None:
                 y0 = y
                 norm = y0.norm()
@@ -233,6 +272,6 @@ def test_Overlaps_rotational_invariance():
 
 
 if __name__ == '__main__':
-    test_Overlaps_perm()
-    test_Overlaps_backward()
-    test_Overlaps_rotational_invariance()
+    assert test_Overlaps_perm()
+    assert test_Overlaps_backward()
+    assert test_Overlaps_rotational_invariance() < 5e-5
