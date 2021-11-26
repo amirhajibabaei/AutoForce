@@ -107,7 +107,7 @@ class Overlaps(Descriptor):
             and thus contain redundent numbers.
 
             After compression some components are multiplied
-            by 2, so that the norm of the descriptor remains
+            by sqrt(2), so that the norm of the descriptor remains
             the same.
 
         """
@@ -146,8 +146,8 @@ class Overlaps(Descriptor):
         # 6. Compress
         if compress:
             ui, uj = torch.triu_indices(self.nmax+1, self.nmax+1)
-            _1_2 = 2-torch.eye(self.nmax+1, dtype=torch.int)
-            _ssnnl = _ssnnl[:, :, ui, uj, :]*_1_2[ui, uj, None]
+            _2sq = (2.0-torch.eye(self.nmax+1, dtype=rij.dtype)).sqrt()
+            _ssnnl = _ssnnl[:, :, ui, uj, :]*_2sq[ui, uj, None]
             _ssnnl = _ssnnl.flatten(-2, -1)
 
         # 7. Bcast Species
@@ -271,7 +271,41 @@ def test_Overlaps_rotational_invariance():
     return max(errors)
 
 
+def test_Overlaps_compressed_norm():
+    """
+    Test if the norm is the the same when
+        1) compress = True
+        2) compress = False
+
+    """
+
+    from autoforce.descriptors import CosineCut, Overlaps
+
+    # 1. Setup
+    cutoff = 6.
+    lmax = 3
+    nmax = 4
+    nj = 40
+    type1 = 25
+    type2 = nj - type1
+    soap = Overlaps(lmax, nmax)
+    cut = CosineCut()
+    rij = torch.rand(nj, 3).to(torch.float32)
+    rij.sub_(0.5).mul_(2*cutoff+1.)
+    species = torch.tensor(type1*[1]+type2*[2])
+
+    # 2. Test
+    rij.requires_grad = True
+    dij = rij.norm(dim=1)
+    wj = cut(dij, cutoff)
+    _, _, y1 = soap(rij, species, wj, compress=True)
+    _, _, y2 = soap(rij, species, wj, compress=False)
+
+    return y1.norm().isclose(y2.norm())
+
+
 if __name__ == '__main__':
     assert test_Overlaps_perm()
     assert test_Overlaps_backward()
     assert test_Overlaps_rotational_invariance() < 5e-5
+    assert test_Overlaps_compressed_norm()
