@@ -94,7 +94,7 @@ class Configuration:
         return f'{self.__class__.__name__}({counts}, {self.requires_grad=})'
 
     @staticmethod
-    def from_Atoms(atoms: ase.Atoms,
+    def from_atoms(atoms: ase.Atoms,
                    requires_grad: Optional[bool] = False
                    ):
         """
@@ -110,19 +110,19 @@ class Configuration:
                              )
 
 
-def test_Configuration_from_Atoms():
+def test_Configuration_from_atoms():
     """
-    Test if from_Atoms works.
+    Test if from_atoms works.
 
     """
 
     from ase.build import bulk
 
     atoms = bulk('Au').repeat(3)
-    conf = Configuration.from_Atoms(atoms, requires_grad=True)
+    conf = Configuration.from_atoms(atoms, requires_grad=True)
 
     return True
 
 
 if __name__ == '__main__':
-    test_Configuration_from_Atoms()
+    test_Configuration_from_atoms()
