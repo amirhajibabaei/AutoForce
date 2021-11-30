@@ -109,6 +109,19 @@ class Configuration:
                              requires_grad=requires_grad
                              )
 
+    def as_atoms(self) -> ase.Atoms:
+
+        atoms = ase.Atoms(numbers=_numpy(self.numbers),
+                          positions=_numpy(self.positions),
+                          cell=_numpy(self.cell),
+                          pbc=self.pbc)
+
+        return atoms
+
+
+def _numpy(t: torch.Tensor) -> np.ndarray:
+    return t.detach().numpy()
+
 
 def test_Configuration_from_atoms():
     """
@@ -120,6 +133,7 @@ def test_Configuration_from_atoms():
 
     atoms = bulk('Au').repeat(3)
     conf = Configuration.from_atoms(atoms, requires_grad=True)
+    conf.as_atoms()
 
     return True
 
