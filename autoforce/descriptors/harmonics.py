@@ -1,6 +1,6 @@
 # +
+import autoforce.cfg as cfg
 import torch
-from autoforce.typeinfo import float_t, pi, eps
 from autoforce.descriptors import Transform
 from math import sqrt
 
@@ -53,7 +53,7 @@ class Harmonics(Transform):
     def __init__(self, lmax: int) -> None:
         super().__init__()
         self.lmax = lmax
-        self.Yoo = torch.sqrt(1./(4*pi))
+        self.Yoo = torch.sqrt(1./(4*cfg.pi))
         self._al, self._bl, self._cl, self._dl = _alp(lmax)
         self.l, self.m, self.sign = _l_m_s(lmax)
         _c = (self.l**2-self.m**2) * (2*self.l+1) / (2*self.l-1)
@@ -69,7 +69,7 @@ class Harmonics(Transform):
         x, y, z = rij.T
         rxy2 = x*x + y*y
         r2 = rxy2 + z*z
-        rxy = rxy2.add(eps).sqrt()
+        rxy = rxy2.add(cfg.eps).sqrt()
         r = r2.sqrt()
 
         # 2. Associated Legendre Polynomials
@@ -83,7 +83,7 @@ class Harmonics(Transform):
                         ])
 
         # 3. Sin & Cos of m*phi
-        pole = rxy < eps
+        pole = rxy < cfg.eps
         sin_phi = torch.where(pole, y, y/rxy)
         cos_phi = torch.where(pole, x, x/rxy)
         sin = [torch.zeros_like(sin_phi), sin_phi]
@@ -95,7 +95,7 @@ class Harmonics(Transform):
             cos += [c]
 
         # 4. Spherical Harmonics
-        Y = torch.zeros(self.lmax+1, self.lmax+1, r.size(0), dtype=float_t)
+        Y = torch.zeros(self.lmax+1, self.lmax+1, r.size(0), dtype=cfg.float_t)
         for l in range(self.lmax+1):
             Y[l, l] = alp[l][0]
             for m in range(l, 0, -1):
@@ -113,19 +113,19 @@ def _alp(lmax: int) -> (list, list, list, list):
     """
     a = [None, None]
     b = [None, None]
-    c = [torch.tensor(1.0, dtype=float_t),
-         torch.tensor(sqrt(3), dtype=float_t)]
-    d = [None, torch.tensor(-sqrt(1.5), dtype=float_t)]
+    c = [torch.tensor(1.0, dtype=cfg.float_t),
+         torch.tensor(sqrt(3), dtype=cfg.float_t)]
+    d = [None, torch.tensor(-sqrt(1.5), dtype=cfg.float_t)]
     for l in range(2, lmax+1):
         _a = []
         _b = []
         for m in range(l-1):
             _a.append(sqrt((4*l**2-1)/(l**2-m**2)))
             _b.append(-sqrt(((l-1)**2-m**2)/(4*(l-1)**2-1)))
-        _a = torch.tensor(_a, dtype=float_t).reshape(-1, 1)
-        _b = torch.tensor(_b, dtype=float_t).reshape(-1, 1)
-        _c = torch.tensor(sqrt(2*l+1), dtype=float_t)
-        _d = torch.tensor(-sqrt((1+1/(2*l))), dtype=float_t)
+        _a = torch.tensor(_a, dtype=cfg.float_t).reshape(-1, 1)
+        _b = torch.tensor(_b, dtype=cfg.float_t).reshape(-1, 1)
+        _c = torch.tensor(sqrt(2*l+1), dtype=cfg.float_t)
+        _d = torch.tensor(-sqrt((1+1/(2*l))), dtype=cfg.float_t)
         a.append(_a)
         b.append(_b)
         c.append(_c)
@@ -138,9 +138,9 @@ def _l_m_s(lmax: int) -> (torch.Tensor, torch.Tensor):
     Auxiliary function for (l, m) tables.
 
     """
-    l = torch.empty(lmax+1, lmax+1, 1, dtype=float_t)
-    m = torch.empty(lmax+1, lmax+1, 1, dtype=float_t)
-    s = torch.empty(lmax+1, lmax+1, 1, dtype=float_t)
+    l = torch.empty(lmax+1, lmax+1, 1, dtype=cfg.float_t)
+    m = torch.empty(lmax+1, lmax+1, 1, dtype=cfg.float_t)
+    s = torch.empty(lmax+1, lmax+1, 1, dtype=cfg.float_t)
     for i in range(lmax+1):
         l[:i, i] = i
         l[i, :i+1] = i
@@ -184,9 +184,9 @@ def test_Harmonics_scipy(lmax: int = 10) -> float:
 
     rlm = Harmonics(lmax)
 
-    x = torch.tensor([[1., 0., 0.]], dtype=float_t)
-    y = torch.tensor([[0., 1., 0.]], dtype=float_t)
-    z = torch.tensor([[0., 0., 1.]], dtype=float_t)
+    x = torch.tensor([[1., 0., 0.]], dtype=cfg.float_t)
+    y = torch.tensor([[0., 1., 0.]], dtype=cfg.float_t)
+    z = torch.tensor([[0., 0., 1.]], dtype=cfg.float_t)
 
     error = []
     for r in [x, y, z]:
@@ -214,7 +214,7 @@ def test_Harmonics_rotational_invariance(lmax: int = 10,
     """
 
     # unit vectors in x-z plane
-    theta = torch.linspace(0, pi, size, dtype=float_t)
+    theta = torch.linspace(0, cfg.pi, size, dtype=cfg.float_t)
     x = theta.sin()
     y = torch.zeros_like(x)
     z = theta.cos()
@@ -228,11 +228,11 @@ def test_Harmonics_rotational_invariance(lmax: int = 10,
     y = rlm(xyz)
 
     # invariant parameter
-    a = 2*torch.ones(lmax+1, lmax+1, dtype=float_t)
-    a -= torch.eye(lmax+1, dtype=float_t)
+    a = 2*torch.ones(lmax+1, lmax+1, dtype=cfg.float_t)
+    a -= torch.eye(lmax+1, dtype=cfg.float_t)
     a.unsqueeze_(-1)
     a /= 2*rlm.l+1
-    a *= 4*pi/(lmax+1)
+    a *= 4*cfg.pi/(lmax+1)
     _1 = (a*y.pow(2)).sum(dim=(0, 1))
 
     # errors

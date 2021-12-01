@@ -1,5 +1,5 @@
 from .transform import Transform
-from .descriptor import Descriptor
 from .cutoff import PolynomialCut, CosineCut
 from .harmonics import Harmonics
-from .soap import Overlaps
+from .overlaps import Overlaps
+from .descriptor import Descriptor

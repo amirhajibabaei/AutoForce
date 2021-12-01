@@ -1,9 +1,9 @@
 # +
+import autoforce.cfg as cfg
 import numpy as np
 import torch
 import ase
 from ase.neighborlist import wrap_positions
-from autoforce.typeinfo import float_t
 from typing import Union, Optional
 
 
@@ -22,7 +22,7 @@ class Configuration:
 
         * the positions will be wrapped
         * uses torch.Tensor instead of np.ndarray
-        * uses float_t (=float_32) instead of float64
+        * uses cfg.float_t (=float32) instead of float64
 
     The torch.Tensor class is used for enabling
     automatic differenstiation.
@@ -73,8 +73,8 @@ class Configuration:
 
         self.numbers = torch.from_numpy(numbers)
         wrapped = wrap_positions(positions, cell, pbc)
-        self.positions = torch.from_numpy(wrapped).to(float_t)
-        self.cell = torch.from_numpy(cell).to(float_t)
+        self.positions = torch.from_numpy(wrapped).to(cfg.float_t)
+        self.cell = torch.from_numpy(cell).to(cfg.float_t)
         self.pbc = pbc
         self.requires_grad = requires_grad
 

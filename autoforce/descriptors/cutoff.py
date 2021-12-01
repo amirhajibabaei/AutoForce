@@ -1,7 +1,7 @@
 # +
+import autoforce.cfg as cfg
 import torch
 from autoforce.descriptors import Transform
-from autoforce.typeinfo import pi, float_t
 from typing import Union
 
 
@@ -27,7 +27,7 @@ class Cutoff(Transform):
 
         beyond = dij > cutoff
         result = torch.where(beyond,
-                             torch.zeros(1, dtype=float_t),
+                             torch.zeros(1, dtype=dij.dtype),
                              self.smooth(dij/cutoff)
                              )
         return result
@@ -61,4 +61,4 @@ class CosineCut(Cutoff):
     """
 
     def smooth(self, sij: torch.Tensor) -> torch.Tensor:
-        return sij.mul(pi).cos().add(1).mul(0.5)
+        return sij.mul(cfg.pi).cos().add(1).mul(0.5)

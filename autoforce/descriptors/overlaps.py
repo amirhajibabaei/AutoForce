@@ -1,7 +1,7 @@
 # +
+import autoforce.cfg as cfg
 import torch
 from autoforce.descriptors import Transform, Harmonics
-from autoforce.typeinfo import float_t
 from math import sqrt, factorial as fac
 from itertools import product
 from typing import Optional
@@ -163,7 +163,7 @@ def _nnl(lmax, nmax):
                        for l in range(lmax+1)]
                       for n in range(nmax+1)
                       ])
-    return (a[None]*a[:, None]).sqrt().to(float_t)
+    return (a[None]*a[:, None]).sqrt().to(cfg.float_t)
 
 
 def test_Overlaps_perm():
@@ -183,7 +183,7 @@ def test_Overlaps_perm():
     type2 = nj - type1
     soap = Overlaps(lmax, nmax)
     cut = CosineCut()
-    rij = torch.rand(nj, 3, dtype=float_t)
+    rij = torch.rand(nj, 3, dtype=cfg.float_t)
     rij.sub_(0.5).mul_(2*cutoff+1.)
     species = torch.tensor(type1*[1]+type2*[2])
 
@@ -214,7 +214,7 @@ def test_Overlaps_backward():
     type2 = nj - type1
     soap = Overlaps(lmax, nmax)
     cut = CosineCut()
-    rij = torch.rand(nj, 3, dtype=float_t)
+    rij = torch.rand(nj, 3, dtype=cfg.float_t)
     rij.sub_(0.5).mul_(2*cutoff+1.)
     species = torch.tensor(type1*[1]+type2*[2])
 
@@ -236,7 +236,7 @@ def test_Overlaps_rotational_invariance():
 
     from autoforce.descriptors import CosineCut
     from autoforce.descriptors import transform as trans
-    from autoforce.typeinfo import pi
+    from autoforce.cfg import pi
 
     # 1. Setup
     cutoff = 6.
@@ -248,9 +248,9 @@ def test_Overlaps_rotational_invariance():
     soap = Overlaps(lmax, nmax)
     cut = CosineCut()
     species = torch.tensor(type1*[1]+type2*[2])
-    r = torch.rand(nj, dtype=float_t)*cutoff + 0.5
-    theta = torch.rand(nj, dtype=float_t)*pi
-    phi = torch.rand(nj, dtype=float_t)*2*pi
+    r = torch.rand(nj, dtype=cfg.float_t)*cutoff + 0.5
+    theta = torch.rand(nj, dtype=cfg.float_t)*pi
+    phi = torch.rand(nj, dtype=cfg.float_t)*2*pi
     rij = trans.cartesian(r, theta, phi)
     wj = cut(r, cutoff)
     R_z = trans.rotation_matrix([0., 0., 1.], pi/18)
@@ -292,7 +292,7 @@ def test_Overlaps_compressed_norm():
     type2 = nj - type1
     soap = Overlaps(lmax, nmax)
     cut = CosineCut()
-    rij = torch.rand(nj, 3, dtype=float_t)
+    rij = torch.rand(nj, 3, dtype=cfg.float_t)
     rij.sub_(0.5).mul_(2*cutoff+1.)
     species = torch.tensor(type1*[1]+type2*[2])
 
