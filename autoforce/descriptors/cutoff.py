@@ -34,7 +34,7 @@ class Cutoff(Transform):
 
     def smooth(self, dij):
         raise NotImplementedError(
-            f'{self.name}: smooth method is not implemented!')
+            f'{self.__class__.__name__}: smooth method is not implemented!')
 
 
 class PolynomialCut(Cutoff):
@@ -47,7 +47,7 @@ class PolynomialCut(Cutoff):
     def __init__(self, degree: int) -> None:
         super().__init__()
         if degree < 2:
-            raise RuntimeError(f'{self.name}: degree is less than 2!')
+            raise RuntimeError('PolynomialCut: degree is less than 2!')
         self.degree = degree
 
     def smooth(self, sij: torch.Tensor) -> torch.Tensor:
