@@ -90,8 +90,8 @@ class Configuration:
 
     def __repr__(self) -> str:
         z, c = np.unique(self.numbers, return_counts=True)
-        counts = ','.join([f'{a}: {b}' for a, b in zip(z, c)])
-        return f'{self.__class__.__name__}({counts}, {self.requires_grad=})'
+        counts = ', '.join([f'{a}: {b}' for a, b in zip(z, c)])
+        return f'Configuration({{{counts}}})'
 
     @staticmethod
     def from_atoms(atoms: ase.Atoms,

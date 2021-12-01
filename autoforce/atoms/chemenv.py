@@ -47,6 +47,22 @@ class ChemEnv:
     def detach(self):  # -> ChemEnv
         return ChemEnv(self.number, self.numbers, self.rij.detach())
 
+    @property
+    def requires_grad(self) -> bool:
+        return self.rij.requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, value: bool) -> None:
+        self.rij.requires_grad = value
+
+    def __repr__(self) -> str:
+        if self.is_isolated:
+            counts = ''
+        else:
+            z, c = np.unique(self.numbers, return_counts=True)
+            counts = ', '.join([f'{a}: {b}' for a, b in zip(z, c)])
+        return f'ChemEnv({int(self.number)} -> {{{counts}}})'
+
     @staticmethod
     def from_atoms(atoms: ase.Atoms,
                    cutoff: Union[float, dict],
