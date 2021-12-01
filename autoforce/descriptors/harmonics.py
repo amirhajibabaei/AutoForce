@@ -1,11 +1,11 @@
 # +
 import torch
 from autoforce.typeinfo import float_t, pi, eps
-from autoforce.descriptors import Descriptor
+from autoforce.descriptors import Transform
 from math import sqrt
 
 
-class Harmonics(Descriptor):
+class Harmonics(Transform):
 
     """
     Description:
@@ -59,7 +59,7 @@ class Harmonics(Descriptor):
         _c = (self.l**2-self.m**2) * (2*self.l+1) / (2*self.l-1)
         self.coef = _c[1:, 1:].sqrt()
 
-    def forward(self, rij: torch.Tensor) -> torch.Tensor:
+    def function(self, rij: torch.Tensor) -> torch.Tensor:
         """
         The input should be a Tensor with shape [:, 3].
 

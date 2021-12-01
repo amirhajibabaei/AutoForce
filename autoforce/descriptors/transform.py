@@ -2,6 +2,54 @@
 import torch
 from torch import Tensor
 from typing import Union, Sequence
+from abc import ABC, abstractmethod
+
+
+class Transform(ABC):
+    """
+    Abstract base class for transformations.
+
+    A "Transform" in essence is a simple python
+    function, similar to those defined in the rest
+    of this module, but it can also be configured.
+    For instance "Harmonics" is instantiated
+    for a given "lmax" which pre-calculates
+    some tables for faster execution. Otherwise,
+    if efficient implementation is possible with
+    a simple python function, it should be preferred.
+
+    The main body of a "Transform" should be
+    implemented in a "function" method (required).
+
+    The main restriction is that a "Transform"
+    should be immutable and it should not contain
+    parameters which may change during the execution.
+    Instead any tunable parameter should appear
+    as an argument of the "function" method.
+
+    A "Transform" should not contain any ad hoc
+    parameters (e.g. if x < 1e-6: ..., etc.).
+    An ad hoc number is equivalent to choosing
+    a model which should be controllable by
+    the higher level "Descriptor" classes.
+
+    "Transfroms" are low-level and well-defined
+    operations which will be employed by the
+    "Descriptor" classes which are allowed to
+    contain optimizable parameters.
+
+    """
+
+    def __call__(self, *args, **kwargs):
+        return self.function(*args, **kwargs)
+
+    @abstractmethod
+    def function(self, *args, **kwargs):
+        pass
+
+    @property
+    def name(self):
+        return self.__class__.__name__
 
 
 def r_theta_phi(v: Tensor) -> (Tensor, Tensor, Tensor):

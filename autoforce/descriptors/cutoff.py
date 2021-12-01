@@ -1,11 +1,11 @@
 # +
 import torch
-from autoforce.descriptors import Descriptor
+from autoforce.descriptors import Transform
 from autoforce.typeinfo import pi, float_t
 from typing import Union
 
 
-class Cutoff(Descriptor):
+class Cutoff(Transform):
     """
     Smooth cutoff functions.
 
@@ -14,10 +14,10 @@ class Cutoff(Descriptor):
     def __init__(self) -> None:
         super().__init__()
 
-    def forward(self,
-                dij: torch.Tensor,
-                cutoff: Union[float, torch.Tensor]
-                ) -> torch.Tensor:
+    def function(self,
+                 dij: torch.Tensor,
+                 cutoff: Union[float, torch.Tensor]
+                 ) -> torch.Tensor:
         """
         dij are distances.
         cutoff can be either a float (for all)

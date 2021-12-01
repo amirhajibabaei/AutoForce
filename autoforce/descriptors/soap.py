@@ -1,17 +1,19 @@
 # +
 import torch
-from autoforce.descriptors import Descriptor, Harmonics
+from autoforce.descriptors import Transform, Harmonics
 from autoforce.typeinfo import float_t
 from math import sqrt, factorial as fac
 from itertools import product
 from typing import Optional
 
 
-class Overlaps(Descriptor):
+class Overlaps(Transform):
     """
     Description:
 
-    * The "Smooth Overlap of Atomic Positions (SOAP)" descriptor.
+    * The implementation for
+        "Smooth Overlap of Atomic Positions (SOAP)"
+      descriptor.
 
     * Smooth cutoffs:
       Often, this descriptor should be used along with a smooth
@@ -71,11 +73,11 @@ class Overlaps(Descriptor):
     def lmax(self):
         return self.harmonics.lmax
 
-    def forward(self, rij: torch.Tensor,
-                species: torch.Tensor,
-                wj: Optional[torch.Tensor] = None,
-                compress: Optional[bool] = True
-                ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    def function(self, rij: torch.Tensor,
+                 species: torch.Tensor,
+                 wj: Optional[torch.Tensor] = None,
+                 compress: Optional[bool] = True
+                 ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         """
         * rij: A float tensor with shape [:, 3] (displacement vectors).
 
@@ -181,7 +183,7 @@ def test_Overlaps_perm():
     type2 = nj - type1
     soap = Overlaps(lmax, nmax)
     cut = CosineCut()
-    rij = torch.rand(nj, 3).to(torch.float32)
+    rij = torch.rand(nj, 3, dtype=float_t)
     rij.sub_(0.5).mul_(2*cutoff+1.)
     species = torch.tensor(type1*[1]+type2*[2])
 
@@ -212,7 +214,7 @@ def test_Overlaps_backward():
     type2 = nj - type1
     soap = Overlaps(lmax, nmax)
     cut = CosineCut()
-    rij = torch.rand(nj, 3).to(torch.float32)
+    rij = torch.rand(nj, 3, dtype=float_t)
     rij.sub_(0.5).mul_(2*cutoff+1.)
     species = torch.tensor(type1*[1]+type2*[2])
 
@@ -290,7 +292,7 @@ def test_Overlaps_compressed_norm():
     type2 = nj - type1
     soap = Overlaps(lmax, nmax)
     cut = CosineCut()
-    rij = torch.rand(nj, 3).to(torch.float32)
+    rij = torch.rand(nj, 3, dtype=float_t)
     rij.sub_(0.5).mul_(2*cutoff+1.)
     species = torch.tensor(type1*[1]+type2*[2])
 
