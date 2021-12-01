@@ -29,7 +29,10 @@ class ChemEnv:
 
     __slots__ = ['number', 'numbers', 'rij']
 
-    def __init__(self, number, numbers=None, rij=None):
+    def __init__(self,
+                 number: torch.Tensor,
+                 numbers: Optional[torch.Tensor] = None,
+                 rij: Optional[torch.Tensor] = None):
         self.number = number
         self.numbers = numbers
         self.rij = rij
