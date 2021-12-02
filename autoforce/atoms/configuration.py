@@ -88,8 +88,11 @@ class Configuration:
         self.positions.requires_grad = value
         self.cell.requires_grad = value
 
+    def species(self, return_counts=False):
+        return np.unique(self.numbers, return_counts=return_counts)
+
     def __repr__(self) -> str:
-        z, c = np.unique(self.numbers, return_counts=True)
+        z, c = self.species(return_counts=True)
         counts = ', '.join([f'{a}: {b}' for a, b in zip(z, c)])
         return f'Configuration({{{counts}}})'
 
