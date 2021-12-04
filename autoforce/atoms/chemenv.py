@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import ase
 from ase.neighborlist import primitive_neighbor_list
-from autoforce.atoms import Configuration
+from autoforce.atoms import Configuration, Chemsor
 from typing import Union, Optional
 
 
@@ -65,7 +65,7 @@ class ChemEnv:
 
     @staticmethod
     def from_atoms(atoms: ase.Atoms,
-                   cutoff: Union[float, dict],
+                   cutoff: Chemsor,
                    subset: Optional[list] = None,
                    requires_grad: Optional[bool] = False
                    ) -> (Configuration, list):
@@ -84,7 +84,7 @@ class ChemEnv:
 
     @staticmethod
     def from_configuration(conf: Configuration,
-                           cutoff: Union[float, dict],
+                           cutoff: Chemsor,
                            subset: Optional[list] = None
                            ) -> list:
         """
@@ -104,6 +104,10 @@ class ChemEnv:
         truncated.
 
         """
+
+        if cutoff.index_dim != 2 or not cutoff.perm_sym:
+            raise RuntimeError('Wrong Chemsor for cutoff!')
+        cutoff = cutoff.as_dict(conf.species(), float)
 
         # 1. Neighborlist and shifts sij due to pbc
         i, j, sij = primitive_neighbor_list('ijS',
@@ -155,10 +159,12 @@ def test_ChemEnv():
     from ase.build import bulk
 
     atoms = bulk('Au').repeat(3)
-    conf = Configuration.from_atoms(atoms, requires_grad=True)
-    envs = ChemEnv.from_configuration(conf, 6.)
 
-    conf, envs = ChemEnv.from_atoms(atoms, 6., requires_grad=True)
+    cutoff = Chemsor({(79, 79): 6.})
+    conf = Configuration.from_atoms(atoms, requires_grad=True)
+    envs = ChemEnv.from_configuration(conf, cutoff)
+
+    conf, envs = ChemEnv.from_atoms(atoms, cutoff, requires_grad=True)
 
     envs[0].clone()
 
@@ -179,7 +185,9 @@ def test_ChemEnv_isolated_atoms():
     atoms.pbc = False
     atoms[-1].position += 100.
 
-    conf, [env] = ChemEnv.from_atoms(atoms, 6., subset=[-1])
+    cutoff = Chemsor({(79, 79): 6.})
+
+    conf, [env] = ChemEnv.from_atoms(atoms, cutoff, subset=[-1])
 
     return env.is_isolated
 

@@ -1,27 +1,34 @@
+# +
 import autoforce.cfg as cfg
 import torch
 from torch import Tensor
 from itertools import product
-from typing import Optional, Union, Dict, Tuple
+from typing import Optional, Union, Dict, Tuple, Callable
 
 
 class Chemsor:
     """
     Chemical + Tensor = Chemsor!
 
-    A canonical class for treating atom specific parameters.
+    A class for canonical treatment of species
+    dependent parameters.
 
-    Specified keys:
+    It can be instantiated with a dict of key-value
+    pairs and/or a default value for all indices
+    which are not explicitly specified.
 
-        >>> cutoff = Chemsor({(1, 1): 3., (1, 6): 4., (6, 6): 5})
+    With keys:
 
-    Default for all:
+        >>> keyval = {(1, 1): 3., (1, 6): 4., (6, 6): 5}
+        >>> cutoff = Chemsor(keyval)
+
+    With a Default value:
 
         >>> cutoff = Chemsor(default=6.)
 
-    Default + specified keys:
+    Specified keys + a default value:
 
-        >>> cutoff = Chemsor({(1, 1): 3., (1, 6): 4., (6, 6): 5}, default=6.)
+        >>> cutoff = Chemsor(keyval, default=6.)
 
     Indices can be specified afterwards as well.
     For example, the last example is equivalent to:
@@ -33,7 +40,9 @@ class Chemsor:
         >>> cutoff[6, 6] = 6.
 
     If perm_sym = True, it is ensured that values are
-    invariant wrt permutation of indices (x[1, 2] == x[2, 1]).
+    invariant wrt permutation of indices:
+
+        x[1, 2] == x[2, 1]
 
     Other dimensionality for indices are also accepted:
 
@@ -41,7 +50,7 @@ class Chemsor:
 
     Finally, it can be used as callable:
 
-        >>> cutoff = Chemsor({(1, 1): 3., (1, 6): 4., (6, 6): 5.})
+        >>> cutoff = Chemsor(keyval)
         >>> a = torch.tensor(1)
         >>> b = torch.tensor([1, 1, 6, 6])
         >>> cutoff(a, b)
@@ -51,6 +60,10 @@ class Chemsor:
         tensor([3., 3., 5., 5.])
 
     """
+
+    # TODO: use cython
+
+    __slots__ = ('dict', 'default', 'index_dim', 'perm_sym')
 
     def __init__(self,
                  dict: Optional[Dict[Tuple[int, ...], Tensor]] = None,
@@ -84,7 +97,7 @@ class Chemsor:
 
         if len(key) != self.index_dim:
             raise IndexError(
-                f'key {key} has wrong length! (!={self.index_dim})')
+                f'The key {key} has the wrong length! (!={self.index_dim})')
 
         if self.perm_sym:
             key = tuple(sorted(key))
@@ -112,7 +125,9 @@ class Chemsor:
         else:
             self.dict[self._getkey(key)] = value
 
-    def as_dict(self, species: Tuple[int]) -> Dict[Tuple[int], Tensor]:
+    def as_dict(self, species: Tuple[int],
+                convert: Optional[Callable] = None
+                ) -> Dict[Tuple[int], Tensor]:
 
         if not hasattr(species, '__iter__'):
             species = (species,)
@@ -124,13 +139,20 @@ class Chemsor:
                 i = tuple(sorted(i))
             val = self[i]
             if val is not None:
+                if convert:
+                    val = convert(val)
                 dict[i] = val
 
         return dict
 
     def __call__(self, *args: Tuple[Tensor, ...]) -> Tensor:
         """
-        args are a tuple (length=index_dim) of broadcastable tensors.
+        args = (..., tj, ...)
+
+        where tj are int tensors,
+        length(args) == index_dim,
+        and all tensors have the same size or
+        can be broadcasted to the same size.
 
         """
         args = torch.broadcast_tensors(*args)
@@ -183,6 +205,8 @@ def test_Chemsor() -> bool:
     b = torch.tensor([1, 2, 3])
     assert (s(a, b) == torch.tensor([3., 1., 3.])).all()
     assert (s(b, b) == torch.tensor([3., 7., 3.])).all()
+
+    s.as_dict([1])
 
     return True
 
