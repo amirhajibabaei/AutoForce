@@ -31,12 +31,13 @@ class Transform(ABC):
     parameters (e.g. if x < 1e-6: ..., etc.).
     An ad hoc number is equivalent to choosing
     a model which should be controllable by
-    the higher level "Descriptor" classes.
+    the higher level classes.
 
-    "Transfroms" are low-level and well-defined
-    operations which will be employed by the
-    "Descriptor" classes which are allowed to
-    contain optimizable parameters.
+    "Transfroms" are low-level classes which
+    work directly with "Tensor" inputs/outputs
+    which are employed by the higher level
+    "Descriptor" classes which deal with
+    ChemEnvs, etc.
 
     """
 
@@ -46,10 +47,6 @@ class Transform(ABC):
     @abstractmethod
     def function(self, *args, **kwargs):
         pass
-
-    @property
-    def name(self):
-        return self.__class__.__name__
 
 
 def r_theta_phi(v: Tensor) -> (Tensor, Tensor, Tensor):
