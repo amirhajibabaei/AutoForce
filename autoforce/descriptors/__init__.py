@@ -1,5 +1,4 @@
 from .configuration import Configuration
-from .chemsor import Chemsor
 from .chemenv import ChemEnv
 from .transform import Transform
 from .cutoff import Cutoff, PolynomialCut, CosineCut

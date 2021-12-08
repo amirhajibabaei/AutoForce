@@ -3,7 +3,8 @@ import numpy as np
 import torch
 import ase
 from ase.neighborlist import primitive_neighbor_list
-from autoforce.descriptors import Configuration, Chemsor
+from autoforce.parameters import Chemsor
+from autoforce.descriptors import Configuration
 from typing import Union, Optional
 
 

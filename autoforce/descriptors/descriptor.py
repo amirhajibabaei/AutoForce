@@ -1,8 +1,9 @@
 # +
 import autoforce.cfg as cfg
+from autoforce.parameters import Chemsor
+from autoforce.descriptors import Configuration, ChemEnv, Cutoff
 import torch
 from torch import Tensor
-from autoforce.descriptors import Configuration, ChemEnv, Chemsor, Cutoff
 from ase import Atoms
 from typing import List, Callable, Optional, Any
 from abc import ABC, abstractmethod
@@ -36,7 +37,7 @@ class Descriptor(ABC):
     def __call__(self,
                  conf: Configuration,
                  cutoff: Chemsor,
-                 sigma: Optional[Chemsor] = None,
+                 scale: Optional[Chemsor] = None,
                  subset: Optional[List[int]] = None
                  ) -> List[Vector]:
 
@@ -51,8 +52,8 @@ class Descriptor(ABC):
                 dij = rij.norm(dim=1)
                 rc = cutoff(x.number, x.numbers)
                 weights = self.cutoff_fn(dij, rc)
-                if sigma is not None:
-                    sij = sigma(x.number, x.numbers).view(-1, 1)
+                if scale is not None:
+                    sij = scale(x.number, x.numbers).view(-1, 1)
                     rij = rij / sij
                 v = self.vector(rij, x.numbers, weights)
                 return v
@@ -70,13 +71,13 @@ class Descriptor(ABC):
     def from_atoms(self,
                    atoms: Atoms,
                    cutoff: Chemsor,
-                   sigma: Optional[Chemsor] = None,
+                   scale: Optional[Chemsor] = None,
                    subset: Optional[List[int]] = None,
                    requires_grad: Optional[bool] = False
                    ) -> List[Vector]:
 
         conf = Configuration.from_atoms(atoms, requires_grad=requires_grad)
-        descriptors = self(conf, cutoff, sigma=sigma, subset=subset)
+        descriptors = self(conf, cutoff, scale=scale, subset=subset)
 
         return conf, descriptors
 

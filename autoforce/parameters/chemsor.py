@@ -1,5 +1,6 @@
 # +
 import autoforce.cfg as cfg
+from autoforce.parameters import Constraint
 import torch
 from torch import Tensor
 from itertools import product
@@ -63,17 +64,21 @@ class Chemsor:
 
     # TODO: use cython
 
-    __slots__ = ('dict', 'default', 'index_dim', 'perm_sym')
+    __slots__ = ('dict', 'default', 'index_dim', 'perm_sym',
+                 'constraint', '_requires_grad')
 
     def __init__(self,
                  dict: Optional[Dict[Tuple[int, ...], Tensor]] = None,
                  default: Optional[Tensor] = None,
                  index_dim: Optional[int] = None,
-                 perm_sym: Optional[bool] = True
+                 perm_sym: Optional[bool] = True,
+                 constraint: Optional[Constraint] = None,
+                 requires_grad: Optional[bool] = False
                  ) -> None:
 
         self.index_dim = index_dim
         self.perm_sym = perm_sym
+        self.constraint = constraint
         self.dict = {}
         self[:] = default
 
@@ -89,6 +94,24 @@ class Chemsor:
                     else:
                         self.index_dim = 1
                 self[self._getkey(key)] = val
+
+        self.requires_grad = requires_grad
+
+    def parameters(self) -> Tuple[Tensor]:
+        if self.default is None:
+            return (*self.dict.values(),)
+        else:
+            return (self.default, *self.dict.values())
+
+    @property
+    def requires_grad(self) -> bool:
+        return self._requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, value: bool) -> None:
+        self._requires_grad = value
+        for par in self.parameters():
+            par.requires_grad = value
 
     def _getkey(self, key: Tuple[int, ...]) -> Tuple[int, ...]:
 
@@ -107,15 +130,26 @@ class Chemsor:
         return key
 
     def __getitem__(self, key: Tuple[int, ...]) -> Union[Tensor, None]:
+
         key = self._getkey(key)
         if key in self.dict:
-            return self.dict[key]
+            value = self.dict[key]
         else:
-            return self.default
+            value = self.default
+
+        if self.constraint:
+            value = self.constraint.apply(value)
+
+        return value
 
     def __setitem__(self, key: Tuple[int, ...], value: Tensor) -> None:
+
         if value is not None:
             value = torch.as_tensor(value).to(cfg.float_t)
+
+            if self.constraint:
+                value = self.constraint.inverse(value)
+
         if type(key) == slice:
             if all([x is None for x in (key.start, key.stop, key.step)]):
                 self.dict = {}
@@ -207,6 +241,13 @@ def test_Chemsor() -> bool:
     assert (s(b, b) == torch.tensor([3., 7., 3.])).all()
 
     s.as_dict([1])
+
+    #
+    from autoforce.parameters import RangeConstraint
+    const = RangeConstraint(0., 10.)
+    s = Chemsor({(1, 2): 1., (2, 2): 7.}, 3.)
+    assert (s(a, b) == torch.tensor([3., 1., 3.])).all()
+    assert (s(b, b) == torch.tensor([3., 7., 3.])).all()
 
     return True
 
