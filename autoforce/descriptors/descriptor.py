@@ -86,7 +86,7 @@ class Descriptor(ABC):
         prod = []
         for x in X:
             if x.data is None:
-                row = len(Y)*[zero]
+                prod.append(torch.zeros(len(Y), dtype=cfg.float_t))
                 continue
             row = []
             for y in Y:

@@ -132,8 +132,9 @@ class ChemEnv:
         # 4. Create Envs; None for isolated atoms
         envs = len(conf.numbers)*[None]
         for _i, j, rij in z:
-            i = _i[0]
-            envs[i] = ChemEnv(conf.numbers[i], conf.numbers[j], rij)
+            if len(_i) > 0:
+                i = _i[0]
+                envs[i] = ChemEnv(conf.numbers[i], conf.numbers[j], rij)
 
         # 5. Envs for isolated atoms
         for i, env in enumerate(envs):
