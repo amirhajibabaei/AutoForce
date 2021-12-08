@@ -70,6 +70,34 @@ class OnlineSymMatrix(OnlineMatrix):
         return True
 
 
+class OnlineTriMatrix(OnlineMatrix):
+
+    def __init__(self, data: Optional[Tensor] = None, upper=False) -> None:
+        super().__init__(data)
+        self.upper = upper
+        if self.data is None:
+            self.data = torch.empty(0, 0)
+
+    def append_(self, vec: Tensor, diag: Optional[Tensor] = None) -> bool:
+
+        if diag is None:
+            diag = vec[-1]
+            vec = vec[:-1]
+        diag = diag.view(1, 1)
+        vec = vec.view(-1, 1)
+
+        if self.upper:
+            a = vec
+            b = torch.zeros_like(vec).t()
+        else:
+            a = torch.zeros_like(vec)
+            b = vec.t()
+
+        self.data = torch.cat([torch.cat([self.data, a], dim=1),
+                               torch.cat([b, diag], dim=1)])
+        return True
+
+
 def test_OnlineMatrix():
 
     a = torch.rand(5, 10)
@@ -87,6 +115,23 @@ def test_OnlineMatrix():
     return test1, test2
 
 
+def test_OnlineTriMatrix():
+
+    a = torch.rand(5, 5)
+    l = torch.tril(a)
+    u = torch.triu(a)
+
+    M = OnlineTriMatrix()
+    N = OnlineTriMatrix(upper=True)
+    for i in range(5):
+        M.append_(a[i, :i+1])
+        N.append_(a[:i+1, i])
+    test1 = M.data.allclose(l)
+    test2 = N.data.allclose(u)
+
+    return test1, test2
+
+
 def test_OnlineSymMatrix():
 
     a = torch.rand(5, 5)
@@ -98,12 +143,13 @@ def test_OnlineSymMatrix():
         M.append_(a[i, :i+1])
         N.append_(a[i, :i], diag=a[i, i])
     test1 = M.data.allclose(a)
-    test2 = M.data.allclose(a)
+    test2 = N.data.allclose(a)
 
     return test1, test2
 
 
 if __name__ == '__main__':
     a = test_OnlineMatrix()
-    b = test_OnlineSymMatrix()
-    print(a, b)
+    b = test_OnlineTriMatrix()
+    c = test_OnlineSymMatrix()
+    print(a, b, c)
