@@ -98,6 +98,48 @@ class OnlineTriMatrix(OnlineMatrix):
         return True
 
 
+class OnlineSPD(OnlineSymMatrix):
+
+    def __init__(self, data: Optional[Tensor] = None) -> None:
+        super().__init__(data)
+        self._chol = None
+        if self.size[0] > 0:
+            self._invert()
+
+    def _invert(self) -> None:
+        self._chol = torch.linalg.cholesky(self.data)
+        self._inv = self._chol.cholesky_inverse()
+
+    def append_(self,
+                vec: Tensor,
+                diag: Optional[Tensor] = None,
+                spilling: Optional[Tensor] = None
+                ) -> bool:
+
+        if self.size[0] is None or spilling is None:
+            app = True
+        else:
+
+            if diag is None:
+                diag = vec[-1]
+                vec = vec[:-1]
+            diag = diag.view(1, 1)
+
+            vec = vec.view(-1, 1)
+            alpha = (diag - vec.t()@self._inv@vec)/diag
+
+            if alpha > spilling:
+                app = True
+            else:
+                app = False
+
+        if app:
+            super().append_(vec, diag=diag)
+            self._invert()
+
+        return app
+
+
 def test_OnlineMatrix():
 
     a = torch.rand(5, 10)
@@ -148,8 +190,26 @@ def test_OnlineSymMatrix():
     return test1, test2
 
 
+def test_OnlineSPD():
+
+    Xind = torch.tensor([0.])
+    m = OnlineSPD(torch.ones(1, 1))
+    Xdat = torch.arange(0, 5, 0.01)
+
+    for x in Xdat:
+        k = x.sub(Xind).pow(2).mul(-0.5).exp()
+        app = m.append_(k, diag=torch.ones([]), spilling=1e-1)
+        if app:
+            Xind = torch.cat([Xind, x.view(1)])
+
+    test = ((m._inv@m.data)-torch.eye(m.size[0])).abs().max().lt(1e-4)
+
+    return bool(test)
+
+
 if __name__ == '__main__':
     a = test_OnlineMatrix()
     b = test_OnlineTriMatrix()
     c = test_OnlineSymMatrix()
-    print(a, b, c)
+    d = test_OnlineSPD()
+    print(a, b, c, d)

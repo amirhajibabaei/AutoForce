@@ -1,1 +1,5 @@
-from .online import OnlineABC, OnlineMatrix, OnlineSymMatrix
+from .online import (OnlineABC,
+                     OnlineMatrix,
+                     OnlineTriMatrix,
+                     OnlineSymMatrix,
+                     OnlineSPD)
