@@ -22,11 +22,13 @@ class Vector:
     def detach(self):
         v = Vector(self.data.detach(), self.indices)
         v._species = self._species
+        v._norm = self._norm.detach()
         return v
 
     def clone(self):
         v = Vector(self.data.clone(), self.indices)
         v._species = self._species
+        v._norm = self._norm.clone()
         return v
 
     def __repr__(self):
