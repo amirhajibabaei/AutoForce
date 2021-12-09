@@ -36,8 +36,12 @@ from math import pi as _pi
 
 # Defaults:
 float_t = torch.float32
+
+# Constants
 finfo = torch.finfo(float_t)
 eps = finfo.eps
+zero = torch.tensor(0.0, dtype=float_t)
+one = torch.tensor(1.0, dtype=float_t)
 pi = torch.tensor(_pi, dtype=float_t)
 
 
