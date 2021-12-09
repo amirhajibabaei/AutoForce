@@ -11,12 +11,13 @@ from abc import ABC, abstractmethod
 
 class Vector:
 
-    __slots__ = ('data', 'indices', '_species')
+    __slots__ = ('data', 'indices', '_species', '_norm')
 
     def __init__(self, data: Tensor, indices: Optional[Any] = None):
         self.data = data
         self.indices = indices
         self._species = None
+        self._norm = None
 
     def detach(self):
         v = Vector(self.data.detach(), self.indices)
@@ -67,6 +68,7 @@ class Descriptor(ABC):
                 y = mapping(x.rij)
 
             y._species = x.number
+            y._norm = self.product([y], [y]).sqrt().view([])
             descriptors.append(y)
 
         return descriptors
@@ -85,7 +87,6 @@ class Descriptor(ABC):
         return conf, descriptors
 
     def product(self, X: List[Vector], Y: List[Vector]) -> Tensor:
-        zero = torch.zeros([], dtype=cfg.float_t)
         prod = []
         for x in X:
             if x.data is None:
@@ -94,7 +95,7 @@ class Descriptor(ABC):
             row = []
             for y in Y:
                 if y.data is None or x._species != y._species:
-                    z = zero
+                    z = cfg.zero
                 else:
                     z = self.vector_product(x, y)
                 row.append(z)
