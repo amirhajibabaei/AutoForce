@@ -28,6 +28,9 @@ class Vector:
         v._species = self._species
         return v
 
+    def __repr__(self):
+        return f'Vector(species={self._species})'
+
 
 class Descriptor(ABC):
 
