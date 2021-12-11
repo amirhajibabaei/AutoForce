@@ -42,13 +42,13 @@ class RangeConstraint(Constraint):
 
     def apply(self, x):
         x = torch.as_tensor(x)
-        y = self.a + self.l/x.neg().exp().add(1.)
+        y = self.a + self.l*torch.special.expit(x)
         return y
 
     def inverse(self, y):
         y = torch.as_tensor(y)
         x = (y-self.a)/self.l
-        return -(x.neg().add(1.)/x).log()
+        return torch.special.logit(x)
 
 
 def test_RangeConstraint():

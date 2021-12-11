@@ -69,7 +69,7 @@ class Descriptor(ABC):
             else:
                 y = mapping(x.rij)
 
-            y._species = x.number
+            y._species = int(x.number)
             y._norm = self.product([y], [y]).sqrt().view([])
             descriptors.append(y)
 
