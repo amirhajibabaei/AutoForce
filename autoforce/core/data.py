@@ -1,0 +1,154 @@
+# +
+from torch import Tensor
+from typing import List, Any, Optional
+
+
+class Conf:
+    """
+    An atomic configuration.
+
+    Similar to ase.Atoms, except the data
+    are stored as torch.Tensor instead of
+    np.ndarray.
+
+
+    Keywords:
+    numbers      atomic numbers
+    positions    self explanatory
+    cell         self explanatory
+    pbc          periodic boundary conditions
+
+    """
+
+    __slots__ = ('numbers', 'positions', 'cell', 'pbc')
+
+    def __init__(self,
+                 numbers: Tensor,
+                 positions: Tensor,
+                 cell: Tensor,
+                 pbc: List[bool]
+                 ) -> None:
+        """
+        Self explanatory.
+
+        """
+
+        if positions.requires_grad != cell.requires_grad:
+            raise RuntimeError('requires_grad should be the '
+                               'same for positions and cell!'
+                               )
+
+        self.numbers = numbers
+        self.positions = positions
+        self.cell = cell
+        self.pbc = pbc
+
+    @property
+    def requires_grad(self) -> bool:
+        return self.positions.requires_grad
+
+    @requires_grad.setter
+    def requires_grad(self, value: bool) -> None:
+        self.positions.requires_grad = value
+        self.cell.requires_grad = value
+
+
+class Environ:
+    """
+    Local chemical environment (LCE) of an atom.
+
+    Keywords:
+    central atom    the atom for which the Environ
+                    is created
+    neighborhood    atoms in the neighborhood of
+                    the central atom (|rij| < cutoff)
+
+    """
+
+    __slots__ = ('index', 'number', 'numbers', 'rij')
+
+    def __init__(self,
+                 index: Tensor,
+                 number: Tensor,
+                 numbers: Tensor,
+                 rij: Tensor
+                 ) -> None:
+        """
+        index    index of the central atom in the
+                 Conf it belongs to.
+        number   atomic number of the central atom
+        numbers  atomic numbers of the neighborhood atoms
+        rij      coordinates of the neighborhood atoms
+                 relative to the central atom
+
+        """
+
+        self.index = index
+        self.number = number
+        self.numbers = numbers
+        self.rij = rij
+
+
+class Descriptor:
+    """
+    Descriptor vector, feature vector, or
+    fingerprints for a LCE.
+
+    It is often the output of a "descriptor
+    function" which can opaquely handle its
+    own data structures via "tensors" and "meta".
+
+    "tensors" are reserved for the data which
+    are derived from atomic positions and their
+    gradients are tracked.
+
+    "meta" are arbitrary auxiliary data.
+
+    "index" is the index of the LCE from which
+    the descriptor is derived from. If None,
+    it is automatically handled.
+
+    "species" is the species of the model which
+    will handle the descriptor. If None, it is
+    automatically handled. In most cases species
+    are automatically set to the atomic number
+    of the central atom (i.e. a model per atom
+    type). In rare cases one might be interested
+    in mixing several atom types in a single model
+    which can be achieved by considering them
+    as the same species.
+
+    Thus, in the contex of this package,
+    "species" and "atomic numbers" refer to
+    two different concepts.
+
+    """
+
+    __slots__ = ('tensors', 'meta', 'index', 'species')
+
+    def __init__(self,
+                 *tensors: Any,  # TODO: Any <- Tuple[Tensor, ...]
+                 meta: Any = None,
+                 index: Optional[int] = None,
+                 species: Optional[int] = None
+                 ) -> None:
+        """
+        tensors    a tuple of tensors (main data)
+        meta       arbitrary auxiliary data
+        index      index of the central atom
+        species    species of the descriptor
+
+        """
+
+        self.tensors = tensors
+        self.meta = meta
+        self.index = index
+        self.species = species
+
+    def detach(self):  # TODO: -> Descriptor
+        tensors = (t.detach() for t in self.tensors)
+        detached = Descriptor(*tensors,
+                              meta=self.meta,
+                              index=self.index,
+                              species=self.species)
+        return detached
