@@ -3,6 +3,19 @@ from torch import Tensor
 from typing import List, Any, Optional
 
 
+class Data:
+
+    __slots__ = ('energy', 'forces')
+
+    def __init__(self,
+                 *,
+                 energy: Optional[Tensor] = None,
+                 forces: Optional[Tensor] = None
+                 ) -> None:
+        self.energy = energy
+        self.forces = forces
+
+
 class Conf:
     """
     An atomic configuration.
@@ -17,16 +30,18 @@ class Conf:
     positions    self explanatory
     cell         self explanatory
     pbc          periodic boundary conditions
+    data         energy & forces
 
     """
 
-    __slots__ = ('numbers', 'positions', 'cell', 'pbc')
+    __slots__ = ('numbers', 'positions', 'cell', 'pbc', 'data')
 
     def __init__(self,
                  numbers: Tensor,
                  positions: Tensor,
                  cell: Tensor,
-                 pbc: List[bool]
+                 pbc: List[bool],
+                 data: Optional[Data] = None
                  ) -> None:
         """
         Self explanatory.
@@ -42,6 +57,10 @@ class Conf:
         self.positions = positions
         self.cell = cell
         self.pbc = pbc
+
+        if data is None:
+            data = Data()
+        self.data = data
 
     @property
     def requires_grad(self) -> bool:
