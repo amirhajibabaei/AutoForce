@@ -2,7 +2,6 @@
 from autoforce.core.data import Environ, Descriptor
 from torch import Tensor
 from abc import ABC, abstractmethod
-from typing import Optional, List
 
 
 class Similarity(ABC):
