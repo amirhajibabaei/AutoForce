@@ -1,13 +1,14 @@
 # +
 import autoforce.cfg as cfg
+from autoforce.core import Function
+from autoforce.descriptors.harmonics import Harmonics
 import torch
-from autoforce.descriptors import Transform, Harmonics
 from math import sqrt, factorial as fac
 from itertools import product
 from typing import Optional
 
 
-class Overlaps(Transform):
+class Overlaps(Function):
     """
     Description:
 
@@ -73,11 +74,11 @@ class Overlaps(Transform):
     def lmax(self):
         return self.harmonics.lmax
 
-    def function(self, rij: torch.Tensor,
-                 species: torch.Tensor,
-                 wj: Optional[torch.Tensor] = None,
-                 compress: Optional[bool] = True
-                 ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    def forward(self, rij: torch.Tensor,
+                species: torch.Tensor,
+                wj: Optional[torch.Tensor] = None,
+                compress: Optional[bool] = True
+                ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         """
         * rij: A float tensor with shape [:, 3] (displacement vectors).
 
@@ -172,7 +173,7 @@ def test_Overlaps_perm():
 
     """
 
-    from autoforce.descriptors import CosineCut
+    from autoforce.core import CosineCut
 
     # 1. Setup
     cutoff = 6.
@@ -203,7 +204,7 @@ def test_Overlaps_backward():
 
     """
 
-    from autoforce.descriptors import CosineCut
+    from autoforce.core import CosineCut
 
     # 1. Setup
     cutoff = 6.
@@ -234,8 +235,8 @@ def test_Overlaps_rotational_invariance():
 
     """
 
-    from autoforce.descriptors import CosineCut
-    from autoforce.descriptors import transform as trans
+    from autoforce.core import CosineCut
+    from autoforce.descriptors import coordinates as trans
     from autoforce.cfg import pi
 
     # 1. Setup
@@ -281,7 +282,7 @@ def test_Overlaps_compressed_norm():
 
     """
 
-    from autoforce.descriptors import CosineCut, Overlaps
+    from autoforce.core import CosineCut
 
     # 1. Setup
     cutoff = 6.

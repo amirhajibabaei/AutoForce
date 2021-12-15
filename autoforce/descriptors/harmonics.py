@@ -1,11 +1,11 @@
 # +
 import autoforce.cfg as cfg
-import torch
-from autoforce.descriptors import Transform
+from autoforce.core import Function
 from math import sqrt
+import torch
 
 
-class Harmonics(Transform):
+class Harmonics(Function):
 
     """
     Description:
@@ -59,7 +59,7 @@ class Harmonics(Transform):
         _c = (self.l**2-self.m**2) * (2*self.l+1) / (2*self.l-1)
         self.coef = _c[1:, 1:].sqrt()
 
-    def function(self, rij: torch.Tensor) -> torch.Tensor:
+    def forward(self, rij: torch.Tensor) -> torch.Tensor:
         """
         The input should be a Tensor with shape [:, 3].
 
@@ -159,7 +159,7 @@ def _scipy_harmonics(rij: torch.Tensor, lmax: int) -> torch.Tensor:
 
     """
 
-    from autoforce.descriptors.transform import r_theta_phi
+    from autoforce.descriptors.coordinates import r_theta_phi
     from scipy.special import sph_harm
 
     r, theta, phi = r_theta_phi(rij)

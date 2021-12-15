@@ -1,40 +1,35 @@
 # +
 import autoforce.cfg as cfg
+from autoforce.core.function import Function
 import torch
-from autoforce.descriptors import Transform
-from typing import Union
+from torch import Tensor
+from abc import abstractmethod
+from typing import Optional
 
 
-class Cutoff(Transform):
+class Cutoff(Function):
     """
     Smooth cutoff functions.
 
     """
 
-    def __init__(self) -> None:
-        super().__init__()
-
-    def function(self,
-                 dij: torch.Tensor,
-                 cutoff: Union[float, torch.Tensor]
-                 ) -> torch.Tensor:
+    def forward(self, dij: Tensor, cutoff: Tensor) -> Tensor:
         """
-        dij are distances.
-        cutoff can be either a float (for all)
-        or a tensor with the same length as dij.
-
+        dij        distances
+        cutoff     can be either a scalar or a tensor
+                   with the same length as dij
         """
 
         beyond = dij > cutoff
         result = torch.where(beyond,
-                             torch.zeros(1, dtype=dij.dtype),
+                             cfg.zero,
                              self.smooth(dij/cutoff)
                              )
         return result
 
-    def smooth(self, dij):
-        raise NotImplementedError(
-            f'{self.__class__.__name__}: smooth method is not implemented!')
+    @abstractmethod
+    def smooth(self, dij: Tensor) -> Tensor:
+        ...
 
 
 class PolynomialCut(Cutoff):
@@ -44,7 +39,7 @@ class PolynomialCut(Cutoff):
 
     """
 
-    def __init__(self, degree: int) -> None:
+    def __init__(self, degree: Optional[int] = 2) -> None:
         super().__init__()
         if degree < 2:
             raise RuntimeError('PolynomialCut: degree is less than 2!')
