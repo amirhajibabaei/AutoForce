@@ -143,19 +143,21 @@ class Descriptor:
 
     """
 
-    __slots__ = ('tensors', 'meta', 'index', 'species')
+    __slots__ = ('tensors', 'meta', 'index', 'species', 'norm')
 
     def __init__(self,
                  *tensors: Any,  # TODO: Any <- Tuple[Tensor, ...]
                  meta: Any = None,
                  index: Optional[int] = None,
-                 species: Optional[int] = None
+                 species: Optional[int] = None,
+                 norm: Optional[Tensor] = None
                  ) -> None:
         """
         tensors    a tuple of tensors (main data)
         meta       arbitrary auxiliary data
         index      index of the central atom
         species    species of the descriptor
+        norm       norm of the descriptor
 
         """
 
@@ -163,6 +165,7 @@ class Descriptor:
         self.meta = meta
         self.index = index
         self.species = species
+        self.norm = norm
 
     def detach(self):  # TODO: -> Descriptor
         tensors = (t.detach() for t in self.tensors)

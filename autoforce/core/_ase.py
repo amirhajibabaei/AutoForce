@@ -79,7 +79,7 @@ def neighborlist(conf: Conf,
         else:
             _i = i[k][0]
             env = Environ(_i,
-                          conf.numbers[i[k]],
+                          conf.numbers[_i],
                           conf.numbers[j[k]],
                           rij[k])
             environs.append(env)
