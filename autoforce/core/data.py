@@ -12,6 +12,10 @@ class Data:
                  energy: Optional[Tensor] = None,
                  forces: Optional[Tensor] = None
                  ) -> None:
+        """
+        Self explanatory.
+
+        """
         self.energy = energy
         self.forces = forces
 
@@ -84,13 +88,14 @@ class Environ:
 
     """
 
-    __slots__ = ('index', 'number', 'numbers', 'rij')
+    __slots__ = ('index', 'number', 'numbers', 'rij', 'wij')
 
     def __init__(self,
                  index: Tensor,
                  number: Tensor,
                  numbers: Tensor,
-                 rij: Tensor
+                 rij: Tensor,
+                 wij: Optional[Tensor] = None
                  ) -> None:
         """
         index    index of the central atom in the
@@ -99,6 +104,8 @@ class Environ:
         numbers  atomic numbers of the neighborhood atoms
         rij      coordinates of the neighborhood atoms
                  relative to the central atom
+        wij      weights of the neighborhood atoms
+                 (obtained by a smooth cutoff function)
 
         """
 
@@ -106,6 +113,7 @@ class Environ:
         self.number = number
         self.numbers = numbers
         self.rij = rij
+        self.wij = wij
 
 
 class Descriptor:
