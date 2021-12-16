@@ -180,5 +180,6 @@ class Descriptor:
         detached = Descriptor(*tensors,
                               meta=self.meta,
                               index=self.index,
-                              species=self.species)
+                              species=self.species,
+                              norm=self.norm.detach())
         return detached
