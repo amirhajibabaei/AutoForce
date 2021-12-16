@@ -116,7 +116,7 @@ class OnlineSPD(OnlineSymMatrix):
                 spilling: Optional[Tensor] = None
                 ) -> bool:
 
-        if self.size[0] is None or spilling is None:
+        if self.size[0] == 0 or spilling is None:
             app = True
         else:
 
