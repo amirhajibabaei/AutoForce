@@ -3,7 +3,10 @@ calculator = 'Gaussian'
 # ML
 ediff = 1*kcal_mol      # LCE sampling threshold
 fdiff = 1*kcal_mol      # DFT sampling threshold
+# ediff = (kcal_mol, 0.1, 2*kcal_mol, 1.0, 3*kcal_mol)
+# fdiff = (kcal_mol, 0.1, 2*kcal_mol, 1.0, 3*kcal_mol)
 noise_f = 0.01
+
 
 # structure relaxation
 algo = 'BFGS'

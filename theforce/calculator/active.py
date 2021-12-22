@@ -4,7 +4,7 @@ from theforce.descriptor.atoms import TorchAtoms, AtomsData, LocalsData, Distrib
 from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
 from theforce.descriptor.sesoap import DefaultRadii
 from theforce.util.tensors import padded, nan_to_num
-from theforce.util.util import date, timestamp, abspath
+from theforce.util.util import date, timestamp, abspath, iterable
 from theforce.io.sgprio import SgprIO
 import theforce.distributed as distrib
 from ase.calculators.calculator import Calculator, all_changes
@@ -68,6 +68,28 @@ class FilterDeltas(Filter):
 
 kcal_mol = 0.043
 inf = float('inf')
+
+
+class Switch:
+
+    def __init__(self, value):
+        self._value = value
+        value = iterable(value)
+        self.switches = (-inf, *value[1::2], inf)
+        self.values = value[0::2]
+        for k, s in enumerate(self.switches[:-1]):
+            if s > self.switches[k+1]:
+                raise RuntimeError('Switch is not ordered!')
+
+    def __repr__(self):
+        return f'{self._value}'
+
+    def __call__(self, x):
+        k = 0
+        for k, s in enumerate(self.switches[:-1]):
+            if x > s and x < self.switches[k+1]:
+                break
+        return self.values[k]
 
 
 class ActiveCalculator(Calculator):
@@ -238,8 +260,8 @@ class ActiveCalculator(Calculator):
         self.pckl = pckl
         self.get_model(covariance, kernel_kw or {})
         self.ediff = ediff
-        self.ediff_lb = ediff_lb or self.ediff
-        self.ediff_ub = ediff_ub or self.ediff
+        self.ediff_lb = ediff_lb or ediff
+        self.ediff_ub = ediff_ub or ediff
         self.ediff_tot = ediff_tot
         self.fdiff = fdiff
         self.noise_f = noise_f
@@ -306,6 +328,52 @@ class ActiveCalculator(Calculator):
     def size(self):
         return self.model.ndata, len(self.model.X)
 
+    # --------------------------------------------
+    @property
+    def fdiff(self):
+        return self._fdiff(self.maximum_force)
+
+    @fdiff.setter
+    def fdiff(self, value):
+        if type(value) == Switch:
+            self._fdiff = value
+        else:
+            self._fdiff = Switch(value)
+
+    @property
+    def ediff(self):
+        return self._ediff(self.maximum_force)
+
+    @ediff.setter
+    def ediff(self, value):
+        if type(value) == Switch:
+            self._ediff = value
+        else:
+            self._ediff = Switch(value)
+
+    @property
+    def ediff_lb(self):
+        return self._ediff_lb(self.maximum_force)
+
+    @ediff_lb.setter
+    def ediff_lb(self, value):
+        if type(value) == Switch:
+            self._ediff_lb = value
+        else:
+            self._ediff_lb = Switch(value)
+
+    @property
+    def ediff_ub(self):
+        return self._ediff_ub(self.maximum_force)
+
+    @ediff_ub.setter
+    def ediff_ub(self, value):
+        if type(value) == Switch:
+            self._ediff_ub = value
+        else:
+            self._ediff_ub = Switch(value)
+    # --------------------------------------------
+
     def calculate(self, _atoms=None, properties=['energy'], system_changes=all_changes):
 
         if self.size[1] == 0 and not self.active:
@@ -326,6 +394,9 @@ class ActiveCalculator(Calculator):
         dat1 = self.size[0]
         self.atoms.update(posgrad=True, cellgrad=True,
                           forced=True, dont_save_grads=True, **uargs)
+
+        #
+        self.maximum_force = inf
 
         # build a model
         if self.step == 0:
@@ -423,6 +494,7 @@ class ActiveCalculator(Calculator):
             self.results['energy'] += energy.detach().numpy()
             self.results['forces'] += forces.detach().numpy()
             self.results['stress'] += stress.flat[[0, 4, 8, 5, 2, 1]]
+        self.maximum_force = abs(self.results['forces']).max()
         return float(energy)
 
     def zero(self):
@@ -917,8 +989,9 @@ class ActiveCalculator(Calculator):
                 f.write(' '.join([str(float(arg)) for arg in args])+'\n')
 
     def log_settings(self):
-        settings = ['ediff', 'ediff_tot', 'fdiff']
+        settings = ['_ediff', 'ediff_tot', '_fdiff']
         s = ''.join([f' {s}: {getattr(self, s)} ' for s in settings])
+        s = s.replace(' _', ' ')
         self.log(f'settings: {s}')
 
 
@@ -989,7 +1062,15 @@ def parse_logfile(file='active.log', window=(None, None)):
         split = s[2:]
 
         if split[1] == 'settings:':
-            settings = {a: eval(b) for a, b in zip(split[2::2], split[3::2])}
+            settings = {}
+            b = None
+            for a in split[2:]:
+                if ':' in a:
+                    settings[a] = ''
+                    b = a
+                else:
+                    settings[b] += a
+            settings = {a: eval(b) for a, b in settings.items()}
 
         try:
             step = int(split[0])
@@ -1071,7 +1152,8 @@ def log_to_figure(file, figsize=(10, 5), window=(None, None), meta_ax=True, plot
     wall = axes[2].twinx()
     wall.plot(*zip(*elapsed), color='cyan', alpha=0.5)
     wall.set_ylabel('minutes')
-    axes[2].axhline(y=settings['ediff:'], ls='--', color='k')
+    for y_ediff in iterable(settings['ediff:'])[0::2]:
+        axes[2].axhline(y=y_ediff, ls='--', color='k')
     # axes[2].axhline(y=settings['ediff_lb:'], ls='--', color='k')
     # axes[2].axhline(y=settings['ediff_ub:'], ls='--', color='k', alpha=0.3)
     axes[2].grid()
