@@ -110,6 +110,11 @@ class OnlineSPD(OnlineSymMatrix):
         self._chol = torch.linalg.cholesky(self.data)
         self._inv = self._chol.cholesky_inverse()
 
+    def residual(self, vec: Tensor, diag: Tensor) -> Tensor:
+        vec = vec.view(-1, 1)
+        alpha = (diag - vec.t()@self._inv@vec)/diag
+        return alpha
+
     def append_(self,
                 vec: Tensor,
                 diag: Optional[Tensor] = None,
@@ -126,7 +131,7 @@ class OnlineSPD(OnlineSymMatrix):
             diag = diag.view(1, 1)
 
             vec = vec.view(-1, 1)
-            alpha = (diag - vec.t()@self._inv@vec)/diag
+            alpha = self.residual(vec, diag)
 
             if alpha > spilling:
                 app = True
