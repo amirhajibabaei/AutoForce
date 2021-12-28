@@ -1,6 +1,6 @@
 # +
 import autoforce.cfg as cfg
-from autoforce.core.transform import Transform
+from autoforce.core.bijection import Bijection
 import torch
 from torch import Tensor
 from itertools import product
@@ -52,15 +52,15 @@ class ChemPar:
     tensor([3., 3., 5., 5.])
 
     Constraints can be enforced using a
-    transform function. In this case
-    transform.inverse is called for setting
-    the values and transform.forward is
+    bijection function. In this case
+    bijection.inverse is called for setting
+    the values and bijection.forward is
     called when the values are requested.
 
     """
 
     __slots__ = ('values', 'default', 'clone', 'keylen',
-                 'permsym', 'transform', '_requires_grad')
+                 'permsym', 'bijection', '_requires_grad')
 
     def __init__(self,
                  *,
@@ -69,7 +69,7 @@ class ChemPar:
                  clone: Optional[bool] = True,
                  keylen: Optional[int] = None,
                  permsym: Optional[bool] = True,
-                 transform: Optional[Transform] = None,
+                 bijection: Optional[Bijection] = None,
                  requires_grad: Optional[bool] = False
                  ) -> None:
         """
@@ -83,7 +83,7 @@ class ChemPar:
                        values is None
         permsym        if True, the parameter is invariant
                        wrt permutation os indices
-        transform      applies a transformation
+        bijection      applies a bijective transformation
         requires_grad  turns on gradient tracing
 
         """
@@ -91,7 +91,7 @@ class ChemPar:
         self.clone = clone
         self.keylen = keylen
         self.permsym = permsym
-        self.transform = transform
+        self.bijection = bijection
         self.values = {}
         self[:] = default
 
@@ -146,8 +146,8 @@ class ChemPar:
         if value is not None:
             value = torch.as_tensor(value).to(cfg.float_t)
 
-            if self.transform:
-                value = self.transform.inverse(value)
+            if self.bijection:
+                value = self.bijection.inverse(value)
 
         if type(key) == slice:
             if all([x is None for x in (key.start, key.stop, key.step)]):
@@ -173,8 +173,8 @@ class ChemPar:
             else:
                 value = self.default
 
-        if self.transform:
-            value = self.transform.forward(value)
+        if self.bijection:
+            value = self.bijection.forward(value)
 
         return value
 
@@ -262,9 +262,9 @@ def test_ChemPar() -> bool:
     s.as_dict([1])
 
     #
-    from autoforce.core.transform import FiniteRange
+    from autoforce.core.bijection import FiniteRange
     const = FiniteRange(0., 10.)
-    s = ChemPar(values={(1, 2): 1., (2, 2): 7.}, default=3., transform=const)
+    s = ChemPar(values={(1, 2): 1., (2, 2): 7.}, default=3., bijection=const)
     assert (s(a, b) == torch.tensor([3., 1., 3.])).all()
     assert (s(b, b) == torch.tensor([3., 7., 3.])).all()
 

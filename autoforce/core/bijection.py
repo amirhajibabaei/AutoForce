@@ -5,9 +5,9 @@ from torch import Tensor
 from abc import abstractmethod
 
 
-class Transform(Function):
+class Bijection(Function):
     """
-    A Transfrom is a Function which, in addition
+    A Bijection is a Function which, in addition
     to the "forward" method, has an "inverse"
     method such that
 
@@ -20,7 +20,7 @@ class Transform(Function):
         ...
 
 
-class FiniteRange(Transform):
+class FiniteRange(Bijection):
 
     def __init__(self, a: float, b: float) -> None:
 
