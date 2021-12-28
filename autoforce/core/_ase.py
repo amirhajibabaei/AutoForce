@@ -1,6 +1,6 @@
 # +
 import autoforce.cfg as cfg
-from autoforce.core.data import Data, Conf, Environ
+from autoforce.core.buffers import Data, Conf, Environ
 from autoforce.core.parameter import ChemPar
 from autoforce.core.function import Function
 from ase.neighborlist import (wrap_positions,

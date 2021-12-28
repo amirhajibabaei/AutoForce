@@ -1,5 +1,5 @@
 # +
-from autoforce.core.data import Environ, Descriptor
+from autoforce.core.buffers import Environ, Descriptor
 from torch import Tensor
 from abc import ABC, abstractmethod
 

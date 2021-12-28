@@ -1,4 +1,4 @@
-from .data import Data, Conf, Environ, Descriptor
+from .buffers import Data, Conf, Environ, Descriptor
 from .function import Function
 from .cutoff_fn import Cutoff_fn, PolynomialCut, CosineCut
 from .bijection import Bijection, FiniteRange
