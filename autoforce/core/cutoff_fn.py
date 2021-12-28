@@ -7,7 +7,7 @@ from abc import abstractmethod
 from typing import Optional
 
 
-class Cutoff(Function):
+class Cutoff_fn(Function):
     """
     Smooth cutoff functions.
 
@@ -32,7 +32,7 @@ class Cutoff(Function):
         ...
 
 
-class PolynomialCut(Cutoff):
+class PolynomialCut(Cutoff_fn):
     """
     Polynomial-type smooth cutoff function.
     Degree must be greater then or equal to 2.
@@ -49,7 +49,7 @@ class PolynomialCut(Cutoff):
         return (1-sij)**self.degree
 
 
-class CosineCut(Cutoff):
+class CosineCut(Cutoff_fn):
     """
     Cosine-type smooth cutoff function.
 
