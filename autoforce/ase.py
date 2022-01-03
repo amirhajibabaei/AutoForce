@@ -1,8 +1,6 @@
 # +
 import autoforce.cfg as cfg
-from autoforce.core.buffers import Data, Conf, Environ
-from autoforce.core.parameter import ChemPar
-from autoforce.core.function import Function
+import autoforce.core as core
 from ase.neighborlist import (wrap_positions,
                               primitive_neighbor_list as _nl)
 from typing import Optional, List, Any
@@ -12,7 +10,7 @@ import numpy as np
 import ase
 
 
-def from_atoms(atoms: ase.Atoms) -> Conf:
+def from_atoms(atoms: ase.Atoms) -> core.Conf:
     """
     Generates a data.Conf object from a ase.Atoms object.
 
@@ -27,38 +25,39 @@ def from_atoms(atoms: ase.Atoms) -> Conf:
     cell = torch.from_numpy(atoms.cell.array).to(cfg.float_t)
 
     # 2.
-    data = Data()
+    e, f = None, None
     if atoms.calc:
         if 'energy' in atoms.calc.results:
             e = atoms.get_potential_energy()
-            data.energy = torch.tensor(e).to(cfg.float_t)
+            e = torch.tensor(e).to(cfg.float_t)
         if 'forces' in atoms.calc.results:
             f = atoms.get_forces()
-            data.forces = torch.from_numpy(f).to(cfg.float_t)
+            f = torch.from_numpy(f).to(cfg.float_t)
+    data = core.PotData(energy=e, forces=f)
 
     # 3.
-    conf = Conf(numbers, positions, cell, atoms.pbc, data=data)
+    conf = core.Conf(numbers, positions, cell, atoms.pbc, potential=data)
 
     return conf
 
 
-def environlist(conf: Conf,
-                cutoff: ChemPar,
-                cutoff_fn: Function,
-                subset: Optional[List[int]] = None
-                ) -> (List[Environ], Counter):
+def localslist(conf: core.Conf,
+               cutoff: core.ChemPar,
+               cutoff_fn: core.Function,
+               subset: Optional[List[int]] = None
+               ) -> (List[core.LocalEnv], Counter):
     """
-    Generates a list of LCEs (data.Environ) from data.Conf.
+    Generates a list of data.LocalEnv from data.Conf.
     It uses ASE neighborlist generator for building LCEs
     and weights wij of the neigbors are calculated using
     cutoff and cutoff_fn arguments.
 
-    Note that no Environ is generated for isolated atoms,
+    Note that no LocalEnv is generated for isolated atoms,
     thus it also returns a count of the isolated atoms.
 
     The "subset" arg can be used for requesting only a
-    subset of LCEs. Although, the full neighborlist still
-    is generated. This can be optimized in near future.
+    subset of local envs. Although, the full neighborlist
+    still is generated. This can be optimized in near future.
 
     """
 
@@ -88,26 +87,26 @@ def environlist(conf: Conf,
     dij = rij.norm(dim=1)
     wij = cutoff_fn(dij, cutoff(conf.numbers[i], conf.numbers[j]))
 
-    # 4. Split environs; note that neighborlist is already sorted wrt "i"
+    # 4. Split localenvs; note that neighborlist is already sorted wrt "i"
     sizes = np.bincount(i, minlength=natoms).tolist()
     i = torch.from_numpy(i).split(sizes)
     j = torch.from_numpy(j).split(sizes)
     rij = rij.split(sizes)
     wij = wij.split(sizes)
 
-    # 5. Environs
-    environs = []
+    # 5. LocalEnvs
+    localenvs = []
     isolated = Counter()
     for k in subset:
         if sizes[k] == 0:
             isolated[int(conf.numbers[k])] += 1
         else:
             _i = i[k][0]
-            env = Environ(_i,
-                          conf.numbers[_i],
-                          conf.numbers[j[k]],
-                          rij[k],
-                          wij[k])
-            environs.append(env)
+            env = core.LocalEnv(_i,
+                                conf.numbers[_i],
+                                conf.numbers[j[k]],
+                                rij[k],
+                                wij[k])
+            localenvs.append(env)
 
-    return environs, isolated
+    return localenvs, isolated

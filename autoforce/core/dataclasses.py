@@ -3,7 +3,7 @@ from torch import Tensor
 from typing import List, Any, Optional
 
 
-class Data:
+class PotData:
 
     __slots__ = ('energy', 'forces')
 
@@ -34,18 +34,18 @@ class Conf:
     positions    self explanatory
     cell         self explanatory
     pbc          periodic boundary conditions
-    data         energy & forces
+    potential    energy & forces
 
     """
 
-    __slots__ = ('numbers', 'positions', 'cell', 'pbc', 'data')
+    __slots__ = ('numbers', 'positions', 'cell', 'pbc', 'potential')
 
     def __init__(self,
                  numbers: Tensor,
                  positions: Tensor,
                  cell: Tensor,
                  pbc: List[bool],
-                 data: Optional[Data] = None
+                 potential: Optional[PotData] = None
                  ) -> None:
         """
         Self explanatory.
@@ -62,9 +62,9 @@ class Conf:
         self.cell = cell
         self.pbc = pbc
 
-        if data is None:
-            data = Data()
-        self.data = data
+        if potential is None:
+            potential = PotData()
+        self.potential = potential
 
     @property
     def requires_grad(self) -> bool:
@@ -76,15 +76,25 @@ class Conf:
         self.cell.requires_grad = value
 
 
-class Environ:
+class LocalEnv:
     """
     Local chemical environment (LCE) of an atom.
 
     Keywords:
-    central atom    the atom for which the Environ
+    central atom    the atom for which the LocalEnv
                     is created
     neighborhood    atoms in the neighborhood of
                     the central atom (|rij| < cutoff)
+
+    On wij:
+    wij are weights of the neighborhood atoms which
+    are typically set by a Cutoff_fn e.g.:
+        wij = (1-rij/cutoff)**2
+    but, they can also be utilized for generalized
+    weighing mechanisms. Descriptor functions should
+    behave such that if for a neighbor wij=0, the
+    result should be the same as eliminating that
+    neighbor from the LocalEnv.
 
     """
 
@@ -105,7 +115,6 @@ class Environ:
         rij      coordinates of the neighborhood atoms
                  relative to the central atom
         wij      weights of the neighborhood atoms
-                 (obtained by a smooth cutoff function)
 
         """
 
@@ -116,10 +125,10 @@ class Environ:
         self.wij = wij
 
 
-class Descriptor:
+class LocalDes:
     """
-    Descriptor vector, feature vector, or
-    fingerprints for a LCE.
+    Local descriptor vector, feature vector, or
+    fingerprints for a LocalEnv.
 
     It is often the output of a "descriptor
     function" which can opaquely handle its
@@ -127,11 +136,11 @@ class Descriptor:
 
     "tensors" are reserved for the data which
     are derived from atomic positions and their
-    gradients are tracked.
+    gradients maybe tracked.
 
     "meta" are arbitrary auxiliary data.
 
-    "index" is the index of the LCE from which
+    "index" is the index of the LocalEnv from which
     the descriptor is derived from. If None,
     it is automatically handled.
 
@@ -175,11 +184,11 @@ class Descriptor:
         self.species = species
         self.norm = norm
 
-    def detach(self):  # TODO: -> Descriptor
+    def detach(self):  # TODO: -> LocalDes
         tensors = (t.detach() for t in self.tensors)
-        detached = Descriptor(*tensors,
-                              meta=self.meta,
-                              index=self.index,
-                              species=self.species,
-                              norm=self.norm.detach())
+        detached = LocalDes(*tensors,
+                            meta=self.meta,
+                            index=self.index,
+                            species=self.species,
+                            norm=self.norm.detach())
         return detached
