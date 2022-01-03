@@ -1,7 +1,7 @@
 # +
 import autoforce.cfg as cfg
 from autoforce.core import Function
-from autoforce.similarity.harmonics import Harmonics
+from autoforce.descriptors.harmonics import Harmonics
 import torch
 from math import sqrt, factorial as fac
 from itertools import product
@@ -236,7 +236,7 @@ def test_Overlaps_rotational_invariance():
     """
 
     from autoforce.core import CosineCut
-    from autoforce.similarity import coordinates as trans
+    from autoforce.descriptors import coordinates as trans
     from autoforce.cfg import pi
 
     # 1. Setup
