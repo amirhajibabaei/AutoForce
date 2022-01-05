@@ -1,53 +1,53 @@
 # +
 """
-Global configuration (dtype, constants, etc.)
-of autoforce.
+Global configuration of autoforce.
 
-The default dtype is torch.float32 which is
-chosen over float64 for the sake of memory
-efficiency.
 
-If desired, the dfault dtype can be changed
+*** Precision ***
 
+The default precision is set by: dtype=float64.
+
+If desired, the precision can be globally set by:
     >>> import autoforce.cfg as cfg
     >>> import torch
-    >>> cfg.configure(torch.float64)
-   
-   
-Note:
+    >>> cfg.configure_precision(torch.floatXX)
 
-Internally, we explicitly set the dtype of
-every tensor created by
 
-    torch.tensor(..., dtype=cfg.float_t)
-    torch.zeros(..., dtype=cfg.float_t)
+Note 1: Internally, we explicitly set the dtype
+of every new tensor by
+    >>> torch.tensor(..., dtype=cfg.dtype)
+    >>> torch.zeros(..., dtype=cfg.dtype)
     etc.
-    
-We did not use
+We do not use
+    >>> torch.set_default_dtype(cfg.dtype)
+because this package should not change the global
+status of other packages.
 
-    torch.set_default_dtype(cfg.float_t)
-    
-because this package should not change
-the global status of other packages.
+
+Note 2: Although float32 is preferred for memory
+efficiency, it dramatically undermines accuracy.
+If this lack of accuracy is only related to algebraic
+operations, a mixed precision scheme may be adopted
+in future.
 
 """
 import torch
 from math import pi as _pi
 
-# Defaults:
-float_t = torch.float32
 
-# Constants
-finfo = torch.finfo(float_t)
-eps = finfo.eps
-zero = torch.tensor(0.0, dtype=float_t)
-one = torch.tensor(1.0, dtype=float_t)
-pi = torch.tensor(_pi, dtype=float_t)
+def configure_precision(dtype: torch.dtype) -> None:
+    """
+    dtype: torch.float64 or torch.float32
+    """
+
+    glob = globals()
+    glob['float_t'] = dtype
+    glob['finfo'] = torch.finfo(dtype)
+    glob['eps'] = finfo.eps
+    glob['zero'] = torch.tensor(0.0, dtype=dtype)
+    glob['one'] = torch.tensor(1.0, dtype=dtype)
+    glob['empty'] = torch.empty(0, dtype=dtype)
+    glob['pi'] = torch.tensor(_pi, dtype=dtype)
 
 
-def configure(dtype: torch.dtype) -> None:
-    global float_t, finfo, eps, pi
-    float_t = dtype
-    finfo = torch.finfo(float_t)
-    eps = finfo.eps
-    pi = torch.tensor(_pi, dtype=float_t)
+configure_precision(torch.float64)
