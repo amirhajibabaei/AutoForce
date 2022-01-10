@@ -3,6 +3,7 @@ import autoforce.cfg as cfg
 import autoforce.core as core
 from ase.neighborlist import (wrap_positions,
                               primitive_neighbor_list as _nl)
+from ase.io import read as _read
 from typing import Optional, List, Any, Union
 from collections import Counter
 import torch
@@ -45,7 +46,7 @@ def read(*args: Any, **kwargs: Any) -> Union[core.Conf, List[core.Conf]]:
     """
     Reads Atoms and converts them to Conf.
     """
-    data = ase.io.read(*args, **kwargs)
+    data = _read(*args, **kwargs)
     if type(data) == ase.Atoms:
         ret = from_atoms(data)
     else:
