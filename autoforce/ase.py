@@ -3,7 +3,7 @@ import autoforce.cfg as cfg
 import autoforce.core as core
 from ase.neighborlist import (wrap_positions,
                               primitive_neighbor_list as _nl)
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union
 from collections import Counter
 import torch
 import numpy as np
@@ -39,6 +39,18 @@ def from_atoms(atoms: ase.Atoms) -> core.Conf:
     conf = core.Conf(numbers, positions, cell, atoms.pbc, potential=data)
 
     return conf
+
+
+def read(*args: Any, **kwargs: Any) -> Union[core.Conf, List[core.Conf]]:
+    """
+    Reads Atoms and converts them to Conf.
+    """
+    data = ase.io.read(*args, **kwargs)
+    if type(data) == ase.Atoms:
+        ret = from_atoms(data)
+    else:
+        ret = [from_atoms(x) for x in data]
+    return ret
 
 
 def localslist(conf: core.Conf,
