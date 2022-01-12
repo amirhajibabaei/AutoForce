@@ -122,4 +122,7 @@ def localslist(conf: core.Conf,
                                 wij[k])
             localenvs.append(env)
 
+    conf._isolated_atoms = isolated
+    conf._cached_LocalEnv = localenvs
+
     return localenvs, isolated

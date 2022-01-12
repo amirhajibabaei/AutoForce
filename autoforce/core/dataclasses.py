@@ -38,7 +38,14 @@ class Conf:
 
     """
 
-    __slots__ = ('numbers', 'positions', 'cell', 'pbc', 'potential')
+    __slots__ = ('numbers',
+                 'positions',
+                 'cell',
+                 'pbc',
+                 'potential',
+                 '_isolated_atoms',
+                 '_cached_LocalEnv',
+                 '_cached_LocalDes')
 
     def __init__(self,
                  numbers: Tensor,
@@ -65,6 +72,10 @@ class Conf:
         if potential is None:
             potential = PotData()
         self.potential = potential
+
+        self._isolated_atoms = None
+        self._cached_LocalEnv = None
+        self._cached_LocalDes = None
 
     @property
     def requires_grad(self) -> bool:
@@ -98,7 +109,11 @@ class LocalEnv:
 
     """
 
-    __slots__ = ('index', 'number', 'numbers', 'rij', 'wij')
+    __slots__ = ('index',
+                 'number',
+                 'numbers',
+                 'rij',
+                 'wij')
 
     def __init__(self,
                  index: Tensor,
@@ -158,9 +173,17 @@ class LocalDes:
     "species" and "atomic numbers" refer to
     two different concepts.
 
+
+    TODO: explain orientation attribute.
+
     """
 
-    __slots__ = ('tensors', 'meta', 'index', 'species', 'norm')
+    __slots__ = ('tensors',
+                 'meta',
+                 'index',
+                 'species',
+                 'norm',
+                 '_cached_orientation')
 
     def __init__(self,
                  *tensors: Any,  # TODO: Any <- Tuple[Tensor, ...]
@@ -184,6 +207,8 @@ class LocalDes:
         self.species = species
         self.norm = norm
 
+        self._cached_orientation = []
+
     def detach(self):  # TODO: -> LocalDes
         tensors = (t.detach() for t in self.tensors)
         detached = LocalDes(*tensors,
@@ -191,4 +216,6 @@ class LocalDes:
                             index=self.index,
                             species=self.species,
                             norm=self.norm.detach())
+        detached._cached_orientation = [t.detach() for t in
+                                        self._cached_orientation]
         return detached

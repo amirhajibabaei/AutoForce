@@ -8,6 +8,7 @@ import torch
 class SOAP(core.Descriptor):
 
     def __init__(self, lmax: int, nmax: int):
+        super().__init__()
         self.overlaps = Overlaps(lmax, nmax)
 
     def forward(self, e: core.LocalEnv) -> core.LocalDes:
