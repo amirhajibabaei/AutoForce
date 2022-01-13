@@ -78,6 +78,9 @@ class Descriptor(ABC):
         self.basis[d.species].append(d.detach())
         self.active_set[d.species].append(True)
 
+    def basis_count(self):
+        return tuple((s, a.count(True)) for s, a in self.active_set.items())
+
     def get_orientation(self, d: LocalDes) -> List[Tensor]:
         # update cache: d._cached_orientation
         basis = self.basis[d.species]
