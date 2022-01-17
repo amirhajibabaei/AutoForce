@@ -42,8 +42,7 @@ class Descriptor(ABC):
 
     TODO:
         1. Explain "basis" attribute.
-        2. Explain "orientation" method.
-        3. Explain "active_set" attribute.
+        2. Explain "active_set" attribute.
 
     """
 
@@ -72,7 +71,7 @@ class Descriptor(ABC):
         """
         ...
 
-    def __call__(self, e: LocalEnv) -> LocalDes:
+    def _get_descriptor(self, e: LocalEnv) -> LocalDes:
         while len(e._cached_descriptors) < Descriptor.instances:
             e._cached_descriptors.append(None)
         if e._cached_descriptors[self.index] is None:
@@ -85,6 +84,33 @@ class Descriptor(ABC):
             e._cached_descriptors[self.index] = d
         return e._cached_descriptors[self.index]
 
+    def get_descriptors(self, conf: Conf) -> List:
+        if conf._cached_local_envs is None:
+            raise RuntimeError(f'{conf._cached_local_envs = }')
+        return [self._get_descriptor(l) for l in conf._cached_local_envs]
+
+    def _get_scalar_products(self, d: LocalDes) -> List[Tensor]:
+        # update cache: d._cached_scalar_products
+        basis = self.basis[d.species]
+        active = self.active_set[d.species]
+        m = len(d._cached_scalar_products)
+        for b, a in zip(basis[m:], active[m:]):
+            if a:
+                prod = self.scalar_product(b, d)/(b.norm*d.norm)
+            else:
+                prod = None
+            d._cached_scalar_products.append(prod)
+        # retrieve from cache
+        z = zip(d._cached_scalar_products, active)
+        return [p for p, a in z if a]
+
+    def get_scalar_products(self, conf: Conf) -> Dict:
+        out = defaultdict(list)
+        for d in self.get_descriptors(conf):
+            k = self._get_scalar_products(d)
+            out[d.species].append(k)
+        return out
+
     def append(self, d: LocalDes) -> None:
         self.basis[d.species].append(d.detach())
         self.active_set[d.species].append(True)
@@ -92,39 +118,11 @@ class Descriptor(ABC):
     def basis_count(self):
         return tuple((s, a.count(True)) for s, a in self.active_set.items())
 
-    def get_orientation(self, d: LocalDes) -> List[Tensor]:
-        # update cache: d._cached_orientation
-        basis = self.basis[d.species]
-        active = self.active_set[d.species]
-        m = len(d._cached_orientation)
-        for b, a in zip(basis[m:], active[m:]):
-            if a:
-                cosine = self.scalar_product(b, d)/(b.norm*d.norm)
-            else:
-                cosine = None
-            d._cached_orientation.append(cosine)
-        # retrieve from cache
-        z = zip(d._cached_orientation, active)
-        out = [cosine for cosine, a in z if a]
-        return out
-
     def get_gram_matrix(self) -> Dict:
         out = {}
         for species, basis in self.basis.items():
             z = zip(basis, self.active_set[species])
             out[species] = torch.stack(
-                [torch.stack(self.get_orientation(b)) for b, a in z if a]
+                [torch.stack(self._get_scalar_products(b)) for b, a in z if a]
             )
-        return out
-
-    def get_descriptors(self, conf: Conf) -> List:
-        if conf._cached_local_envs is None:
-            raise RuntimeError(f'{conf._cached_local_envs = }')
-        return [self(l) for l in conf._cached_local_envs]
-
-    def get_orientations(self, conf: Conf) -> Dict:
-        out = defaultdict(list)
-        for d in self.get_descriptors(conf):
-            k = self.get_orientation(d)
-            out[d.species].append(k)
         return out

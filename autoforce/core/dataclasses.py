@@ -176,9 +176,6 @@ class LocalDes:
     "species" and "atomic numbers" refer to
     two different concepts.
 
-
-    TODO: explain orientation attribute.
-
     """
 
     __slots__ = ('tensors',
@@ -186,7 +183,7 @@ class LocalDes:
                  'index',
                  'species',
                  'norm',
-                 '_cached_orientation')
+                 '_cached_scalar_products')
 
     def __init__(self,
                  *tensors: Any,  # TODO: Any <- Tuple[Tensor, ...]
@@ -211,7 +208,7 @@ class LocalDes:
         self.norm = norm
 
         # cache
-        self._cached_orientation = []
+        self._cached_scalar_products = []
 
     def detach(self):  # TODO: -> LocalDes
         tensors = (t.detach() for t in self.tensors)
@@ -220,6 +217,6 @@ class LocalDes:
                             index=self.index,
                             species=self.species,
                             norm=self.norm.detach())
-        detached._cached_orientation = [t.detach() for t in
-                                        self._cached_orientation]
+        detached._cached_scalar_products = [t.detach() for t in
+                                            self._cached_scalar_products]
         return detached
