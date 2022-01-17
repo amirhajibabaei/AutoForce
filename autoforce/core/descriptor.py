@@ -47,7 +47,14 @@ class Descriptor(ABC):
 
     """
 
+    instances = 0
+
     def __init__(self) -> None:
+        # Assign a global index for this instance
+        self.index = Descriptor.instances
+        Descriptor.instances += 1
+
+        # Self explanatory
         self.basis = defaultdict(list)
         self.active_set = defaultdict(list)
 
@@ -66,13 +73,17 @@ class Descriptor(ABC):
         ...
 
     def __call__(self, e: LocalEnv) -> LocalDes:
-        d = self.forward(e)
-        d.index = int(e.index)
-        if d.norm is None:
-            d.norm = self.scalar_product(d, d).sqrt().view([])
-        if d.species is None:
-            d.species = int(e.number)
-        return d
+        while len(e._cached_descriptors) < Descriptor.instances:
+            e._cached_descriptors.append(None)
+        if e._cached_descriptors[self.index] is None:
+            d = self.forward(e)
+            d.index = int(e.index)
+            if d.norm is None:
+                d.norm = self.scalar_product(d, d).sqrt().view([])
+            if d.species is None:
+                d.species = int(e.number)
+            e._cached_descriptors[self.index] = d
+        return e._cached_descriptors[self.index]
 
     def append(self, d: LocalDes) -> None:
         self.basis[d.species].append(d.detach())
@@ -107,11 +118,9 @@ class Descriptor(ABC):
         return out
 
     def get_descriptors(self, conf: Conf) -> List:
-        if conf._cached_LocalDes is None:
-            if conf._cached_LocalEnv is None:
-                raise RuntimeError('no LocalENV list!')
-            conf._cached_LocalDes = [self(l) for l in conf._cached_LocalEnv]
-        return conf._cached_LocalDes
+        if conf._cached_local_envs is None:
+            raise RuntimeError(f'{conf._cached_local_envs = }')
+        return [self(l) for l in conf._cached_local_envs]
 
     def get_orientations(self, conf: Conf) -> Dict:
         out = defaultdict(list)

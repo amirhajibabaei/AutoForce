@@ -43,9 +43,8 @@ class Conf:
                  'cell',
                  'pbc',
                  'potential',
-                 '_isolated_atoms',
-                 '_cached_LocalEnv',
-                 '_cached_LocalDes')
+                 '_cached_local_envs',
+                 '_cached_isolated_atoms')
 
     def __init__(self,
                  numbers: Tensor,
@@ -73,9 +72,9 @@ class Conf:
             potential = PotData()
         self.potential = potential
 
-        self._isolated_atoms = None
-        self._cached_LocalEnv = None
-        self._cached_LocalDes = None
+        # cache
+        self._cached_local_envs = None
+        self._cached_isolated_atoms = None
 
     @property
     def requires_grad(self) -> bool:
@@ -113,7 +112,8 @@ class LocalEnv:
                  'number',
                  'numbers',
                  'rij',
-                 'wij')
+                 'wij',
+                 '_cached_descriptors')
 
     def __init__(self,
                  index: Tensor,
@@ -138,6 +138,9 @@ class LocalEnv:
         self.numbers = numbers
         self.rij = rij
         self.wij = wij
+
+        # cache
+        self._cached_descriptors = []
 
 
 class LocalDes:
@@ -207,6 +210,7 @@ class LocalDes:
         self.species = species
         self.norm = norm
 
+        # cache
         self._cached_orientation = []
 
     def detach(self):  # TODO: -> LocalDes
