@@ -2,7 +2,7 @@
 from autoforce.core.dataclasses import Conf, LocalEnv, LocalDes
 import torch
 from torch import Tensor
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from abc import ABC, abstractmethod
 from typing import Dict, List
 
@@ -115,8 +115,11 @@ class Descriptor(ABC):
         self.basis[d.species].append(d.detach())
         self.active_set[d.species].append(True)
 
-    def basis_count(self):
-        return tuple((s, a.count(True)) for s, a in self.active_set.items())
+    def basis_count(self) -> OrderedDict:
+        c = OrderedDict()
+        for s, a in self.active_set.items():
+            c[s] = a.count(True)
+        return c
 
     def get_gram_matrix(self) -> Dict:
         out = {}
