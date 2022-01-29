@@ -105,11 +105,13 @@ class Descriptor(ABC):
         return [p for p, a in z if a]
 
     def get_scalar_products(self, conf: Conf) -> Dict:
-        out = defaultdict(list)
+        prod = defaultdict(list)
+        norms = defaultdict(list)
         for d in self.get_descriptors(conf):
             k = self._get_scalar_products(d)
-            out[d.species].append(k)
-        return out
+            prod[d.species].append(k)
+            norms[d.species].append(d.norm)
+        return prod, norms
 
     def append(self, d: LocalDes) -> None:
         self.basis[d.species].append(d.detach())
@@ -117,6 +119,10 @@ class Descriptor(ABC):
 
     def basis_count(self) -> Dict:
         return {s: a.count(True) for s, a in self.active_set.items()}
+
+    def basis_norms(self) -> Dict:
+        return {s: [d.norm for d, b in zip(self.basis[s], a) if b]
+                for s, a in self.active_set.items()}
 
     def get_gram_matrix(self) -> Dict:
         out = {}
