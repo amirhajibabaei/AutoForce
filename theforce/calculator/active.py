@@ -532,8 +532,11 @@ class ActiveCalculator(Calculator):
         i = self.get_unique_lces()
         inducing = LocalsData([self.atoms.local(j, detach=True) for j in i])
         self.model.set_data(data, inducing)
-        # data is stored in _exact, thus we only store the inducing
         if self.tape:
+            # FP results are stored in self._saved_for_tape in _exact
+            if self._saved_for_tape is not None:
+                self.tape.write(self._saved_for_tape)
+                self._saved_for_tape = None
             for loc in inducing:
                 self.tape.write(loc)
         details = [(j, self.atoms.numbers[j]) for j in i]
@@ -608,7 +611,8 @@ class ActiveCalculator(Calculator):
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
         if self.tape:
-            self.tape.write(tmp)
+            # self.tape.write(tmp)
+            self._saved_for_tape = tmp
         self.log('exact energy: {}'.format(energy))
         #
         if self.model.ndata > 0:
@@ -765,7 +769,7 @@ class ActiveCalculator(Calculator):
         self.covlog = f'{float(beta[q[0]])}'
         return added
 
-    def update_data(self, try_fake=True, internal=False):
+    def update_data(self, try_fake=True, internal=False, save_model=True):
         # try bypassing
         if self.tune_for_md and len(self.model.data) > 2:
             last = self.model.data[-1]
@@ -785,6 +789,9 @@ class ActiveCalculator(Calculator):
         if added > 0:
             if try_fake:
                 self.head()
+            if self._saved_for_tape is not None:
+                self.tape.write(self._saved_for_tape)
+                self._saved_for_tape = None
             self.log('added data: {} -> size: {} {}'.format(
                 added, *self.size))
             if self.ioptim in [0, 2]:
@@ -797,6 +804,8 @@ class ActiveCalculator(Calculator):
             if not internal:
                 self.distrib.upload(new)
             self.sanity_check()
+            if save_model:
+                self.save_model()
         return added
 
     def sanity_check(self):
@@ -819,7 +828,8 @@ class ActiveCalculator(Calculator):
         if update_data and not inducing:  # for include_tape
             update_data = self.get_covloss().max() > self.ediff
         if update_data:
-            n = self.update_data(try_fake=not try_real, internal=True)
+            n = self.update_data(try_fake=not try_real,
+                                 internal=True, save_model=False)
         else:
             n = 0
         if m > 0 or n > 0:
@@ -837,11 +847,14 @@ class ActiveCalculator(Calculator):
             if self.rank == 0:
                 self.log(f'noise: {self.model.scaled_noise}')
                 self.log(f'mean: {self.model.mean}')
-            if self.pckl:
-                self.model.to_folder(self.pckl)
+            self.save_model()
             self.updated = True
         self._update_args = {}
         return m, n
+
+    def save_model(self):
+        if self.pckl:
+            self.model.to_folder(self.pckl)
 
     def include_data(self, data):
         if type(data) == str:
@@ -877,8 +890,7 @@ class ActiveCalculator(Calculator):
             if added_lce[0] > 0:
                 if self.ioptim == 1:
                     self.optimize()
-                if self.pckl:
-                    self.model.to_folder(self.pckl)
+                self.save_model()
                 self.log('added lone indus: {}/{} -> size: {} {}'.format(
                     *added_lce, *self.size))
                 self.log('fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
@@ -953,8 +965,7 @@ class ActiveCalculator(Calculator):
         self.log('fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}'.format(
             *(float(v) for v in self.model._stats)))
 
-        if self.pckl:
-            self.model.to_folder(self.pckl)
+        self.save_model()
 
     @property
     def rank(self):
