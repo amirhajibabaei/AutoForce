@@ -221,7 +221,7 @@ mask:         stress components for relaxation (default=None)
 algo:         algo from ase.optimize (default='BFGS')
 trajectory:   traj file name (default='relax.traj')
 rattle:       rattle atoms at initial step (default=0.02)
-clear_hist:   if true, clear optimizer history when ML model is updated (default=True)
+clear_hist:   if true, clear optimizer history when ML model is updated (default=False)
 confirm:      if True, Ab initio for the last step and potentially reoptimize (default=True)
 ```
 

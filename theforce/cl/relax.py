@@ -10,7 +10,7 @@ import os
 
 
 def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='relax.traj', rattle=0.02,
-          clear_hist=True, confirm=True, calc=None):
+          clear_hist=False, confirm=True, calc=None):
     """
     atoms:        ASE atoms
     fmax:         maximum forces
@@ -51,7 +51,8 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='rela
             if calc.update_data(try_fake=False):
                 calc.update(data=False)
                 calc.results.clear()
-                dyn.initialize()
+                if clear_hist:  # TODO: dubious
+                    dyn.initialize()
                 dyn.run(fmax=fmax)
             else:
                 break
