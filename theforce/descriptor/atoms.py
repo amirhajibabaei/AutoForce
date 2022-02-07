@@ -4,7 +4,7 @@ import torch
 from torch import ones_like, as_tensor, from_numpy, cat
 import theforce.distributed as dist
 from ase.atoms import Atoms
-from ase.neighborlist import NeighborList
+from ase.neighborlist import NeighborList, PrimitiveNeighborList, NewPrimitiveNeighborList
 from ase.calculators.singlepoint import SinglePointCalculator
 import copy
 import warnings
@@ -332,7 +332,8 @@ class TorchAtoms(Atoms):
 
     def build_nl(self, rc):
         self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
-                               self_interaction=False, bothways=True)
+                               self_interaction=False, bothways=True,
+                               primitive=NewPrimitiveNeighborList)
         self.cutoff = rc
         self.xyz = torch.from_numpy(self.positions)
         try:
