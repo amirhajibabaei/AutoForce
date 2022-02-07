@@ -96,7 +96,7 @@ class Descriptor(ABC):
         m = len(d._cached_scalar_products)
         for b, a in zip(basis[m:], active[m:]):
             if a:
-                prod = self.scalar_product(b, d)/(b.norm*d.norm)
+                prod = self.scalar_product(b, d)
             else:
                 prod = None
             d._cached_scalar_products.append(prod)
