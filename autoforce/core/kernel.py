@@ -35,7 +35,8 @@ class Kernel(ABC):
         basis_count = tuple((s, c) for s, c in
                             descriptor.basis_count().items())
         for conf in confslist:
-            species_matrix = self.get_species_design_matrix(descriptor, conf)
+            species_matrix = self.get_design_matrix_per_species(descriptor,
+                                                                conf)
             ke = []
             kf = []
             for species, count in basis_count:
@@ -53,10 +54,10 @@ class Kernel(ABC):
         Kf = torch.cat(Kf)
         return basis_count, Ke, Kf
 
-    def get_species_design_matrix(self,
-                                  descriptor: Descriptor,
-                                  conf: Conf
-                                  ) -> Dict:
+    def get_design_matrix_per_species(self,
+                                      descriptor: Descriptor,
+                                      conf: Conf
+                                      ) -> Dict:
         species_matrix = {}
         basis_norms = descriptor.basis_norms()
         products, norms = descriptor.get_scalar_products(conf)
@@ -78,3 +79,14 @@ class Kernel(ABC):
             kern_grad = torch.cat(kern_grad, dim=1)
             species_matrix[species] = (kern, kern_grad)
         return species_matrix
+
+    def get_overlap_matrix_per_species(self,
+                                       descriptor: Descriptor
+                                       ) -> Dict:
+        gram = descriptor.get_gram_matrix()
+        basis_norms = descriptor.basis_norms()
+        for species, g in gram.items():
+            norms = torch.stack(basis_norms[species])
+            gram[species] = self.forward(
+                g, norms.view(1, -1), norms.view(-1, 1))
+        return gram
