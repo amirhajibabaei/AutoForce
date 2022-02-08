@@ -16,6 +16,7 @@ import torch
 import numpy as np
 import warnings
 import os
+import time
 
 
 def default_kernel(lmax=3, nmax=3, exponent=4, cutoff=6., species=None):
@@ -100,7 +101,7 @@ class ActiveCalculator(Calculator):
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol, ioptim=1,
                  max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None,
-                 eps_dr=0.1, ignore=None):
+                 eps_dr=0.1, ignore=None, report_timings=False):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -295,6 +296,7 @@ class ActiveCalculator(Calculator):
         self.tune_for_md = True
         self.eps_dr = eps_dr
         self.ignore = [] if ignore is None else ignore
+        self.report_timings = report_timings
 
     @property
     def active(self):
@@ -376,6 +378,8 @@ class ActiveCalculator(Calculator):
 
     def calculate(self, _atoms=None, properties=['energy'], system_changes=all_changes):
 
+        timings = [time.time()]  # node 0: start
+
         if self.size[1] == 0 and not self.active:
             raise RuntimeError('you forgot to assign a DFT calculator!')
 
@@ -391,9 +395,12 @@ class ActiveCalculator(Calculator):
         if _atoms is not None and self.process_group is not None:
             atoms.attach_process_group(self.process_group)
         Calculator.calculate(self, atoms, properties, system_changes)
+
         dat1 = self.size[0]
         self.atoms.update(posgrad=True, cellgrad=True,
                           forced=True, dont_save_grads=True, **uargs)
+
+        timings.append(time.time())  # node 1: nl and desc
 
         #
         self.maximum_force = inf
@@ -407,8 +414,12 @@ class ActiveCalculator(Calculator):
         # kernel
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
 
+        timings.append(time.time())  # node 2: kernel
+
         # energy/forces
         self.update_results(self.active or (self.meta is not None))
+
+        timings.append(time.time())  # node 3: results
 
         # active learning
         self.deltas = None
@@ -434,6 +445,8 @@ class ActiveCalculator(Calculator):
                     ase.io.Trajectory('active_uncertain.traj', 'a').write(tmp)
         energy = self.results['energy']
 
+        timings.append(time.time())  # node 4: active
+
         # test
         if self.active and self.test and self.step - self._last_test > self.test:
             self._test()
@@ -453,6 +466,11 @@ class ActiveCalculator(Calculator):
 
         # needed for self.calculate_numerical_stress
         self.results['free_energy'] = self.results['energy']
+
+        timings.append(time.time())  # node 5: end
+        if self.report_timings:
+            self.log(('timings: ' + (len(timings)-1)*' {:0.2g}').format(
+                *np.diff(timings)))
 
     def veto(self):
         if self.size[0] < 2:

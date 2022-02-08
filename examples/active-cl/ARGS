@@ -19,3 +19,4 @@ dt = 1
 picos = 1
 test = 50
 stdout = True
+#report_timings = True
