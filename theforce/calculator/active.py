@@ -469,8 +469,9 @@ class ActiveCalculator(Calculator):
 
         timings.append(time.time())  # node 5: end
         if self.report_timings:
-            self.log(('timings: ' + (len(timings)-1)*' {:0.2g}').format(
-                *np.diff(timings)))
+            delta_time = np.diff(timings)
+            self.log(('timings:' + (len(timings)-1)*' {:0.2g}').format(
+                *delta_time) + f' total: {sum(delta_time):0.2g}')
 
     def veto(self):
         if self.size[0] < 2:
