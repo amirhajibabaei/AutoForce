@@ -26,7 +26,8 @@ def least_important(A, y, rank, size):
 
 
 def main(pckl, inducing, R2, out):
-    mpi_init()
+    if not dist.is_initialized:
+        mpi_init()
     rank = dist.get_rank()
     size = dist.get_world_size()
     model = PosteriorPotentialFromFolder(pckl,
