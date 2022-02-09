@@ -28,6 +28,26 @@ class Kernel(ABC):
         """
         ...
 
+    def get_potential_energy(self,
+                             descriptor: Descriptor,
+                             conf: Conf,
+                             weights: Dict
+                             ) -> Dict:
+        basis_norms = descriptor.basis_norms()
+        products, norms = descriptor.get_scalar_products(conf)
+        energy = 0
+        for species, prod in products.items():
+            n_conf = torch.stack(norms[species]).view(-1, 1)
+            n_basis = torch.stack(basis_norms[species]).view(1, -1)
+            prod = torch.stack([torch.stack(a) for a in prod])
+            k = self.forward(species,
+                             prod,
+                             n_conf,
+                             n_basis,
+                             )
+            energy = energy + (k @ weights[species]).sum()
+        return energy
+
     def get_design_matrix(self,
                           descriptor: Descriptor,
                           confslist: List[Conf]
