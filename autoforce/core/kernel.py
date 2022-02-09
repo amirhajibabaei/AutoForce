@@ -12,11 +12,13 @@ class Kernel(ABC):
 
     @abstractmethod
     def forward(self,
+                s: int,
                 uv: Tensor,
                 u: Tensor,
                 v: Tensor
                 ) -> Tensor:
         """
+        s:    species
         uv:   scalar products matrix <u_i,v_j> with shape (m, n)
         u:    norms sqrt(<u_i,u_i>) with shape (m, 1)
         v:    norms sqrt(<v_j,v_j>) with shape (1, n)
@@ -66,9 +68,10 @@ class Kernel(ABC):
             kern_grad = []
             species_norms = torch.stack(norms[species]).view(1, -1)
             for a in zip(*products[species], basis_norms[species]):
-                k = self.forward(torch.stack(a[:-1]).view(1, -1),
+                k = self.forward(species,
+                                 torch.stack(a[:-1]).view(1, -1),
                                  a[-1].view(1, 1),
-                                 species_norms
+                                 species_norms,
                                  ).sum()
                 dk, = torch.autograd.grad(k,
                                           conf.positions,
@@ -83,10 +86,12 @@ class Kernel(ABC):
     def get_overlap_matrix_per_species(self,
                                        descriptor: Descriptor
                                        ) -> Dict:
-        gram = descriptor.get_gram_matrix()
+        gram_dict = descriptor.get_gram_matrix()
         basis_norms = descriptor.basis_norms()
-        for species, g in gram.items():
+        for species, gram in gram_dict.items():
             norms = torch.stack(basis_norms[species])
-            gram[species] = self.forward(
-                g, norms.view(1, -1), norms.view(-1, 1))
-        return gram
+            gram_dict[species] = self.forward(species,
+                                              gram,
+                                              norms.view(1, -1),
+                                              norms.view(-1, 1))
+        return gram_dict
