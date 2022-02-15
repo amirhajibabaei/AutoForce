@@ -37,13 +37,10 @@ class Kernel(ABC):
         products, norms = descriptor.get_scalar_products(conf)
         energy = 0
         for species, prod in products.items():
-            n_conf = torch.stack(norms[species]).view(-1, 1)
-            n_basis = torch.stack(basis_norms[species]).view(1, -1)
-            prod = torch.stack([torch.stack(a) for a in prod])
             k = self.forward(species,
-                             prod,
-                             n_conf,
-                             n_basis,
+                             torch.stack([torch.stack(a) for a in prod]),
+                             torch.stack(norms[species]).view(-1, 1),
+                             torch.stack(basis_norms[species]).view(1, -1),
                              )
             energy = energy + (k @ weights[species]).sum()
         return energy
@@ -100,12 +97,12 @@ class Kernel(ABC):
                 kern_grad.append(dk.view(-1, 1))
             kern = torch.stack(kern).view(1, -1)
             kern_grad = torch.cat(kern_grad, dim=1)
-            species_matrix[species] = (kern, kern_grad)
+            species_matrix[species] = (kern, -kern_grad)
         return species_matrix
 
-    def get_overlap_matrix_per_species(self,
-                                       descriptor: Descriptor
-                                       ) -> Dict:
+    def get_basis_overlaps_matrix_per_species(self,
+                                              descriptor: Descriptor
+                                              ) -> Dict:
         gram_dict = descriptor.get_gram_matrix()
         basis_norms = descriptor.basis_norms()
         for species, gram in gram_dict.items():

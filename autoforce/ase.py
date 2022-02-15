@@ -34,10 +34,10 @@ def from_atoms(atoms: ase.Atoms) -> core.Conf:
         if 'forces' in atoms.calc.results:
             f = atoms.get_forces()
             f = torch.from_numpy(f).to(cfg.float_t)
-    data = core.PotData(energy=e, forces=f)
+    targets = core.Targets(energy=e, forces=f)
 
     # 3.
-    conf = core.Conf(numbers, positions, cell, atoms.pbc, potential=data)
+    conf = core.Conf(numbers, positions, cell, atoms.pbc, targets=targets)
 
     return conf
 

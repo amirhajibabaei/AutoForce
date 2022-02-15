@@ -39,11 +39,6 @@ class Descriptor(ABC):
     defined as the square root of its scalar product
     by itself.
 
-
-    TODO:
-        1. Explain "basis" attribute.
-        2. Explain "active_set" attribute.
-
     """
 
     instances = 0
@@ -71,7 +66,7 @@ class Descriptor(ABC):
         """
         ...
 
-    def _get_descriptor(self, e: LocalEnv) -> LocalDes:
+    def _forward(self, e: LocalEnv) -> LocalDes:
         while len(e._cached_descriptors) < Descriptor.instances:
             e._cached_descriptors.append(None)
         if e._cached_descriptors[self.index] is None:
@@ -87,7 +82,7 @@ class Descriptor(ABC):
     def get_descriptors(self, conf: Conf) -> List:
         if conf._cached_local_envs is None:
             raise RuntimeError(f'{conf._cached_local_envs = }')
-        return [self._get_descriptor(l) for l in conf._cached_local_envs]
+        return [self._forward(l) for l in conf._cached_local_envs]
 
     def _get_scalar_products(self, d: LocalDes) -> List[Tensor]:
         # update cache: d._cached_scalar_products
@@ -113,7 +108,7 @@ class Descriptor(ABC):
             norms[d.species].append(d.norm)
         return prod, norms
 
-    def append(self, d: LocalDes) -> None:
+    def basis_append(self, d: LocalDes) -> None:
         self.basis[d.species].append(d.detach())
         self.active_set[d.species].append(True)
 

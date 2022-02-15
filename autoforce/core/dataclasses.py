@@ -3,7 +3,7 @@ from torch import Tensor
 from typing import List, Any, Optional
 
 
-class PotData:
+class Targets:
 
     __slots__ = ('energy', 'forces')
 
@@ -24,9 +24,9 @@ class Conf:
     """
     An atomic configuration.
 
-    Similar to ase.Atoms, except the data
+    Same role as ase.Atoms, except the data
     are stored as torch.Tensor instead of
-    np.ndarray.
+    np.ndarray, for using the autograd.
 
 
     Keywords:
@@ -34,7 +34,7 @@ class Conf:
     positions    self explanatory
     cell         self explanatory
     pbc          periodic boundary conditions
-    potential    energy & forces
+    targets      energy & forces
 
     """
 
@@ -42,7 +42,7 @@ class Conf:
                  'positions',
                  'cell',
                  'pbc',
-                 'potential',
+                 'targets',
                  '_cached_local_envs',
                  '_cached_isolated_atoms')
 
@@ -51,7 +51,7 @@ class Conf:
                  positions: Tensor,
                  cell: Tensor,
                  pbc: List[bool],
-                 potential: Optional[PotData] = None
+                 targets: Optional[Targets] = None
                  ) -> None:
         """
         Self explanatory.
@@ -68,9 +68,9 @@ class Conf:
         self.cell = cell
         self.pbc = pbc
 
-        if potential is None:
-            potential = PotData()
-        self.potential = potential
+        if targets is None:
+            targets = Targets()
+        self.targets = targets
 
         # cache
         self._cached_local_envs = None
