@@ -3,6 +3,7 @@ from autoforce.core.dataclasses import Conf, LocalEnv, LocalDes
 import torch
 from torch import Tensor
 from collections import defaultdict
+import itertools
 from abc import ABC, abstractmethod
 from typing import Dict, List
 
@@ -96,8 +97,11 @@ class Descriptor(ABC):
                 prod = None
             d._cached_scalar_products.append(prod)
         # retrieve from cache
-        z = zip(d._cached_scalar_products, active)
-        return [p for p, a in z if a]
+        # slow: 4.3e-5 sec for len=1000
+        #y = [p for p, a in zip(d._cached_scalar_products, active) if a]
+        # faster: 2.3e-5 sec for len=1000
+        y = list(itertools.compress(d._cached_scalar_products, active))
+        return y
 
     def get_scalar_products(self, conf: Conf) -> Dict:
         prod = defaultdict(list)
