@@ -50,8 +50,7 @@ class Descriptor(ABC):
         Descriptor.instances += 1
 
         # Self explanatory
-        self.basis = defaultdict(list)
-        self.active_set = defaultdict(list)
+        self.basis = Basis()
 
     @abstractmethod
     def forward(self, e: LocalEnv) -> LocalDes:
@@ -87,8 +86,8 @@ class Descriptor(ABC):
 
     def _get_scalar_products(self, d: LocalDes) -> List[Tensor]:
         # update cache: d._cached_scalar_products
-        basis = self.basis[d.species]
-        active = self.active_set[d.species]
+        basis = self.basis.descriptors[d.species]
+        active = self.basis.active[d.species]
         m = len(d._cached_scalar_products)
         for b, a in zip(basis[m:], active[m:]):
             if a:
@@ -112,22 +111,29 @@ class Descriptor(ABC):
             norms[d.species].append(d.norm)
         return prod, norms
 
-    def basis_append(self, d: LocalDes) -> None:
-        self.basis[d.species].append(d.detach())
-        self.active_set[d.species].append(True)
-
-    def basis_count(self) -> Dict:
-        return {s: a.count(True) for s, a in self.active_set.items()}
-
-    def basis_norms(self) -> Dict:
-        return {s: [d.norm for d, b in zip(self.basis[s], a) if b]
-                for s, a in self.active_set.items()}
-
     def get_gram_matrix(self) -> Dict:
         out = {}
-        for species, basis in self.basis.items():
-            z = zip(basis, self.active_set[species])
+        for species, basis in self.basis.descriptors.items():
+            z = itertools.compress(basis, self.basis.active[species])
             out[species] = torch.stack(
-                [torch.stack(self._get_scalar_products(b)) for b, a in z if a]
+                [torch.stack(self._get_scalar_products(b)) for b in z]
             )
         return out
+
+
+class Basis:
+
+    def __init__(self):
+        self.descriptors = defaultdict(list)
+        self.active = defaultdict(list)
+
+    def append(self, d: LocalDes) -> None:
+        self.descriptors[d.species].append(d.detach())
+        self.active[d.species].append(True)
+
+    def count(self) -> Dict:
+        return {s: a.count(True) for s, a in self.active.items()}
+
+    def norms(self) -> Dict:
+        return {s: [d.norm for d in itertools.compress(self.descriptors[s], a)]
+                for s, a in self.active.items()}

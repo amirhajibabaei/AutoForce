@@ -33,7 +33,7 @@ class Kernel(ABC):
                              conf: Conf,
                              weights: Dict
                              ) -> Dict:
-        basis_norms = descriptor.basis_norms()
+        basis_norms = descriptor.basis.norms()
         products, norms = descriptor.get_scalar_products(conf)
         energy = 0
         for species, prod in products.items():
@@ -52,7 +52,7 @@ class Kernel(ABC):
         Ke = []
         Kf = []
         basis_count = tuple((s, c) for s, c in
-                            descriptor.basis_count().items())
+                            descriptor.basis.count().items())
         for conf in confslist:
             species_matrix = self.get_design_matrix_per_species(descriptor,
                                                                 conf)
@@ -78,7 +78,7 @@ class Kernel(ABC):
                                       conf: Conf
                                       ) -> Dict:
         species_matrix = {}
-        basis_norms = descriptor.basis_norms()
+        basis_norms = descriptor.basis.norms()
         products, norms = descriptor.get_scalar_products(conf)
         for species in products.keys():
             kern = []
@@ -104,7 +104,7 @@ class Kernel(ABC):
                                               descriptor: Descriptor
                                               ) -> Dict:
         gram_dict = descriptor.get_gram_matrix()
-        basis_norms = descriptor.basis_norms()
+        basis_norms = descriptor.basis.norms()
         for species, gram in gram_dict.items():
             norms = torch.stack(basis_norms[species])
             gram_dict[species] = self.forward(species,
