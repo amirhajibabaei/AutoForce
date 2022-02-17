@@ -5,7 +5,7 @@ from torch import Tensor
 from collections import defaultdict
 import itertools
 from abc import ABC, abstractmethod
-from typing import Dict, List
+from typing import Dict, List, Any, Optional
 
 
 class Descriptor(ABC):
@@ -44,13 +44,23 @@ class Descriptor(ABC):
 
     instances = 0
 
-    def __init__(self) -> None:
+    def __init__(self, *basis: Optional[Any]) -> None:
+        """
+        args:    a tuple of "Basis" objects.
+
+        """
         # Assign a global index for this instance
         self.index = Descriptor.instances
         Descriptor.instances += 1
 
-        # Self explanatory
-        self.basis = Basis()
+        # Assign an index for input basis
+        for i, b in enumerate(basis):
+            b.index = i
+        self.basis = basis
+
+        # If no input basis, make one!
+        if len(self.basis) == 0:
+            self.new_basis()
 
     @abstractmethod
     def forward(self, e: LocalEnv) -> LocalDes:
@@ -79,46 +89,60 @@ class Descriptor(ABC):
             e._cached_descriptors[self.index] = d
         return e._cached_descriptors[self.index]
 
-    def get_descriptors(self, conf: Conf) -> List:
+    def get_descriptors(self, conf: Conf) -> List[LocalDes]:
         if conf._cached_local_envs is None:
             raise RuntimeError(f'{conf._cached_local_envs = }')
         return [self._forward(l) for l in conf._cached_local_envs]
 
-    def _get_scalar_products(self, d: LocalDes) -> List[Tensor]:
-        # update cache: d._cached_scalar_products
-        basis = self.basis.descriptors[d.species]
-        active = self.basis.active[d.species]
-        m = len(d._cached_scalar_products)
+    def _get_scalar_products(self,
+                             d: LocalDes,
+                             wrt: Optional[int] = 0
+                             ) -> List[Tensor]:
+        # 1. update cache: d._cached_scalar_products
+        while len(d._cached_scalar_products) <= wrt:
+            d._cached_scalar_products.append([])
+        basis = self.basis[wrt].descriptors[d.species]
+        active = self.basis[wrt].active[d.species]
+        m = len(d._cached_scalar_products[wrt])
         for b, a in zip(basis[m:], active[m:]):
             if a:
                 prod = self.scalar_product(b, d)
             else:
                 prod = None
-            d._cached_scalar_products.append(prod)
-        # retrieve from cache
+            d._cached_scalar_products[wrt].append(prod)
+        # 2. retrieve from cache
         # slow: 4.3e-5 sec for len=1000
         #y = [p for p, a in zip(d._cached_scalar_products, active) if a]
         # faster: 2.3e-5 sec for len=1000
-        y = list(itertools.compress(d._cached_scalar_products, active))
-        return y
+        y = itertools.compress(d._cached_scalar_products[wrt], active)
+        return list(y)
 
-    def get_scalar_products(self, conf: Conf) -> Dict:
+    def get_scalar_products(self,
+                            conf: Conf,
+                            wrt: Optional[int] = 0
+                            ) -> (Dict, Dict):
         prod = defaultdict(list)
         norms = defaultdict(list)
         for d in self.get_descriptors(conf):
-            k = self._get_scalar_products(d)
+            k = self._get_scalar_products(d, wrt=wrt)
             prod[d.species].append(k)
             norms[d.species].append(d.norm)
         return prod, norms
 
-    def get_gram_matrix(self) -> Dict:
-        out = {}
-        for species, basis in self.basis.descriptors.items():
-            z = itertools.compress(basis, self.basis.active[species])
-            out[species] = torch.stack(
-                [torch.stack(self._get_scalar_products(b)) for b in z]
+    def get_gram_matrix(self, wrt: Optional[int] = 0) -> Dict:
+        gram = {}
+        for species, basis in self.basis[wrt].descriptors.items():
+            z = itertools.compress(basis, self.basis[wrt].active[species])
+            gram[species] = torch.stack(
+                [torch.stack(self._get_scalar_products(b, wrt=wrt)) for b in z]
             )
-        return out
+        return gram
+
+    def new_basis(self) -> int:
+        new = Basis()
+        new.index = len(self.basis)
+        self.basis = (*self.basis, new)
+        return new.index
 
 
 class Basis:

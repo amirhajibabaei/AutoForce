@@ -5,7 +5,7 @@ from autoforce.core.descriptor import Descriptor
 import torch
 from torch import Tensor
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 
 class Kernel(ABC):
@@ -31,10 +31,11 @@ class Kernel(ABC):
     def get_potential_energy(self,
                              descriptor: Descriptor,
                              conf: Conf,
-                             weights: Dict
+                             weights: Dict,
+                             wrt: Optional[int] = 0
                              ) -> Dict:
-        basis_norms = descriptor.basis.norms()
-        products, norms = descriptor.get_scalar_products(conf)
+        basis_norms = descriptor.basis[wrt].norms()
+        products, norms = descriptor.get_scalar_products(conf, wrt=wrt)
         energy = 0
         for species, prod in products.items():
             k = self.forward(species,
@@ -47,15 +48,17 @@ class Kernel(ABC):
 
     def get_design_matrix(self,
                           descriptor: Descriptor,
-                          confslist: List[Conf]
+                          confslist: List[Conf],
+                          wrt: Optional[int] = 0
                           ) -> (Tuple, Tensor, Tensor):
         Ke = []
         Kf = []
         basis_count = tuple((s, c) for s, c in
-                            descriptor.basis.count().items())
+                            descriptor.basis[wrt].count().items())
         for conf in confslist:
             species_matrix = self.get_design_matrix_per_species(descriptor,
-                                                                conf)
+                                                                conf,
+                                                                wrt=wrt)
             ke = []
             kf = []
             for species, count in basis_count:
@@ -75,11 +78,12 @@ class Kernel(ABC):
 
     def get_design_matrix_per_species(self,
                                       descriptor: Descriptor,
-                                      conf: Conf
+                                      conf: Conf,
+                                      wrt: Optional[int] = 0
                                       ) -> Dict:
         species_matrix = {}
-        basis_norms = descriptor.basis.norms()
-        products, norms = descriptor.get_scalar_products(conf)
+        basis_norms = descriptor.basis[wrt].norms()
+        products, norms = descriptor.get_scalar_products(conf, wrt=wrt)
         for species in products.keys():
             kern = []
             kern_grad = []
@@ -101,10 +105,11 @@ class Kernel(ABC):
         return species_matrix
 
     def get_basis_overlaps_matrix_per_species(self,
-                                              descriptor: Descriptor
+                                              descriptor: Descriptor,
+                                              wrt: Optional[int] = 0
                                               ) -> Dict:
-        gram_dict = descriptor.get_gram_matrix()
-        basis_norms = descriptor.basis.norms()
+        gram_dict = descriptor.get_gram_matrix(wrt=wrt)
+        basis_norms = descriptor.basis[wrt].norms()
         for species, gram in gram_dict.items():
             norms = torch.stack(basis_norms[species])
             gram_dict[species] = self.forward(species,

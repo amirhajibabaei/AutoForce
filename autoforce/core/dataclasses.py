@@ -217,6 +217,6 @@ class LocalDes:
                             index=self.index,
                             species=self.species,
                             norm=self.norm.detach())
-        detached._cached_scalar_products = [t.detach() for t in
-                                            self._cached_scalar_products]
+        detached._cached_scalar_products = [[t.detach() for t in wrt]
+                                            for wrt in self._cached_scalar_products]
         return detached
