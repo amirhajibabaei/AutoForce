@@ -101,21 +101,19 @@ class Descriptor(ABC):
         # 1. update cache: d._cached_scalar_products
         while len(d._cached_scalar_products) <= wrt:
             d._cached_scalar_products.append([])
-        basis = self.basis[wrt].descriptors[d.species]
-        active = self.basis[wrt].active[d.species]
         m = len(d._cached_scalar_products[wrt])
-        for b, a in zip(basis[m:], active[m:]):
-            if a:
-                prod = self.scalar_product(b, d)
-            else:
-                prod = None
-            d._cached_scalar_products[wrt].append(prod)
+        new = [self.scalar_product(base, d) if active else None
+               for base, active in zip(self.basis[wrt].descriptors[d.species][m:],
+                                       self.basis[wrt].active[d.species][m:])]
+        d._cached_scalar_products[wrt].extend(new)
+
         # 2. retrieve from cache
         # slow: 4.3e-5 sec for len=1000
         #y = [p for p, a in zip(d._cached_scalar_products, active) if a]
         # faster: 2.3e-5 sec for len=1000
-        y = itertools.compress(d._cached_scalar_products[wrt], active)
-        return list(y)
+        out = itertools.compress(d._cached_scalar_products[wrt],
+                                 self.basis[wrt].active[d.species])
+        return list(out)
 
     def get_scalar_products(self,
                             conf: Conf,
