@@ -1,6 +1,8 @@
 # +
 from torch import Tensor
-from typing import List, Any, Optional
+from collections import defaultdict
+import itertools
+from typing import List, Dict, Any, Optional
 
 
 class Targets:
@@ -220,3 +222,26 @@ class LocalDes:
         detached._cached_scalar_products = [[t.detach() for t in wrt]
                                             for wrt in self._cached_scalar_products]
         return detached
+
+
+class Basis:
+
+    __slots__ = ('index',
+                 'descriptors',
+                 'active')
+
+    def __init__(self):
+        self.index = None
+        self.descriptors = defaultdict(list)
+        self.active = defaultdict(list)
+
+    def append(self, d: LocalDes) -> None:
+        self.descriptors[d.species].append(d.detach())
+        self.active[d.species].append(True)
+
+    def count(self) -> Dict:
+        return {s: a.count(True) for s, a in self.active.items()}
+
+    def norms(self) -> Dict:
+        return {s: [d.norm for d in itertools.compress(self.descriptors[s], a)]
+                for s, a in self.active.items()}

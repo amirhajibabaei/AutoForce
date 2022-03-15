@@ -1,5 +1,5 @@
 # +
-from autoforce.core.dataclasses import Conf, LocalEnv, LocalDes
+from autoforce.core.dataclasses import Conf, LocalEnv, LocalDes, Basis
 import torch
 from torch import Tensor
 from collections import defaultdict
@@ -44,23 +44,12 @@ class Descriptor(ABC):
 
     instances = 0
 
-    def __init__(self, *basis: Optional[Any]) -> None:
-        """
-        args:    a tuple of "Basis" objects.
+    def __init__(self) -> None:
 
-        """
         # Assign a global index for this instance
         self.index = Descriptor.instances
         Descriptor.instances += 1
-
-        # Assign an index for input basis
-        for i, b in enumerate(basis):
-            b.index = i
-        self.basis = basis
-
-        # If no input basis, make one!
-        if len(self.basis) == 0:
-            self.new_basis()
+        self.basis = tuple()
 
     @abstractmethod
     def forward(self, e: LocalEnv) -> LocalDes:
@@ -96,43 +85,40 @@ class Descriptor(ABC):
 
     def _get_scalar_products(self,
                              d: LocalDes,
-                             wrt: Optional[int] = 0
+                             basis: Basis
                              ) -> List[Tensor]:
         # 1. update cache: d._cached_scalar_products
-        while len(d._cached_scalar_products) <= wrt:
+        while len(d._cached_scalar_products) <= basis.index:
             d._cached_scalar_products.append([])
-        m = len(d._cached_scalar_products[wrt])
+        m = len(d._cached_scalar_products[basis.index])
         new = [self.scalar_product(base, d) if active else None
-               for base, active in zip(self.basis[wrt].descriptors[d.species][m:],
-                                       self.basis[wrt].active[d.species][m:])]
-        d._cached_scalar_products[wrt].extend(new)
+               for base, active in zip(basis.descriptors[d.species][m:],
+                                       basis.active[d.species][m:])]
+        d._cached_scalar_products[basis.index].extend(new)
 
         # 2. retrieve from cache
-        # slow: 4.3e-5 sec for len=1000
-        #y = [p for p, a in zip(d._cached_scalar_products, active) if a]
-        # faster: 2.3e-5 sec for len=1000
-        out = itertools.compress(d._cached_scalar_products[wrt],
-                                 self.basis[wrt].active[d.species])
+        out = itertools.compress(d._cached_scalar_products[basis.index],
+                                 basis.active[d.species])
         return list(out)
 
     def get_scalar_products(self,
                             conf: Conf,
-                            wrt: Optional[int] = 0
+                            basis: Basis
                             ) -> (Dict, Dict):
         prod = defaultdict(list)
         norms = defaultdict(list)
         for d in self.get_descriptors(conf):
-            k = self._get_scalar_products(d, wrt=wrt)
+            k = self._get_scalar_products(d, basis)
             prod[d.species].append(k)
             norms[d.species].append(d.norm)
         return prod, norms
 
-    def get_gram_matrix(self, wrt: Optional[int] = 0) -> Dict:
+    def get_gram_matrix(self, basis: Basis) -> Dict:
         gram = {}
-        for species, basis in self.basis[wrt].descriptors.items():
-            z = itertools.compress(basis, self.basis[wrt].active[species])
+        for species, descriptors in basis.descriptors.items():
+            z = itertools.compress(descriptors, basis.active[species])
             gram[species] = torch.stack(
-                [torch.stack(self._get_scalar_products(b, wrt=wrt)) for b in z]
+                [torch.stack(self._get_scalar_products(b, basis)) for b in z]
             )
         return gram
 
@@ -140,22 +126,4 @@ class Descriptor(ABC):
         new = Basis()
         new.index = len(self.basis)
         self.basis = (*self.basis, new)
-        return new.index
-
-
-class Basis:
-
-    def __init__(self):
-        self.descriptors = defaultdict(list)
-        self.active = defaultdict(list)
-
-    def append(self, d: LocalDes) -> None:
-        self.descriptors[d.species].append(d.detach())
-        self.active[d.species].append(True)
-
-    def count(self) -> Dict:
-        return {s: a.count(True) for s, a in self.active.items()}
-
-    def norms(self) -> Dict:
-        return {s: [d.norm for d in itertools.compress(self.descriptors[s], a)]
-                for s, a in self.active.items()}
+        return new
