@@ -4,4 +4,4 @@ from .bijection import Bijection, FiniteRange
 from .cutoff_fn import Cutoff_fn, PolynomialCut, CosineCut
 from .parameter import ChemPar
 from .descriptor import Descriptor
-from .kernel import Kernel
+from .kernel import Kernel, DotProductKernel
