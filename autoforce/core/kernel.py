@@ -11,7 +11,11 @@ from typing import Dict, List, Tuple, Optional
 
 class Kernel(ABC):
 
-    def __init__(self, exponent: ChemPar) -> None:
+    def __init__(self,
+                 descriptor: Descriptor,
+                 exponent: ChemPar
+                 ) -> None:
+        self.descriptor = descriptor
         self.exponent = exponent
 
     @abstractmethod
@@ -39,13 +43,12 @@ class Kernel(ABC):
         return self.forward(uv, u, v)**self.exponent[s]
 
     def get_potential_energy(self,
-                             descriptor: Descriptor,
                              conf: Conf,
                              basis: Basis,
                              weights: Dict
                              ) -> Dict:
         basis_norms = basis.norms()
-        products, norms = descriptor.get_scalar_products_dict(conf, basis)
+        products, norms = self.descriptor.get_scalar_products_dict(conf, basis)
         energy = 0
         for species, prod in products.items():
             k = self.kernel(species,
@@ -57,7 +60,6 @@ class Kernel(ABC):
         return energy
 
     def get_design_matrix(self,
-                          descriptor: Descriptor,
                           confslist: List[Conf],
                           basis: Basis
                           ) -> (Tuple, Tensor, Tensor):
@@ -65,9 +67,7 @@ class Kernel(ABC):
         Kf = []
         basis_count = tuple((s, c) for s, c in basis.count().items())
         for conf in confslist:
-            species_matrix = self.get_design_dict(descriptor,
-                                                  conf,
-                                                  basis)
+            species_matrix = self.get_design_dict(conf, basis)
             ke = []
             kf = []
             for species, count in basis_count:
@@ -86,13 +86,12 @@ class Kernel(ABC):
         return basis_count, Ke, Kf
 
     def get_design_dict(self,
-                        descriptor: Descriptor,
                         conf: Conf,
                         basis: Basis
                         ) -> Dict:
         species_matrix = {}
         basis_norms = basis.norms()
-        products, norms = descriptor.get_scalar_products_dict(conf, basis)
+        products, norms = self.descriptor.get_scalar_products_dict(conf, basis)
         for species in products.keys():
             kern = []
             kern_grad = []
@@ -114,10 +113,9 @@ class Kernel(ABC):
         return species_matrix
 
     def get_basis_overlaps_dict(self,
-                                descriptor: Descriptor,
                                 basis: Basis
                                 ) -> Dict:
-        gram_dict = descriptor.get_gram_dict(basis)
+        gram_dict = self.descriptor.get_gram_dict(basis)
         basis_norms = basis.norms()
         for species, gram in gram_dict.items():
             norms = torch.stack(basis_norms[species])
@@ -130,8 +128,11 @@ class Kernel(ABC):
 
 class DotProductKernel(Kernel):
 
-    def __init__(self, exponent: ChemPar) -> None:
-        super().__init__(exponent)
+    def __init__(self,
+                 descriptor: Descriptor,
+                 exponent: ChemPar
+                 ) -> None:
+        super().__init__(descriptor, exponent)
 
     def forward(self,
                 uv: Tensor,
