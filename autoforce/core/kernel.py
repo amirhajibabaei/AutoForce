@@ -35,7 +35,7 @@ class Kernel(ABC):
                              weights: Dict
                              ) -> Dict:
         basis_norms = basis.norms()
-        products, norms = descriptor.get_scalar_products(conf, basis)
+        products, norms = descriptor.get_scalar_products_dict(conf, basis)
         energy = 0
         for species, prod in products.items():
             k = self.forward(species,
@@ -55,9 +55,9 @@ class Kernel(ABC):
         Kf = []
         basis_count = tuple((s, c) for s, c in basis.count().items())
         for conf in confslist:
-            species_matrix = self.get_design_matrix_per_species(descriptor,
-                                                                conf,
-                                                                basis)
+            species_matrix = self.get_design_dict(descriptor,
+                                                  conf,
+                                                  basis)
             ke = []
             kf = []
             for species, count in basis_count:
@@ -75,14 +75,14 @@ class Kernel(ABC):
         Kf = torch.cat(Kf)
         return basis_count, Ke, Kf
 
-    def get_design_matrix_per_species(self,
-                                      descriptor: Descriptor,
-                                      conf: Conf,
-                                      basis: Basis
-                                      ) -> Dict:
+    def get_design_dict(self,
+                        descriptor: Descriptor,
+                        conf: Conf,
+                        basis: Basis
+                        ) -> Dict:
         species_matrix = {}
         basis_norms = basis.norms()
-        products, norms = descriptor.get_scalar_products(conf, basis)
+        products, norms = descriptor.get_scalar_products_dict(conf, basis)
         for species in products.keys():
             kern = []
             kern_grad = []
@@ -103,11 +103,11 @@ class Kernel(ABC):
             species_matrix[species] = (kern, -kern_grad)
         return species_matrix
 
-    def get_basis_overlaps_matrix_per_species(self,
-                                              descriptor: Descriptor,
-                                              basis: Basis
-                                              ) -> Dict:
-        gram_dict = descriptor.get_gram_matrix(basis)
+    def get_basis_overlaps_dict(self,
+                                descriptor: Descriptor,
+                                basis: Basis
+                                ) -> Dict:
+        gram_dict = descriptor.get_gram_dict(basis)
         basis_norms = basis.norms()
         for species, gram in gram_dict.items():
             norms = torch.stack(basis_norms[species])

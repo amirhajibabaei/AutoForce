@@ -65,7 +65,7 @@ class Descriptor(ABC):
         """
         ...
 
-    def _forward(self, e: LocalEnv) -> LocalDes:
+    def get_descriptor(self, e: LocalEnv) -> LocalDes:
         while len(e._cached_descriptors) < Descriptor.instances:
             e._cached_descriptors.append(None)
         if e._cached_descriptors[self.index] is None:
@@ -81,12 +81,12 @@ class Descriptor(ABC):
     def get_descriptors(self, conf: Conf) -> List[LocalDes]:
         if conf._cached_local_envs is None:
             raise RuntimeError(f'{conf._cached_local_envs = }')
-        return [self._forward(l) for l in conf._cached_local_envs]
+        return [self.get_descriptor(l) for l in conf._cached_local_envs]
 
-    def _get_scalar_products(self,
-                             d: LocalDes,
-                             basis: Basis
-                             ) -> List[Tensor]:
+    def get_scalar_products(self,
+                            d: LocalDes,
+                            basis: Basis
+                            ) -> List[Tensor]:
         # 1. update cache: d._cached_scalar_products
         while len(d._cached_scalar_products) <= basis.index:
             d._cached_scalar_products.append([])
@@ -101,24 +101,24 @@ class Descriptor(ABC):
                                  basis.active[d.species])
         return list(out)
 
-    def get_scalar_products(self,
-                            conf: Conf,
-                            basis: Basis
-                            ) -> (Dict, Dict):
+    def get_scalar_products_dict(self,
+                                 conf: Conf,
+                                 basis: Basis
+                                 ) -> (Dict, Dict):
         prod = defaultdict(list)
         norms = defaultdict(list)
         for d in self.get_descriptors(conf):
-            k = self._get_scalar_products(d, basis)
+            k = self.get_scalar_products(d, basis)
             prod[d.species].append(k)
             norms[d.species].append(d.norm)
         return prod, norms
 
-    def get_gram_matrix(self, basis: Basis) -> Dict:
+    def get_gram_dict(self, basis: Basis) -> Dict:
         gram = {}
         for species, descriptors in basis.descriptors.items():
             z = itertools.compress(descriptors, basis.active[species])
             gram[species] = torch.stack(
-                [torch.stack(self._get_scalar_products(b, basis)) for b in z]
+                [torch.stack(self.get_scalar_products(b, basis)) for b in z]
             )
         return gram
 
