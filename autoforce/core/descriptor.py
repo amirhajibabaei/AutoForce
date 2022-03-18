@@ -1,5 +1,6 @@
 # +
 from autoforce.core.dataclasses import Conf, LocalEnv, LocalDes, Basis
+from autoforce.core.cutoff import Cutoff, Cutoff_fn
 import torch
 from torch import Tensor
 from collections import defaultdict
@@ -44,7 +45,13 @@ class Descriptor(ABC):
 
     instances = 0
 
-    def __init__(self) -> None:
+    def __init__(self,
+                 cutoff: Cutoff,
+                 cutoff_fn: Cutoff_fn
+                 ) -> None:
+
+        self.cutoff = cutoff
+        self.cutoff_fn = cutoff_fn
 
         # Assign a global index for this instance
         self.index = Descriptor.instances
@@ -52,16 +59,26 @@ class Descriptor(ABC):
         self.basis = tuple()
 
     @abstractmethod
-    def forward(self, e: LocalEnv) -> LocalDes:
+    def forward(self,
+                number: Tensor,
+                numbers: Tensor,
+                rij: Tensor,
+                wij: Tensor
+                ) -> LocalDes:
         """
         Should be implemented in a subclass.
+
         """
         ...
 
     @abstractmethod
-    def scalar_product(self, x: LocalDes, y: LocalDes) -> Tensor:
+    def scalar_product(self,
+                       x: LocalDes,
+                       y: LocalDes
+                       ) -> Tensor:
         """
         Should be implemented in a subclass.
+
         """
         ...
 
@@ -69,7 +86,9 @@ class Descriptor(ABC):
         while len(e._cached_descriptors) < Descriptor.instances:
             e._cached_descriptors.append(None)
         if e._cached_descriptors[self.index] is None:
-            d = self.forward(e)
+            numbers, rij, dij, cij = self.cutoff.get_neighbors(e)
+            wij = self.cutoff_fn(dij, cij)
+            d = self.forward(e.number, numbers, rij, wij)
             d.index = int(e.index)
             if d.norm is None:
                 d.norm = self.scalar_product(d, d).sqrt().view([])

@@ -1,23 +1,36 @@
 # +
-from autoforce.core import Descriptor, LocalEnv, LocalDes
+import autoforce.core as core
 from autoforce.descriptors.overlaps import Overlaps
 from torch import Tensor
 import torch
 
 
-class SOAP(Descriptor):
+class SOAP(core.Descriptor):
 
-    def __init__(self, lmax: int, nmax: int):
-        super().__init__()
+    def __init__(self,
+                 cutoff: core.Cutoff,
+                 cutoff_fn: core.Cutoff_fn,
+                 lmax: int,
+                 nmax: int
+                 ) -> None:
+        super().__init__(cutoff, cutoff_fn)
         self.overlaps = Overlaps(lmax, nmax)
 
-    def forward(self, e: LocalEnv) -> LocalDes:
-        a, b, data = self.overlaps(e.rij, e.numbers, e.wij)
+    def forward(self,
+                number: Tensor,
+                numbers: Tensor,
+                rij: Tensor,
+                wij: Tensor
+                ) -> core.LocalDes:
+        a, b, data = self.overlaps(rij, numbers, wij)
         t = torch.sparse_coo_tensor([a.tolist(), b.tolist()], data)
-        d = LocalDes(t)
+        d = core.LocalDes(t)
         return d
 
-    def scalar_product(self, u: LocalDes, v: LocalDes) -> Tensor:
+    def scalar_product(self,
+                       u: core.LocalDes,
+                       v: core.LocalDes
+                       ) -> Tensor:
         x, = u.tensors
         y, = v.tensors
         k = torch.sparse.sum(x*y)

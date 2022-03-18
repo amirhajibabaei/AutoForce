@@ -46,7 +46,7 @@ class Kernel(ABC):
                              conf: Conf,
                              basis: Basis,
                              weights: Dict
-                             ) -> Dict:
+                             ) -> Tensor:
         basis_norms = basis.norms()
         products, norms = self.descriptor.get_scalar_products_dict(conf, basis)
         energy = 0

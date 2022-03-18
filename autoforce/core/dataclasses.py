@@ -45,6 +45,8 @@ class Conf:
                  'cell',
                  'pbc',
                  'targets',
+                 'number_of_atoms',
+                 'unique_counts',
                  '_cached_local_envs',
                  '_cached_isolated_atoms')
 
@@ -66,6 +68,9 @@ class Conf:
                                )
 
         self.numbers = numbers
+        self.number_of_atoms = int(numbers.numel())
+        u, c = numbers.unique(return_counts=True)
+        self.unique_counts = {int(a): int(b) for a, b in zip(u, c)}
         self.positions = positions
         self.cell = cell
         self.pbc = pbc
@@ -98,23 +103,13 @@ class LocalEnv:
     neighborhood    atoms in the neighborhood of
                     the central atom (|rij| < cutoff)
 
-    On wij:
-    wij are weights of the neighborhood atoms which
-    are typically set by a Cutoff_fn e.g.:
-        wij = (1-rij/cutoff)**2
-    but, they can also be utilized for generalized
-    weighing mechanisms. Descriptor functions should
-    behave such that if for a neighbor wij=0, the
-    result should be the same as eliminating that
-    neighbor from the LocalEnv.
-
     """
 
     __slots__ = ('index',
                  'number',
                  'numbers',
                  'rij',
-                 'wij',
+                 'dij',
                  '_cached_descriptors')
 
     def __init__(self,
@@ -122,7 +117,6 @@ class LocalEnv:
                  number: Tensor,
                  numbers: Tensor,
                  rij: Tensor,
-                 wij: Optional[Tensor] = None
                  ) -> None:
         """
         index    index of the central atom in the
@@ -131,7 +125,6 @@ class LocalEnv:
         numbers  atomic numbers of the neighborhood atoms
         rij      coordinates of the neighborhood atoms
                  relative to the central atom
-        wij      weights of the neighborhood atoms
 
         """
 
@@ -139,7 +132,7 @@ class LocalEnv:
         self.number = number
         self.numbers = numbers
         self.rij = rij
-        self.wij = wij
+        self.dij = rij.norm(dim=1)
 
         # cache
         self._cached_descriptors = []
