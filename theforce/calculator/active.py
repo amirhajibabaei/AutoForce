@@ -304,7 +304,7 @@ class ActiveCalculator(Calculator):
 
     def get_model(self, model, kernel_kw):
         if model == 'pckl':
-            if os.path.isdir(self.pckl):
+            if self.pckl and os.path.isdir(self.pckl):
                 model = self.pckl
             else:
                 model = None
