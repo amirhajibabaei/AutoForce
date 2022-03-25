@@ -124,19 +124,3 @@ class Kernel(ABC):
                                              norms.view(1, -1),
                                              norms.view(-1, 1))
         return gram_dict
-
-
-class DotProductKernel(Kernel):
-
-    def __init__(self,
-                 descriptor: Descriptor,
-                 exponent: ChemPar
-                 ) -> None:
-        super().__init__(descriptor, exponent)
-
-    def forward(self,
-                uv: Tensor,
-                u: Tensor,
-                v: Tensor
-                ) -> Tensor:
-        return uv/(u*v)

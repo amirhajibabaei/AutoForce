@@ -224,6 +224,9 @@ class ReducedPar:
         self.par = par
         self.op = op
 
+    def include(self, *par: Any) -> None:
+        self.par = (*self.par, *par)
+
     def as_dict(self,
                 species: Tuple[int],
                 convert: Optional[Callable] = None

@@ -5,7 +5,7 @@ import itertools
 from typing import List, Dict, Any, Optional
 
 
-class Targets:
+class Target:
 
     __slots__ = ('energy', 'forces')
 
@@ -36,7 +36,7 @@ class Conf:
     positions    self explanatory
     cell         self explanatory
     pbc          periodic boundary conditions
-    targets      energy & forces
+    target       energy & forces
 
     """
 
@@ -44,7 +44,7 @@ class Conf:
                  'positions',
                  'cell',
                  'pbc',
-                 'targets',
+                 'target',
                  'number_of_atoms',
                  'unique_counts',
                  '_cached_local_envs',
@@ -55,7 +55,7 @@ class Conf:
                  positions: Tensor,
                  cell: Tensor,
                  pbc: List[bool],
-                 targets: Optional[Targets] = None
+                 target: Optional[Target] = None
                  ) -> None:
         """
         Self explanatory.
@@ -75,9 +75,9 @@ class Conf:
         self.cell = cell
         self.pbc = pbc
 
-        if targets is None:
-            targets = Targets()
-        self.targets = targets
+        if target is None:
+            target = Target()
+        self.target = target
 
         # cache
         self._cached_local_envs = None

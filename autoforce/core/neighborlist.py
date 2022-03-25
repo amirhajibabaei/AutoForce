@@ -6,12 +6,15 @@ import numpy as np
 import torch
 from collections import Counter
 from abc import ABC, abstractmethod
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 
 class NeighborList(ABC):
 
-    def __init__(self, cutoff: Cutoff) -> None:
+    def __init__(self, cutoff: Optional[Cutoff] = None) -> None:
+        self.set_cutoff(cutoff)
+
+    def set_cutoff(self, cutoff: Cutoff) -> None:
         self.cutoff = cutoff
 
     @abstractmethod
