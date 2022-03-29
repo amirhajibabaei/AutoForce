@@ -1,6 +1,7 @@
 # +
 from .dataclass import Conf, LocalEnv, LocalDes, Basis
-from .cutoff import Cutoff, Cutoff_fn
+from .parameter import Cutoff
+from .cutoff import Cutoff_fn
 import torch
 from torch import Tensor
 from collections import defaultdict

@@ -1,6 +1,6 @@
 # +
 from .dataclass import Conf, Target
-from .cutoff import Cutoff
+from .parameter import Cutoff
 from .kernel import Kernel
 from torch import Tensor
 import torch

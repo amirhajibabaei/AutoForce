@@ -1,6 +1,6 @@
 # +
 from .dataclass import Conf, LocalEnv
-from .cutoff import Cutoff
+from .parameter import Cutoff
 from numpy import ndarray
 import numpy as np
 import torch
