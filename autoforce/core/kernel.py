@@ -1,6 +1,6 @@
 # +
 import autoforce.cfg as cfg
-from .dataclasses import Conf, Basis
+from .dataclass import Conf, Basis
 from .descriptor import Descriptor
 from .parameter import ChemPar
 import torch

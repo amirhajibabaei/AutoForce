@@ -1,5 +1,5 @@
 # +
-from .dataclasses import Conf, LocalEnv, LocalDes, Basis
+from .dataclass import Conf, LocalEnv, LocalDes, Basis
 from .cutoff import Cutoff, Cutoff_fn
 import torch
 from torch import Tensor
@@ -16,7 +16,7 @@ class Descriptor(ABC):
 
         Descriptor: LocalEnv -> LocalDes
 
-    See LocalEnv and LocalDes in core.dataclasses.
+    See LocalEnv and LocalDes in core.dataclass.
 
 
     Required methods:

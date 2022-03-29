@@ -1,5 +1,5 @@
 # +
-from .dataclasses import Conf, LocalEnv
+from .dataclass import Conf, LocalEnv
 from .cutoff import Cutoff
 from numpy import ndarray
 import numpy as np

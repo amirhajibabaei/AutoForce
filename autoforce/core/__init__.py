@@ -1,4 +1,4 @@
-from .dataclasses import Target, Conf, LocalEnv, LocalDes, Basis
+from .dataclass import Target, Conf, LocalEnv, LocalDes, Basis
 from .neighborlist import NeighborList
 from .function import Function
 from .bijection import Bijection, FiniteRange

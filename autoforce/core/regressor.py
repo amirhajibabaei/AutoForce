@@ -1,5 +1,5 @@
 # +
-from .dataclasses import Conf, Target
+from .dataclass import Conf, Target
 from .cutoff import Cutoff
 from .kernel import Kernel
 from torch import Tensor

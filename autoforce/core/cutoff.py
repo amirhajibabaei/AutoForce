@@ -1,6 +1,6 @@
 # +
 import autoforce.cfg as cfg
-from .dataclasses import LocalEnv
+from .dataclass import LocalEnv
 from .parameter import ChemPar
 from .function import Function
 import torch
