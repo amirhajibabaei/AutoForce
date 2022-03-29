@@ -1,6 +1,6 @@
 # +
-from autoforce.core.dataclasses import Conf, LocalEnv
-from autoforce.core.cutoff import Cutoff
+from .dataclasses import Conf, LocalEnv
+from .cutoff import Cutoff
 from numpy import ndarray
 import numpy as np
 import torch

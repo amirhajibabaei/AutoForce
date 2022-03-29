@@ -1,8 +1,8 @@
 # +
 import autoforce.cfg as cfg
-from autoforce.core.dataclasses import Conf, Basis
-from autoforce.core.descriptor import Descriptor
-from autoforce.core.parameter import ChemPar
+from .dataclasses import Conf, Basis
+from .descriptor import Descriptor
+from .parameter import ChemPar
 import torch
 from torch import Tensor
 from abc import ABC, abstractmethod

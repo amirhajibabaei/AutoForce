@@ -1,5 +1,5 @@
 # +
-from autoforce.core.function import Function
+from .function import Function
 import torch
 from torch import Tensor
 from abc import abstractmethod

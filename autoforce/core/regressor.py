@@ -1,7 +1,7 @@
 # +
-from autoforce.core.dataclasses import Conf, Target
-from autoforce.core.cutoff import Cutoff
-from autoforce.core.kernel import Kernel
+from .dataclasses import Conf, Target
+from .cutoff import Cutoff
+from .kernel import Kernel
 from torch import Tensor
 import torch
 from abc import ABC, abstractmethod

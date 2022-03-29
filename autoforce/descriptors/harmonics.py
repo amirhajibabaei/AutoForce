@@ -159,7 +159,7 @@ def _scipy_harmonics(rij: torch.Tensor, lmax: int) -> torch.Tensor:
 
     """
 
-    from autoforce.similarity.coordinates import r_theta_phi
+    from autoforce.descriptors.coordinates import r_theta_phi
     from scipy.special import sph_harm
 
     r, theta, phi = r_theta_phi(rij)

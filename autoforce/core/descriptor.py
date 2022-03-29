@@ -1,6 +1,6 @@
 # +
-from autoforce.core.dataclasses import Conf, LocalEnv, LocalDes, Basis
-from autoforce.core.cutoff import Cutoff, Cutoff_fn
+from .dataclasses import Conf, LocalEnv, LocalDes, Basis
+from .cutoff import Cutoff, Cutoff_fn
 import torch
 from torch import Tensor
 from collections import defaultdict

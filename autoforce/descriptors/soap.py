@@ -1,6 +1,6 @@
 # +
 import autoforce.core as core
-from autoforce.descriptors.overlaps import Overlaps
+from .overlaps import Overlaps
 from torch import Tensor
 import torch
 

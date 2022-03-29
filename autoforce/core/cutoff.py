@@ -1,8 +1,8 @@
 # +
 import autoforce.cfg as cfg
-from autoforce.core.dataclasses import LocalEnv
-from autoforce.core.parameter import ChemPar
-from autoforce.core.function import Function
+from .dataclasses import LocalEnv
+from .parameter import ChemPar
+from .function import Function
 import torch
 from torch import Tensor
 from abc import abstractmethod

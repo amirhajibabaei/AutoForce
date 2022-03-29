@@ -1,6 +1,6 @@
 # +
-from autoforce.core.parameter import ReducedPar
-from autoforce.core.dataclasses import Conf, Target
+from .parameter import ReducedPar
+from .dataclasses import Conf, Target
 from torch import Tensor
 import torch
 from typing import Sequence, Any

@@ -1,7 +1,7 @@
 # +
 import autoforce.cfg as cfg
 from autoforce.core import Function
-from autoforce.descriptors.harmonics import Harmonics
+from .harmonics import Harmonics
 import torch
 from math import sqrt, factorial as fac
 from itertools import product
@@ -236,7 +236,7 @@ def test_Overlaps_rotational_invariance():
     """
 
     from autoforce.core import CosineCut
-    from autoforce.descriptors import coordinates as trans
+    from .coordinates import cartesian, rotate, rotation_matrix
     from autoforce.cfg import pi
 
     # 1. Setup
@@ -252,18 +252,18 @@ def test_Overlaps_rotational_invariance():
     r = torch.rand(nj, dtype=cfg.float_t)*cutoff + 0.5
     theta = torch.rand(nj, dtype=cfg.float_t)*pi
     phi = torch.rand(nj, dtype=cfg.float_t)*2*pi
-    rij = trans.cartesian(r, theta, phi)
+    rij = cartesian(r, theta, phi)
     wj = cut(r, cutoff)
-    R_z = trans.rotation_matrix([0., 0., 1.], pi/18)
-    R_y = trans.rotation_matrix([0., 1., 0.], pi/18)
+    R_z = rotation_matrix([0., 0., 1.], pi/18)
+    R_y = rotation_matrix([0., 1., 0.], pi/18)
 
     # 2. Test
     y0 = None
     errors = []
     for _ in range(18):
-        rij = trans.rotate(rij, R_y)
+        rij = rotate(rij, R_y)
         for __ in range(36):
-            rij = trans.rotate(rij, R_z)
+            rij = rotate(rij, R_z)
             _, _, y = soap(rij, species, wj=wj)
             if y0 is None:
                 y0 = y
