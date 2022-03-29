@@ -1,6 +1,6 @@
 # +
 import autoforce.cfg as cfg
-from ..bijection import Bijection
+from ..function import Bijection
 import torch
 from torch import Tensor
 from itertools import product
@@ -294,7 +294,7 @@ def test_ChemPar() -> bool:
     s.as_dict([1])
 
     #
-    from ..bijection import FiniteRange
+    from ..function import FiniteRange
     const = FiniteRange(0., 10.)
     s = ChemPar(values={(1, 2): 1., (2, 2): 7.}, default=3., bijection=const)
     assert s(a, b).allclose(tensor([3., 1., 3.]))
