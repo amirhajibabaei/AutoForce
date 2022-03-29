@@ -6,3 +6,5 @@ from .parameter import ChemPar, ReducedPar
 from .cutoff import Cutoff, Cutoff_fn, PolynomialCut, CosineCut
 from .descriptor import Descriptor
 from .kernel import Kernel
+from .regressor import Regressor, KernelRegressor
+from .model import Model
