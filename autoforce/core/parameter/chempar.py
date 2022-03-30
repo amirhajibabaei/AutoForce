@@ -294,7 +294,7 @@ def test_ChemPar() -> bool:
     s.as_dict([1])
 
     #
-    from ..function import FiniteRange
+    from autoforce.functions import FiniteRange
     const = FiniteRange(0., 10.)
     s = ChemPar(values={(1, 2): 1., (2, 2): 7.}, default=3., bijection=const)
     assert s(a, b).allclose(tensor([3., 1., 3.]))
