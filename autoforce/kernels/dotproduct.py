@@ -11,9 +11,9 @@ class DotProductKernel(core.Kernel):
                  ) -> None:
         super().__init__(descriptor, exponent)
 
-    def forward(self,
-                uv: Tensor,
-                u: Tensor,
-                v: Tensor
-                ) -> Tensor:
+    def kernel(self,
+               uv: Tensor,
+               u: Tensor,
+               v: Tensor
+               ) -> Tensor:
         return uv/(u*v)
