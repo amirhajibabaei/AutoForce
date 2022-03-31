@@ -16,7 +16,7 @@ class Function(ABC):
 
     The main purpose of this class is to seperate
     high level abstractions, which may change
-    frequently, from the actual implementation.
+    frequently, from the actual implementations.
 
     Thus, the key restriction is that they shouldn't
     contain any parameters that may change during
@@ -25,18 +25,10 @@ class Function(ABC):
     requires_grad = True.
 
     The main body should be implemented as the
-    "forward" method imilar to "torch.autograd.Function".
-    Except, forward method in the latter is restricted
-    to "@staticmethod" while here it is a normal method.
-    This similarity is enforced in anticipation of
-    custom gradients using the "backward" method
-    in some cases for faster execution.
+    "function" method.
 
     """
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return self.forward(*args, **kwargs)
-
     @abstractmethod
-    def forward(self, *args: Any, **kwargs: Any) -> Any:
+    def function(self, *args: Any, **kwargs: Any) -> Any:
         ...

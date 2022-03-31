@@ -27,10 +27,10 @@ def test_Overlaps_perm() -> bool:
 
     # 2. Test
     dij = rij.norm(dim=1)
-    wj = cut(dij, cutoff)
-    _, _, y = soap(rij, species, wj)
+    wj = cut.function(dij, cutoff)
+    _, _, y = soap.function(rij, species, wj)
     perm = torch.randperm(nj)
-    _, _, y2 = soap(rij[perm], species[perm], wj[perm])
+    _, _, y2 = soap.function(rij[perm], species[perm], wj[perm])
 
     return y2.allclose(y)
 
@@ -57,8 +57,8 @@ def test_Overlaps_backward():
     # 2. Test
     rij.requires_grad = True
     dij = rij.norm(dim=1)
-    wj = cut(dij, cutoff)
-    _, _, y = soap(rij, species, wj)
+    wj = cut.function(dij, cutoff)
+    _, _, y = soap.function(rij, species, wj)
     y.sum().backward()
 
     return True
@@ -84,7 +84,7 @@ def test_Overlaps_rotational_invariance():
     theta = torch.rand(nj, dtype=cfg.float_t)*pi
     phi = torch.rand(nj, dtype=cfg.float_t)*2*pi
     rij = cartesian(r, theta, phi)
-    wj = cut(r, cutoff)
+    wj = cut.function(r, cutoff)
     R_z = rotation_matrix([0., 0., 1.], pi/18)
     R_y = rotation_matrix([0., 1., 0.], pi/18)
 
@@ -95,7 +95,7 @@ def test_Overlaps_rotational_invariance():
         rij = rotate(rij, R_y)
         for __ in range(36):
             rij = rotate(rij, R_z)
-            _, _, y = soap(rij, species, wj=wj)
+            _, _, y = soap.function(rij, species, wj=wj)
             if y0 is None:
                 y0 = y
                 norm = y0.norm()
@@ -129,9 +129,9 @@ def test_Overlaps_compressed_norm():
     # 2. Test
     rij.requires_grad = True
     dij = rij.norm(dim=1)
-    wj = cut(dij, cutoff)
-    _, _, y1 = soap(rij, species, wj, compress=True)
-    _, _, y2 = soap(rij, species, wj, compress=False)
+    wj = cut.function(dij, cutoff)
+    _, _, y1 = soap.function(rij, species, wj, compress=True)
+    _, _, y2 = soap.function(rij, species, wj, compress=False)
 
     return y1.norm().isclose(y2.norm())
 

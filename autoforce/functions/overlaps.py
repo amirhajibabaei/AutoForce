@@ -74,11 +74,11 @@ class Overlaps(Function):
     def lmax(self):
         return self.harmonics.lmax
 
-    def forward(self, rij: torch.Tensor,
-                species: torch.Tensor,
-                wj: Optional[torch.Tensor] = None,
-                compress: Optional[bool] = True
-                ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+    def function(self, rij: torch.Tensor,
+                 species: torch.Tensor,
+                 wj: Optional[torch.Tensor] = None,
+                 compress: Optional[bool] = True
+                 ) -> (torch.Tensor, torch.Tensor, torch.Tensor):
         """
         * rij: A float tensor with shape [:, 3] (displacement vectors).
 
@@ -128,7 +128,7 @@ class Overlaps(Function):
         q_j = (-0.5*d_j**2).exp()
         if wj is not None:
             q_j = q_j*wj
-        y_lmj = self.harmonics(rij)
+        y_lmj = self.harmonics.function(rij)
 
         # 3. Radial & Angular Coupling
         r_nj = (q_j*d_j[None]**self._pow_2n[:, None])

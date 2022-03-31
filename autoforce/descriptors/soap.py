@@ -22,7 +22,7 @@ class SOAP(core.Descriptor):
                 rij: Tensor,
                 wij: Tensor
                 ) -> core.LocalDes:
-        a, b, data = self.overlaps(rij, numbers, wij)
+        a, b, data = self.overlaps.function(rij, numbers, wij)
         t = torch.sparse_coo_tensor([a.tolist(), b.tolist()], data)
         d = core.LocalDes(t)
         return d

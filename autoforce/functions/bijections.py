@@ -17,10 +17,7 @@ class FiniteRange(Bijection):
         self.b = torch.as_tensor(b)
         self.l = b - a
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.a}, {self.b})'
-
-    def forward(self, x: Tensor) -> Tensor:
+    def function(self, x: Tensor) -> Tensor:
         x = torch.as_tensor(x)
         y = self.a + self.l*torch.special.expit(x)
         return y
@@ -29,3 +26,6 @@ class FiniteRange(Bijection):
         y = torch.as_tensor(y)
         x = (y-self.a)/self.l
         return torch.special.logit(x)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.a}, {self.b})'

@@ -174,7 +174,7 @@ class ChemPar:
                 value = self.default
 
         if self.bijection:
-            value = self.bijection.forward(value)
+            value = self.bijection.function(value)
 
         return value
 

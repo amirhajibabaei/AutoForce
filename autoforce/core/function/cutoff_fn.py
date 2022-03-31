@@ -12,7 +12,7 @@ class Cutoff_fn(Function):
 
     """
 
-    def forward(self, dij: Tensor, cutoff: Tensor) -> Tensor:
+    def function(self, dij: Tensor, cutoff: Tensor) -> Tensor:
         """
         dij        distances
         cutoff     can be either a scalar or a tensor

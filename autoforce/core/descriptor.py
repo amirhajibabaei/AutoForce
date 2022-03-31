@@ -88,7 +88,7 @@ class Descriptor(ABC):
             e._cached_descriptors.append(None)
         if e._cached_descriptors[self.index] is None:
             numbers, rij, dij, cij = self.cutoff.get_neighbors(e)
-            wij = self.cutoff_fn(dij, cij)
+            wij = self.cutoff_fn.function(dij, cij)
             d = self.forward(e.number, numbers, rij, wij)
             d.index = int(e.index)
             if d.norm is None:

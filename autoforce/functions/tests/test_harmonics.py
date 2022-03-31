@@ -42,7 +42,7 @@ def test_Harmonics_scipy(lmax: int = 10) -> float:
     error = []
     for r in [x, y, z]:
         a = _scipy_harmonics(r, lmax)
-        b = rlm(r)
+        b = rlm.function(r)
         error.append((a-b).abs().max())
 
     return float(max(error))
@@ -76,7 +76,7 @@ def test_Harmonics_rotational_invariance(lmax: int = 10,
     rlm = Harmonics(lmax)
     xyz.grad = None
     xyz.requires_grad = True
-    y = rlm(xyz)
+    y = rlm.function(xyz)
 
     # invariant parameter
     a = 2*torch.ones(lmax+1, lmax+1, dtype=cfg.float_t)
