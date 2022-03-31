@@ -21,7 +21,7 @@ class Overlaps(Function):
       cutoff function for preserving its continuity (at least up
       to 1st order derivatives) due to particles crossing the
       cutoff boundary. For maximum flexibility, instead of a
-      cutoff function, the "forward" method accepts the optional
+      cutoff function, the "function" method accepts the optional
       weights wj which can be used for any general weighting
       mechanism. For example, given rij[nj, 3] and species[nj]:
 

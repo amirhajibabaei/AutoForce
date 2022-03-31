@@ -16,12 +16,12 @@ class SOAP(core.Descriptor):
         super().__init__(cutoff, cutoff_fn)
         self.overlaps = Overlaps(lmax, nmax)
 
-    def forward(self,
-                number: Tensor,
-                numbers: Tensor,
-                rij: Tensor,
-                wij: Tensor
-                ) -> core.LocalDes:
+    def descriptor(self,
+                   number: Tensor,
+                   numbers: Tensor,
+                   rij: Tensor,
+                   wij: Tensor
+                   ) -> core.LocalDes:
         a, b, data = self.overlaps.function(rij, numbers, wij)
         t = torch.sparse_coo_tensor([a.tolist(), b.tolist()], data)
         d = core.LocalDes(t)

@@ -54,7 +54,7 @@ class ChemPar:
     Constraints can be enforced using a
     bijection function. In this case
     bijection.inverse is called for setting
-    the values and bijection.forward is
+    the values and bijection.function is
     called when the values are requested.
 
     """

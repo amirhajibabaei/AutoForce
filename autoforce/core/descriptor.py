@@ -21,19 +21,19 @@ class Descriptor(ABC):
 
 
     Required methods:
-        1) forward
+        1) descriptor
         2) scalar_product
 
 
-    The "forward" method:
+    The "descriptor" method:
     The body of a Descriptor should be implemented
-    as the "forward" method. The main component of
+    as the "descriptor" method. The main component of
     a LocalDes object is the "tensors" attribute.
     "meta" are arbirtary data for index-keeping,
     etc which are handled opaquely by the Descriptor.
     Other attributes are "index", "species", and "norm"
     which are automatically handled and, generally,
-    should not be specified within the forward method.
+    should not be specified within this method.
 
 
     The "scalar_product" method:
@@ -60,12 +60,12 @@ class Descriptor(ABC):
         self.basis = tuple()
 
     @abstractmethod
-    def forward(self,
-                number: Tensor,
-                numbers: Tensor,
-                rij: Tensor,
-                wij: Tensor
-                ) -> LocalDes:
+    def descriptor(self,
+                   number: Tensor,
+                   numbers: Tensor,
+                   rij: Tensor,
+                   wij: Tensor
+                   ) -> LocalDes:
         """
         Should be implemented in a subclass.
 
@@ -89,7 +89,7 @@ class Descriptor(ABC):
         if e._cached_descriptors[self.index] is None:
             numbers, rij, dij, cij = self.cutoff.get_neighbors(e)
             wij = self.cutoff_fn.function(dij, cij)
-            d = self.forward(e.number, numbers, rij, wij)
+            d = self.descriptor(e.number, numbers, rij, wij)
             d.index = int(e.index)
             if d.norm is None:
                 d.norm = self.scalar_product(d, d).sqrt().view([])
