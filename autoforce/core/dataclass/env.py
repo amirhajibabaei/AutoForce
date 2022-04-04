@@ -16,6 +16,7 @@ class LocalEnv:
 
     __slots__ = ('index',
                  'number',
+                 'neighbors',
                  'numbers',
                  'rij',
                  'dij',
@@ -24,6 +25,7 @@ class LocalEnv:
     def __init__(self,
                  index: Tensor,
                  number: Tensor,
+                 neighbors: Tensor,
                  numbers: Tensor,
                  rij: Tensor,
                  ) -> None:
@@ -39,6 +41,7 @@ class LocalEnv:
 
         self.index = index
         self.number = number
+        self.neighbors = neighbors
         self.numbers = numbers
         self.rij = rij
         self.dij = rij.norm(dim=1)

@@ -64,6 +64,7 @@ class NeighborList(ABC):
                 _i = i[k][0]
                 env = LocalEnv(_i,
                                conf.numbers[_i],
+                               j[k],
                                conf.numbers[j[k]],
                                rij[k]
                                )
