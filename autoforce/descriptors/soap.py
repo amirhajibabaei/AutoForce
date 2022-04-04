@@ -23,15 +23,14 @@ class SOAP(core.Descriptor):
                    wij: Tensor
                    ) -> core.LocalDes:
         a, b, data = self.overlaps.function(rij, numbers, wij)
-        t = torch.sparse_coo_tensor([a.tolist(), b.tolist()], data)
-        d = core.LocalDes(t)
+        d = core.LocalDes(data, meta=(a.tolist(), b.tolist()))
         return d
 
     def scalar_product(self,
                        u: core.LocalDes,
                        v: core.LocalDes
                        ) -> Tensor:
-        x, = u.tensors
-        y, = v.tensors
+        x = torch.sparse_coo_tensor(u.meta, *u.tensors)
+        y = torch.sparse_coo_tensor(v.meta, *v.tensors)
         k = torch.sparse.sum(x*y)
         return k
