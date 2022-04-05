@@ -3,6 +3,7 @@ import autoforce.core as core
 from autoforce.functions import Overlaps
 from torch import Tensor
 import torch
+from autoforce.aliases import Descriptor_t
 
 
 class SOAP(core.Descriptor):
@@ -21,16 +22,7 @@ class SOAP(core.Descriptor):
                    numbers: Tensor,
                    rij: Tensor,
                    wij: Tensor
-                   ) -> core.LocalDes:
+                   ) -> Descriptor_t:
         a, b, data = self.overlaps.function(rij, numbers, wij)
-        d = core.LocalDes(data, meta=(a.tolist(), b.tolist()))
+        d = {(int(p), int(q)): t for p, q, t in zip(a, b, data)}
         return d
-
-    def scalar_product(self,
-                       u: core.LocalDes,
-                       v: core.LocalDes
-                       ) -> Tensor:
-        x = torch.sparse_coo_tensor(u.meta, *u.tensors)
-        y = torch.sparse_coo_tensor(v.meta, *v.tensors)
-        k = torch.sparse.sum(x*y)
-        return k

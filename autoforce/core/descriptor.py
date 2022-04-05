@@ -1,4 +1,5 @@
 # +
+import autoforce.cfg as cfg
 from .dataclass import Conf, LocalEnv, LocalDes, Basis
 from .parameter import Cutoff
 from .function import Cutoff_fn
@@ -8,6 +9,7 @@ from collections import defaultdict
 import itertools
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
+from autoforce.aliases import Descriptor_t
 
 
 class Descriptor(ABC):
@@ -65,23 +67,22 @@ class Descriptor(ABC):
                    numbers: Tensor,
                    rij: Tensor,
                    wij: Tensor
-                   ) -> LocalDes:
+                   ) -> Descriptor_t:
         """
         Should be implemented in a subclass.
 
         """
         ...
 
-    @abstractmethod
     def scalar_product(self,
                        x: LocalDes,
                        y: LocalDes
                        ) -> Tensor:
-        """
-        Should be implemented in a subclass.
-
-        """
-        ...
+        product = cfg.zero
+        for k, t in x.descriptor.items():
+            if k in y.descriptor:
+                product = product + (t*y.descriptor[k]).sum()
+        return product
 
     def get_descriptor(self, e: LocalEnv) -> LocalDes:
         while len(e._cached_descriptors) < Descriptor.instances:
@@ -89,7 +90,9 @@ class Descriptor(ABC):
         if e._cached_descriptors[self.index] is None:
             numbers, rij, dij, cij = self.cutoff.get_neighbors(e)
             wij = self.cutoff_fn.function(dij, cij)
-            d = self.descriptor(e.number, numbers, rij, wij)
+            _d = self.descriptor(e.number, numbers, rij, wij)
+            d = LocalDes(_d)
+            # TODO: eliminate "if"s
             d.index = int(e.index)
             if d.norm is None:
                 d.norm = self.scalar_product(d, d).sqrt().view([])

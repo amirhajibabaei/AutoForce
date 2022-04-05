@@ -1,6 +1,7 @@
 # +
 from torch import Tensor
-from typing import Any, Optional
+from typing import Tuple, Dict, Optional
+from autoforce.aliases import Descriptor_t
 
 
 class LocalDes:
@@ -38,31 +39,27 @@ class LocalDes:
 
     """
 
-    __slots__ = ('tensors',
-                 'meta',
+    __slots__ = ('descriptor',
                  'index',
                  'species',
                  'norm',
                  '_cached_scalar_products')
 
     def __init__(self,
-                 *tensors: Any,  # TODO: Any <- Tuple[Tensor, ...]
-                 meta: Any = None,
+                 descriptor: Descriptor_t,
                  index: Optional[int] = None,
                  species: Optional[int] = None,
                  norm: Optional[Tensor] = None
                  ) -> None:
         """
-        tensors    a tuple of tensors (main data)
-        meta       arbitrary auxiliary data
-        index      index of the central atom
-        species    species of the descriptor
-        norm       norm of the descriptor
+        descriptor   a dict of {key: tensor} (main data)
+        index        index of the central atom
+        species      species of the descriptor
+        norm         norm of the descriptor
 
         """
 
-        self.tensors = tensors
-        self.meta = meta
+        self.descriptor = descriptor
         self.index = index
         self.species = species
         self.norm = norm
@@ -70,10 +67,9 @@ class LocalDes:
         # cache
         self._cached_scalar_products = []
 
-    def detach(self):  # TODO: -> LocalDes
-        tensors = (t.detach() for t in self.tensors)
-        detached = LocalDes(*tensors,
-                            meta=self.meta,
+    def detach(self) -> 'LocalDes':
+        descriptor = {k: t.detach() for k, t in self.descriptor.items()}
+        detached = LocalDes(descriptor,
                             index=self.index,
                             species=self.species,
                             norm=self.norm.detach())
