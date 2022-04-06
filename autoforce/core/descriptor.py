@@ -74,31 +74,29 @@ class Descriptor(ABC):
         """
         ...
 
-    def scalar_product(self,
-                       x: LocalDes,
-                       y: LocalDes
-                       ) -> Tensor:
-        product = cfg.zero
-        for k, t in x.descriptor.items():
-            if k in y.descriptor:
-                product = product + (t*y.descriptor[k]).sum()
-        return product
+    def _descriptor(self,
+                    number: Tensor,
+                    numbers: Tensor,
+                    rij: Tensor,
+                    cij: Tensor
+                    ) -> Descriptor_t:
+        cij = self.cutoff(number, numbers)
+        dij = rij.norm(dim=1)
+        m = dij < cij
+        wij = self.cutoff_fn.function(dij[m], cij[m])
+        d = self.descriptor(number, numbers[m], rij[m], wij)
+        return d
 
     def get_descriptor(self, e: LocalEnv) -> LocalDes:
         while len(e._cached_descriptors) < Descriptor.instances:
             e._cached_descriptors.append(None)
         if e._cached_descriptors[self.index] is None:
-            cutoff = self.cutoff(e.number, e.numbers)
-            m, te = e.truncated(cutoff)
-            wij = self.cutoff_fn.function(te.dij, cutoff[m])
-            _d = self.descriptor(te.number, te.numbers, te.rij, wij)
+            cij = self.cutoff(e.number, e.numbers)
+            _d = self._descriptor(e.number, e.numbers, e.rij, cij)
             d = LocalDes(_d)
-            # TODO: eliminate "if"s
             d.index = int(e.index)
-            if d.norm is None:
-                d.norm = self.scalar_product(d, d).sqrt().view([])
-            if d.species is None:
-                d.species = int(e.number)
+            d.norm = self.scalar_product(d, d).sqrt().view([])
+            d.species = int(e.number)
             e._cached_descriptors[self.index] = d
         return e._cached_descriptors[self.index]
 
@@ -106,6 +104,17 @@ class Descriptor(ABC):
         if conf._cached_local_envs is None:
             raise RuntimeError(f'{conf._cached_local_envs = }')
         return [self.get_descriptor(l) for l in conf._cached_local_envs]
+
+    def scalar_product(self,
+                       x: LocalDes,
+                       y: LocalDes
+                       ) -> Tensor:
+        kx = set(x.descriptor.keys())
+        ky = set(y.descriptor.keys())
+        product = cfg.zero
+        for k in kx.intersection(ky):
+            product = product + (x.descriptor[k]*y.descriptor[k]).sum()
+        return product
 
     def get_scalar_products(self,
                             d: LocalDes,
