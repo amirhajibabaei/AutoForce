@@ -44,7 +44,7 @@ class Model:
         forces = torch.stack(forces).view(-1)
         targets = torch.cat([energies, forces])
 
-        # 2
+        # 2.
         matrices = []
         dims = []
         sections = []
@@ -56,7 +56,15 @@ class Model:
 
         matrix = torch.cat([torch.cat(m, dim=1) for m in zip(*matrices)])
 
-        solution = torch.linalg.lstsq(matrix, targets).solution
+        # 3. torch.lstsq is random -> best of 7 maybe semi-deterministic
+        opt_mae = None
+        for _ in range(7):
+            sol = torch.linalg.lstsq(matrix, targets).solution
+            mae = (matrix@sol - targets).abs().mean()
+            if opt_mae is None or mae < opt_mae:
+                opt_mae = mae
+                solution = sol
+
         weights = torch.split(solution, dims)
         for reg, w, sec in zip(self.regressors, weights, sections):
             reg.set_weights(w, sec)
