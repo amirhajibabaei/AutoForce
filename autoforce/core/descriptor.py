@@ -88,9 +88,10 @@ class Descriptor(ABC):
         while len(e._cached_descriptors) < Descriptor.instances:
             e._cached_descriptors.append(None)
         if e._cached_descriptors[self.index] is None:
-            numbers, rij, dij, cij = self.cutoff.get_neighbors(e)
-            wij = self.cutoff_fn.function(dij, cij)
-            _d = self.descriptor(e.number, numbers, rij, wij)
+            cutoff = self.cutoff(e.number, e.numbers)
+            m, te = e.truncated(cutoff)
+            wij = self.cutoff_fn.function(te.dij, cutoff[m])
+            _d = self.descriptor(te.number, te.numbers, te.rij, wij)
             d = LocalDes(_d)
             # TODO: eliminate "if"s
             d.index = int(e.index)

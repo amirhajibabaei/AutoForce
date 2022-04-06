@@ -1,5 +1,6 @@
 # +
 from torch import Tensor
+from typing import Optional
 
 
 class LocalEnv:
@@ -28,6 +29,7 @@ class LocalEnv:
                  neighbors: Tensor,
                  numbers: Tensor,
                  rij: Tensor,
+                 dij: Optional[Tensor] = None
                  ) -> None:
         """
         index    index of the central atom in the
@@ -44,7 +46,17 @@ class LocalEnv:
         self.neighbors = neighbors
         self.numbers = numbers
         self.rij = rij
-        self.dij = rij.norm(dim=1)
+        self.dij = rij.norm(dim=1) if dij is None else dij
 
         # cache
         self._cached_descriptors = []
+
+    def truncated(self, cutoff: Tensor) -> (Tensor, 'LocalEnv'):
+        m = self.dij < cutoff
+        e = LocalEnv(self.index,
+                     self.number,
+                     self.neighbors[m],
+                     self.numbers[m],
+                     self.rij[m],
+                     dij=self.dij[m])
+        return m, e

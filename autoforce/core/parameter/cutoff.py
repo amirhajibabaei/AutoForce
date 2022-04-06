@@ -20,8 +20,3 @@ class Cutoff(ChemPar):
                          bijection=None,
                          requires_grad=False
                          )
-
-    def get_neighbors(self, e: LocalEnv) -> (Tensor, Tensor, Tensor, Tensor):
-        cutoff = self(e.number, e.numbers)
-        m = e.dij < cutoff
-        return e.numbers[m], e.rij[m], e.dij[m], cutoff[m]
