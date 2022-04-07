@@ -45,7 +45,6 @@ class NeighborList(ABC):
         sij = torch.from_numpy(sij)
         shifts = (sij[..., None]*conf.cell).sum(dim=1)
         rij = conf.positions[j] - conf.positions[i] + shifts
-        dij = rij.norm(dim=1)
 
         # 3. Split:
         # Note that neighborlist is already sorted wrt i

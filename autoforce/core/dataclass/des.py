@@ -40,7 +40,6 @@ class LocalDes:
     """
 
     __slots__ = ('descriptor',
-                 'index',
                  'species',
                  'norm',
                  '_cached_scalar_products')
@@ -53,14 +52,12 @@ class LocalDes:
                  ) -> None:
         """
         descriptor   a dict of {key: tensor} (main data)
-        index        index of the central atom
         species      species of the descriptor
         norm         norm of the descriptor
 
         """
 
         self.descriptor = descriptor
-        self.index = index
         self.species = species
         self.norm = norm
 
@@ -70,7 +67,6 @@ class LocalDes:
     def detach(self) -> 'LocalDes':
         descriptor = {k: t.detach() for k, t in self.descriptor.items()}
         detached = LocalDes(descriptor,
-                            index=self.index,
                             species=self.species,
                             norm=self.norm.detach())
         detached._cached_scalar_products = [[t.detach() for t in wrt]

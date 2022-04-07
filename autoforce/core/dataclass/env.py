@@ -20,7 +20,6 @@ class LocalEnv:
                  'neighbors',
                  'numbers',
                  'rij',
-                 'dij',
                  '_cached_descriptors')
 
     def __init__(self,
@@ -46,17 +45,6 @@ class LocalEnv:
         self.neighbors = neighbors
         self.numbers = numbers
         self.rij = rij
-        self.dij = rij.norm(dim=1) if dij is None else dij
 
         # cache
         self._cached_descriptors = []
-
-    def truncated(self, cutoff: Tensor) -> (Tensor, 'LocalEnv'):
-        m = self.dij < cutoff
-        e = LocalEnv(self.index,
-                     self.number,
-                     self.neighbors[m],
-                     self.numbers[m],
-                     self.rij[m],
-                     dij=self.dij[m])
-        return m, e

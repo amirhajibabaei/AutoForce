@@ -94,7 +94,6 @@ class Descriptor(ABC):
             cij = self.cutoff(e.number, e.numbers)
             _d = self._descriptor(e.number, e.numbers, e.rij, cij)
             d = LocalDes(_d)
-            d.index = int(e.index)
             d.norm = self.scalar_product(d, d).sqrt().view([])
             d.species = int(e.number)
             e._cached_descriptors[self.index] = d
