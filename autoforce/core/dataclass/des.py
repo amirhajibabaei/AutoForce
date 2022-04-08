@@ -1,7 +1,6 @@
 # +
-from torch import Tensor
+from autoforce._typing import Tensor, TensorDict
 from typing import Tuple, Dict, Optional
-from autoforce.aliases import Descriptor_t
 
 
 class LocalDes:
@@ -45,7 +44,7 @@ class LocalDes:
                  '_cached_scalar_products')
 
     def __init__(self,
-                 descriptor: Descriptor_t,
+                 descriptor: TensorDict,
                  index: Optional[int] = None,
                  species: Optional[int] = None,
                  norm: Optional[Tensor] = None

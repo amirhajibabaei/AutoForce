@@ -55,10 +55,10 @@ class NeighborList(ABC):
 
         # 4. Cache
         conf._cached_local_envs = []
-        conf._cached_isolated_atoms = Counter()
+        _cached_isolated_atoms = Counter()
         for k in range(conf.number_of_atoms):
             if sizes[k] == 0:
-                conf._cached_isolated_atoms[int(conf.numbers[k])] += 1
+                _cached_isolated_atoms[int(conf.numbers[k])] += 1
             else:
                 _i = i[k][0]
                 env = LocalEnv(_i,

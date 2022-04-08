@@ -4,12 +4,11 @@ from .dataclass import Conf, LocalEnv, LocalDes, Basis
 from .parameter import Cutoff
 from .function import Cutoff_fn
 import torch
-from torch import Tensor
 from collections import defaultdict
 import itertools
 from abc import ABC, abstractmethod
+from autoforce._typing import Tensor, TensorDict
 from typing import Dict, List, Any, Optional
-from autoforce.aliases import Descriptor_t
 
 
 class Descriptor(ABC):
@@ -67,7 +66,7 @@ class Descriptor(ABC):
                    numbers: Tensor,
                    rij: Tensor,
                    wij: Tensor
-                   ) -> Descriptor_t:
+                   ) -> TensorDict:
         """
         Should be implemented in a subclass.
 
@@ -79,8 +78,7 @@ class Descriptor(ABC):
                     numbers: Tensor,
                     rij: Tensor,
                     cij: Tensor
-                    ) -> Descriptor_t:
-        cij = self.cutoff(number, numbers)
+                    ) -> TensorDict:
         dij = rij.norm(dim=1)
         m = dij < cij
         wij = self.cutoff_fn.function(dij[m], cij[m])

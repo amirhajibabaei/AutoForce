@@ -1,9 +1,7 @@
 # +
 import autoforce.core as core
 from autoforce.functions import Overlaps
-from torch import Tensor
-import torch
-from autoforce.aliases import Descriptor_t
+from autoforce._typing import Tensor, TensorDict
 
 
 class SOAP(core.Descriptor):
@@ -22,7 +20,7 @@ class SOAP(core.Descriptor):
                    numbers: Tensor,
                    rij: Tensor,
                    wij: Tensor
-                   ) -> Descriptor_t:
+                   ) -> TensorDict:
         a, b, data = self.overlaps.function(rij, numbers, wij)
         d = {(int(p), int(q)): t for p, q, t in zip(a, b, data)}
         return d

@@ -63,7 +63,6 @@ class Conf:
 
         # cache
         self._cached_local_envs = None
-        self._cached_isolated_atoms = None
 
     @property
     def requires_grad(self) -> bool:
