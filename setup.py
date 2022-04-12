@@ -3,11 +3,11 @@ from setuptools import setup, find_packages
 
 
 setup(
-    name="theforce",
-    version="v2021.09",
+    name="autoforce",
+    version="0",
     author="Amir Hajibabaei",
     author_email="a.hajibabaei.86@gmail.com",
-    description="machine learning of the ab initio potential energy surface",
+    description="machine learning force-fields",
     url="https://github.com",
     packages=find_packages(),
     classifiers=[

@@ -1,1 +1,0 @@
-mpirun -n 16 vasp_std

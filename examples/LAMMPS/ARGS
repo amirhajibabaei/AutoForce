@@ -1,5 +1,0 @@
-calculator = 'VASP'
-
-# ML
-ediff = 2.0*kcal_mol      # LCE sampling threshold
-fdiff = 2.0*kcal_mol      # DFT sampling threshold
