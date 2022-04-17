@@ -315,10 +315,13 @@ class ActiveCalculator(Calculator):
             self.model = PosteriorPotentialFromFolder(
                 model, load_data=True, update_data=False, group=self.process_group, distrib=self.distrib)
             self._ready = False
-        elif type(model) == PosteriorPotential:
+        elif isinstance(model, PosteriorPotential):
             self.model = model
         else:
-            self.model = PosteriorPotential(model)
+            self.model = self.make_model(model)
+
+    def make_model(self, kern):
+        return PosteriorPotential(kern)
 
     def get_ready(self):
         if not self._ready:
@@ -443,10 +446,12 @@ class ActiveCalculator(Calculator):
                 tmp.calc = None
                 if self.rank == 0:
                     ase.io.Trajectory('active_uncertain.traj', 'a').write(tmp)
-        energy = self.results['energy']
 
         timings.append(time.time())  # node 4: active
+        self.post_calculate(timings)
 
+    def post_calculate(self, timings):
+        energy = self.results['energy']
         # test
         if self.active and self.test and self.step - self._last_test > self.test:
             self._test()
@@ -624,9 +629,9 @@ class ActiveCalculator(Calculator):
         self._last_test = self.step
         return energy, forces
 
-    def _exact(self, copy):
+    def _exact(self, copy, _calc=None, task=None):
         tmp = copy.as_ase() if self.to_ase else copy
-        tmp.set_calculator(self._calc)
+        tmp.set_calculator(_calc or self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
         if self.tape:
@@ -635,8 +640,12 @@ class ActiveCalculator(Calculator):
         self.log('exact energy: {}'.format(energy))
         #
         if self.model.ndata > 0:
-            dE = self.results['energy'] - energy
-            df = abs(self.results['forces'] - forces)
+            if task is None:
+                dE = self.results['energy'] - energy
+                df = abs(self.results['forces'] - forces)
+            else:
+                dE = self.results['energy'][task] - energy
+                df = abs(self.results['forces'][..., task] - forces)
             self.log('errors (pre):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}'.format(
                 dE, df.max(), df.mean()))
         self._last_test = self.step
