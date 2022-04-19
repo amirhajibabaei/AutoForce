@@ -84,6 +84,17 @@ class MultiTaskCalculator(ActiveCalculator):
                 self.deltas[q] = (self.weights * self.deltas[q]).sum(axis=-1)
         super().post_calculate(*args, **kwargs)
 
+    def active_sample_weights_space(self):
+        '''
+        A function that enforces an even sampling over the weights space w=[w0,w1,...,wn]
+        '''
+        self.weights = np.zeros(len(self._calcs))
+        self.weights[np.random.randint(len(self._calcs))] = 1.
+        assert len(self.weights) == len(self._calcs)
+        self.weights = np.asarray(self.weights)
+        self.weights = self.weights / self.weights.sum()
+        self.log(f'Active weights sample actived - Weights changed to w={self.weights}')
+
     def _exact(self, copy):
         results = []
         for task, _calc in enumerate(self._calcs):
@@ -109,3 +120,4 @@ class MultiTaskCalculator(ActiveCalculator):
         s = np.stack(s, axis=-1)
         for q, v in zip(quant, [e, f, s]):
             self.results[q] = v
+        self.log(f'Inter-task correlation: {self.model.tasks_kern}')
