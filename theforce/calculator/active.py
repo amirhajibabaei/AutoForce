@@ -591,18 +591,22 @@ class ActiveCalculator(Calculator):
     def sample_rand_lces(self, indices=None, repeat=1, extend_cov=False):
         added = 0
         for _ in range(repeat):
+            self.log(f'1 added {added} randomly displaced LCEs')
             tmp = (self.atoms.as_ase() if self.to_ase else self.atoms).copy()
             shape = tmp.positions.shape
             tmp.positions += np.random.uniform(-0.05, 0.05, size=shape)
             tmp.calc = None
             atoms = TorchAtoms(ase_atoms=tmp)
+            self.log(f'2 added {added} randomly displaced LCEs')
             atoms.update(posgrad=False, cellgrad=False, dont_save_grads=True,
                          cutoff=self.model.cutoff, descriptors=self.model.descriptors)
             if indices is None:
                 indices = np.random.permutation(len(atoms.loc))
+            self.log(f'3 added {added} randomly displaced LCEs')
             for k in indices:
                 res = abs(self.update_lce(atoms.loc[k]))
                 added += res
+                self.log(f'4 added {added} randomly displaced LCEs')
                 if res > 0 and extend_cov:
                     cov = self.model.gp.kern(self.atoms, self.model.X[-1])
                     self.cov = torch.cat([self.cov, cov], dim=1)

@@ -2,6 +2,8 @@
 from theforce.regression.gppotential import PosteriorPotential
 import theforce.distributed as distrib
 import torch
+from scipy.optimize import minimize
+import numpy as np
 
 
 class MultiTaskPotential(PosteriorPotential):
@@ -26,6 +28,8 @@ class MultiTaskPotential(PosteriorPotential):
         """
         super().__init__(*args, **kwargs)
         self.tasks = tasks
+        self.tasks_kern_L = torch.eye(self.tasks)
+        self.tasks_kern   = torch.eye(self.tasks)
 
     def make_munu(self, *args, **kwargs):
 
@@ -84,17 +88,58 @@ class MultiTaskPotential(PosteriorPotential):
         # in principle this should be optimized as a hyper parameter.
         # for now we set it equal to correlation of forces in different
         # tasks.
-        # for independent tasks, set:
-        # self.tasks_kern = torch.eye(self.tasks)
-        self.tasks_kern = tasks_correlation(forces.view(-1, self.tasks))
-        # a small ridge maybe needed in case tasks are identical:
-        self.tasks_kern += torch.eye(self.tasks) * 1e-2
 
-        # *** solution ***
-        design = torch.kron(kern, self.tasks_kern)
-        solution, predictions = least_squares(design, targets)
-        self.multi_mu = solution
-        self.multi_types = {z: i for i, z in enumerate(atom_types)}
+        tasks_kern_optimization=True
+        niter_tasks=1
+        '''
+        As the optimization of the intertask correlations is time-consuming, 
+        an alternative is to (acvtively) optimize the intertask correlations over the course of the simulation.
+        '''
+        if tasks_kern_optimization is True:
+            self.tasks_kern_L = torch.eye(self.tasks)
+            # decoupled optimizer for mu and W
+            for i,_ in enumerate(range(niter_tasks)):
+                # *** weights optimization ***
+                design = torch.kron(kern, self.tasks_kern)
+                solution, predictions = least_squares(design, targets)
+                self.multi_mu = solution
+                self.multi_types = {z: i for i, z in enumerate(atom_types)}
+
+                # *** intertask kernel optimization ***
+                x1=self.tasks_kern_L[0][0].item()
+                x2=self.tasks_kern_L[1][0].item()
+                x3=self.tasks_kern_L[1][1].item()
+                res=minimize(optimize_task_kern_twobytwo,[x1,x2,x3],args=(kern,solution,targets))
+                self.tasks_kern_L[0][0]=res.x[0]
+                self.tasks_kern_L[1][0]=res.x[1]
+                self.tasks_kern_L[1][1]=res.x[2]
+                self.tasks_kern = self.tasks_kern_L@self.tasks_kern_L.T
+
+                # *** weights optimization ***
+                design = torch.kron(kern, self.tasks_kern)
+                solution, predictions = least_squares(design, targets)
+                self.multi_mu = solution
+                self.multi_types = {z: i for i, z in enumerate(atom_types)}
+                print(f'{i} Optimized tasks corrs: {self.tasks_kern}, Lower: {self.tasks_kern_L}, error: {res.fun}')
+        else:
+            # for predetermined tasks corr
+            self.tasks_kern = tasks_correlation(forces.view(self.tasks,-1),corr_coef='pearson')
+    
+            # for independent tasks, set:
+            #self.tasks_kern = torch.eye(self.tasks)
+            # a small ridge maybe needed in case tasks are identical:
+            #self.tasks_kern += torch.eye(self.tasks) * 1e-1
+    
+            #np corr
+            #import numpy as np
+            #self.tasks_kern = np.corrcoef(forces.view(-1, self.tasks)[:,0], forces.view(-1, self.tasks)[:,1])
+            #self.tasks_kern = torch.from_numpy(self.tasks_kern) 
+    
+            # *** solution ***
+            design = torch.kron(kern, self.tasks_kern)
+            solution, predictions = least_squares(design, targets)
+            self.multi_mu = solution
+            self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
         # *** stats ***
         # TODO: per-task vscales?
@@ -117,7 +162,19 @@ class MultiTaskPotential(PosteriorPotential):
         energies = (kern @ self.multi_mu).reshape(-1, self.tasks).sum(dim=0)
         return [e for e in energies]
 
-
+def optimize_task_kern_twobytwo(x,kern,solution,targets):
+    """
+    A toy function that measures the error of multitask model
+    for a given x in 2 tasks setting
+    """
+    tasks_kern_L_np=np.array([[x[0],0.],[x[1],x[2]]],dtype='float64')
+    tasks_kern_L=torch.from_numpy(tasks_kern_L_np)
+    tasks_kern=tasks_kern_L@tasks_kern_L.T
+    design = torch.kron(kern, tasks_kern)
+    pred = design @ solution
+    err = (pred - targets).abs().mean()
+    return err.numpy()
+    
 def least_squares(design, targets, trials=10):
     """
     Minimizes 
@@ -143,7 +200,17 @@ def least_squares(design, targets, trials=10):
     return solution, predictions
 
 
-def tasks_correlation(f):
-    a = f.t() @ f
-    b = a.diag().sqrt()[None]
-    return a / (b * b.t())
+def tasks_correlation(f,corr_coef='pearson'):
+    '''
+    Pre-defined correlation coefficient matrix. 
+    The optimization of intertask correlation coefficient matrix could be time-consuming.
+    We use a bare correlation coefficient matrix based on predicted forces without optimization.
+    Or the obtained correlation coefficient matrix is used as the first guess. 
+    '''
+    if (corr_coef=='pearson'):
+        W=torch.corrcoef(f)
+    else:
+        a = f.t() @ f
+        b = a.diag().sqrt()[None]
+        W=a / (b * b.t())
+    return W
