@@ -29,6 +29,7 @@ class MultiTaskPotential(PosteriorPotential):
         super().__init__(*args, **kwargs)
         self.tasks = tasks
         self.tasks_kern_L = torch.eye(self.tasks)
+        self.tasks_kern_L += 1e-2
         self.tasks_kern   = torch.eye(self.tasks)
 
     def make_munu(self, *args, **kwargs):
@@ -96,16 +97,18 @@ class MultiTaskPotential(PosteriorPotential):
         an alternative is to (acvtively) optimize the intertask correlations over the course of the simulation.
         '''
         if tasks_kern_optimization is True:
-            self.tasks_kern_L = torch.eye(self.tasks)
-            # decoupled optimizer for mu and W
-            for i,_ in enumerate(range(niter_tasks)):
-                # *** weights optimization ***
-                design = torch.kron(kern, self.tasks_kern)
-                solution, predictions = least_squares(design, targets)
-                self.multi_mu = solution
-                self.multi_types = {z: i for i, z in enumerate(atom_types)}
+            #self.tasks_kern_L = torch.eye(self.tasks)
+            #self.tasks_kern_L += 1e-2
 
-                # *** intertask kernel optimization ***
+            # decoupled optimizer for mu and W
+            ## 1. Initial weights \mu optimization ***
+            design = torch.kron(kern, self.tasks_kern)
+            solution, predictions = least_squares(design, targets)
+            self.multi_mu = solution
+            self.multi_types = {z: i for i, z in enumerate(atom_types)}
+
+            for i,_ in enumerate(range(niter_tasks)):
+                # 2. Inter-task kernel W=L@L.T optimization ***
                 x1=self.tasks_kern_L[0][0].item()
                 x2=self.tasks_kern_L[1][0].item()
                 x3=self.tasks_kern_L[1][1].item()
@@ -115,12 +118,12 @@ class MultiTaskPotential(PosteriorPotential):
                 self.tasks_kern_L[1][1]=res.x[2]
                 self.tasks_kern = self.tasks_kern_L@self.tasks_kern_L.T
 
-                # *** weights optimization ***
+                # 3. Re-optimization of weights \mu based on an updated W ***
                 design = torch.kron(kern, self.tasks_kern)
                 solution, predictions = least_squares(design, targets)
                 self.multi_mu = solution
                 self.multi_types = {z: i for i, z in enumerate(atom_types)}
-                print(f'{i} Optimized tasks corrs: {self.tasks_kern}, Lower: {self.tasks_kern_L}, error: {res.fun}')
+                #print(f'{i} Optimized tasks corrs: {self.tasks_kern}, Lower: {self.tasks_kern_L}, error: {res.fun}')
         else:
             # for predetermined tasks corr
             self.tasks_kern = tasks_correlation(forces.view(self.tasks,-1),corr_coef='pearson')
@@ -175,7 +178,7 @@ def optimize_task_kern_twobytwo(x,kern,solution,targets):
     err = (pred - targets).abs().mean()
     return err.numpy()
     
-def least_squares(design, targets, trials=10):
+def least_squares(design, targets, trials=10, driver='gels'):
     """
     Minimizes 
         || design @ solution - targets ||
@@ -185,12 +188,21 @@ def least_squares(design, targets, trials=10):
         solution, predictions (= design @ solution)
         
     Since torch.linalg.lstsq is non-deteministic,
-    the best solution of "trials" is return.
+    the best solution of "trials" is return. 
+
+    As the design (kern \otimes tasks_kern) matrix could fall into 
+    ill-conditioned form, xGELSY fails often (for some reason - update the origin). 
+    xGELSY uses the complete orthogonal factorization. 
+    Instead we choose xGELS (QR or LQ factorization to solve a overdetermined or underdetermined system),
+    which shows the better stability than xGELSY.
+
+    - https://pytorch.org/docs/stable/generated/torch.linalg.lstsq.html#torch.linalg.lstsq
+    - https://www.smcm.iqfr.csic.es/docs/intel/mkl/mkl_manual/lse/lse_drllsp.htm
     """
     best = None
     predictions = None
     for _ in range(trials):
-        sol = torch.linalg.lstsq(design, targets)
+        sol = torch.linalg.lstsq(design,targets,driver='gels')
         pred = design @ sol.solution
         err = (pred - targets).abs().mean()
         if not best or err < best:
@@ -198,7 +210,6 @@ def least_squares(design, targets, trials=10):
             predictions = pred
             best = err
     return solution, predictions
-
 
 def tasks_correlation(f,corr_coef='pearson'):
     '''
