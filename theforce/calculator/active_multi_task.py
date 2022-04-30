@@ -38,7 +38,7 @@ class MultiTaskCalculator(ActiveCalculator):
     due to low-rank structure.
     """
 
-    def __init__(self, *args, weights=None, **kwargs):
+    def __init__(self, *args, weights=None, weights_sample=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         # weights:
@@ -49,6 +49,7 @@ class MultiTaskCalculator(ActiveCalculator):
         assert len(weights) == len(self._calcs)
         weights = np.asarray(weights)
         self.weights = weights / weights.sum()
+        self.weights_sample = weights_sample
 
     @property
     def tasks(self):
@@ -82,14 +83,22 @@ class MultiTaskCalculator(ActiveCalculator):
             self.results[q] = (self.weights * self.results[q]).sum(axis=-1)
             if self.deltas:
                 self.deltas[q] = (self.weights * self.deltas[q]).sum(axis=-1)
+        #weights sampling
+        if self.weights_sample is not None and (self.step%self.weights_sample)==0 and self.step >0:
+            self.active_sample_weights_space()
         super().post_calculate(*args, **kwargs)
 
     def active_sample_weights_space(self):
         '''
         A function that enforces an even sampling over the weights space w=[w0,w1,...,wn]
         '''
-        self.weights = np.zeros(len(self._calcs))
-        self.weights[np.random.randint(len(self._calcs))] = 1.
+        #enforces weights change
+        while(1):
+            update=np.zeros(len(self._calcs))
+            update[np.random.randint(len(self._calcs))] = 1.
+            if np.dot(self.weights,update) == 0.0:
+                self.weights=update
+                break
         assert len(self.weights) == len(self._calcs)
         self.weights = np.asarray(self.weights)
         self.weights = self.weights / self.weights.sum()
@@ -121,3 +130,4 @@ class MultiTaskCalculator(ActiveCalculator):
         for q, v in zip(quant, [e, f, s]):
             self.results[q] = v
         self.log(f'Inter-task correlation: {self.model.tasks_kern}')
+
