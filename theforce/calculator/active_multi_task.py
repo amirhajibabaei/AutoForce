@@ -83,10 +83,10 @@ class MultiTaskCalculator(ActiveCalculator):
             self.results[q] = (self.weights * self.results[q]).sum(axis=-1)
             if self.deltas:
                 self.deltas[q] = (self.weights * self.deltas[q]).sum(axis=-1)
+        super().post_calculate(*args, **kwargs)
         #weights sampling
         if self.weights_sample is not None and (self.step%self.weights_sample)==0 and self.step >0:
             self.active_sample_weights_space()
-        super().post_calculate(*args, **kwargs)
 
     def active_sample_weights_space(self):
         '''
