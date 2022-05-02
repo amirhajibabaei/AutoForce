@@ -38,7 +38,7 @@ class MultiTaskCalculator(ActiveCalculator):
     due to low-rank structure.
     """
 
-    def __init__(self, *args, weights=None, weights_sample=None, **kwargs):
+    def __init__(self, *args, weights=None, weights_fin=None, weights_sample=None, t_tieq=200000, **kwargs):
         super().__init__(*args, **kwargs)
 
         # weights:
@@ -49,7 +49,15 @@ class MultiTaskCalculator(ActiveCalculator):
         assert len(weights) == len(self._calcs)
         weights = np.asarray(weights)
         self.weights = weights / weights.sum()
+
+        # final weights:
+        assert len(weights_fin) == len(self._calcs)
+        weights_fin = np.asarray(weights_fin)
+        self.weights_fin = weights_fin / weights_fin.sum()
+
         self.weights_sample = weights_sample
+        self.weights_init = self.weights
+        self.t_tieq  = t_tieq
 
     @property
     def tasks(self):
@@ -87,6 +95,9 @@ class MultiTaskCalculator(ActiveCalculator):
         #weights sampling
         if self.weights_sample is not None and (self.step%self.weights_sample)==0 and self.step >0:
             self.active_sample_weights_space()
+        #thermodynamic integration
+        if self.weights_fin is not None and (self.step%self.t_tieq)==0:
+            self.thermo_int()
 
     def active_sample_weights_space(self):
         '''
@@ -103,6 +114,17 @@ class MultiTaskCalculator(ActiveCalculator):
         self.weights = np.asarray(self.weights)
         self.weights = self.weights / self.weights.sum()
         self.log(f'Active weights sample actived - Weights changed to w={self.weights}')
+
+    def thermo_int(self):
+        '''
+        To Perform the Thermodynamic Integration from w1 to w2
+        \lambda changes in time to integrate out the \lambda in numerical grid
+        w_new = (1-\lambda)*w1 + \lambda*w2
+        '''
+        ti_ngrid=10
+        ti_lambda=min(round(self.step/(self.t_tieq*ti_ngrid),1),1.)
+        self.weights=(1.-ti_lambda)*self.weights_init+ti_lambda*self.weights_fin
+        self.log(f'Thermodynamics Integration in progress - Weights w={self.weights}')
 
     def _exact(self, copy):
         results = []
