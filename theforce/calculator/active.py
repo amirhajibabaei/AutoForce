@@ -868,7 +868,7 @@ class ActiveCalculator(Calculator):
             n = 0
 
         # step 0 forced fp
-         if self.step == 0 and self.step0_forced_fp and data and n == 0:
+        if self.step == 0 and self.step0_forced_fp and data and n == 0:
              self.log(f'forced data addition')
              self.model.add_data([self.snapshot()])
              self.log('added data: {} -> size: {} {}'.format(
