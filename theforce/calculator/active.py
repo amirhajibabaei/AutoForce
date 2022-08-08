@@ -101,7 +101,7 @@ class ActiveCalculator(Calculator):
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol, ioptim=1,
                  max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None,
-                 eps_dr=0.1, ignore=None, report_timings=False):
+                 eps_dr=0.1, ignore=None, report_timings=False, step0_forced_fp=False):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -131,7 +131,7 @@ class ActiveCalculator(Calculator):
             ioptim:          a tag for hyper-parameter optimization
             veto:            dict, for vetoing ML updates e.g. {'forces': 5.}
             include_params:  used when include_data, include_tape is called
-
+            step0_forced_fp: if True, forces FP data addition at step 0
         callables:
             include_data     for modeling the existing data
             include_tape     for training from a sgpr tape
@@ -297,6 +297,7 @@ class ActiveCalculator(Calculator):
         self.eps_dr = eps_dr
         self.ignore = [] if ignore is None else ignore
         self.report_timings = report_timings
+        self.step0_forced_fp = step0_forced_fp
 
     @property
     def active(self):
@@ -413,6 +414,7 @@ class ActiveCalculator(Calculator):
             if self.active and self.model.ndata == 0:
                 self.initiate_model()
                 self._update_args = dict(data=False)
+
 
         # kernel
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
@@ -817,6 +819,7 @@ class ActiveCalculator(Calculator):
         a, de, df = self.model.add_1atoms_fast(new, self.ediff_tot, self.fdiff, self.atoms.xyz,
                                                self.cov, self.atoms.is_distributed)
         added = self.model.ndata - n
+
         self.log(f'DF: {df}  accept: {added}')
         if added > 0:
             if try_fake:
@@ -864,6 +867,15 @@ class ActiveCalculator(Calculator):
                                  internal=True, save_model=False)
         else:
             n = 0
+
+        # step 0 forced fp
+        if self.step == 0 and self.step0_forced_fp and data and n == 0:
+            self.log(f'forced data addition')
+            self.model.add_data([self.snapshot()])
+            self.log('added data: {} -> size: {} {}'.format(
+                1, *self.size))
+            n = 1
+
         if m > 0 or n > 0:
             # TODO: if threshold is reached -> downsizes every time! fix this!
             ch1, ch2 = self.model.downsize(
