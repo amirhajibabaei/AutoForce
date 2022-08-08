@@ -126,7 +126,8 @@ class MultiTaskPotential(PosteriorPotential):
                 #print(f'{i} Optimized tasks corrs: {self.tasks_kern}, Lower: {self.tasks_kern_L}, error: {res.fun}')
         else:
             # for predetermined tasks corr
-            self.tasks_kern = tasks_correlation(forces.view(self.tasks,-1),corr_coef='pearson')
+            #self.tasks_kern = tasks_correlation(forces.view(self.tasks,-1),corr_coef='pearson')
+            self.tasks_kern = torch.eye(2)
     
             # for independent tasks, set:
             #self.tasks_kern = torch.eye(self.tasks)

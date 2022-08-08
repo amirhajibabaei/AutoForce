@@ -7,6 +7,7 @@ from scipy.optimize import minimize
 import numpy as np
 import torch
 import os
+from theforce.util.util import date, timestamp, abspath, iterable
 
 
 class MultiTaskCalculator(ActiveCalculator):
@@ -38,7 +39,8 @@ class MultiTaskCalculator(ActiveCalculator):
     due to low-rank structure.
     """
 
-    def __init__(self, *args, weights=None, weights_fin=None, weights_sample=None, t_tieq=200000, **kwargs):
+    def __init__(self, *args, weights=None, weights_fin=None, weights_sample=None, 
+                 t_tieq=200000, multilogfile='multi_active.log', **kwargs):
         super().__init__(*args, **kwargs)
 
         # weights:
@@ -58,6 +60,7 @@ class MultiTaskCalculator(ActiveCalculator):
         self.weights_sample = weights_sample
         self.weights_init = self.weights
         self.t_tieq  = t_tieq
+        self.multilogfile=multilogfile
 
     @property
     def tasks(self):
@@ -91,10 +94,19 @@ class MultiTaskCalculator(ActiveCalculator):
             self.results[q] = (self.weights * self.results[q]).sum(axis=-1)
             if self.deltas:
                 self.deltas[q] = (self.weights * self.deltas[q]).sum(axis=-1)
+
+        #thermodynamic integration
+        delu=''
+        if self.weights_fin is not None:
+            delu=(self.get_task_results(0)['energy']-self.get_task_results(1)['energy'])
+        self.multilog(f'{delu}   {self.model.tasks_kern.view(-1)}')
+
         super().post_calculate(*args, **kwargs)
+
         #weights sampling
         if self.weights_sample is not None and (self.step%self.weights_sample)==0 and self.step >0:
             self.active_sample_weights_space()
+
         #thermodynamic integration
         if self.weights_fin is not None and (self.step%self.t_tieq)==0:
             self.thermo_int()
@@ -151,5 +163,13 @@ class MultiTaskCalculator(ActiveCalculator):
         s = np.stack(s, axis=-1)
         for q, v in zip(quant, [e, f, s]):
             self.results[q] = v
-        self.log(f'Inter-task correlation: {self.model.tasks_kern}')
+        #self.log(f'Inter-task correlation: {self.model.tasks_kern}')
 
+    def multilog(self, mssge, mode='a'):
+        if self.multilogfile and self.rank == 0:
+            with open(self.multilogfile, mode) as f:
+                f.write('{}{} {} {}\n'.format(
+                    self._logpref, date(), self.step, mssge))
+                if self.stdout:
+                    print('{}{} {} {}'.format(
+                        self._logpref, date(), self.step, mssge))
