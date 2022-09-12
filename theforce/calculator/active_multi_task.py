@@ -99,7 +99,7 @@ class MultiTaskCalculator(ActiveCalculator):
         delu=''
         if self.weights_fin is not None:
             delu=(self.get_task_results(0)['energy']-self.get_task_results(1)['energy'])
-        self.multilog(f'{delu}   {self.model.tasks_kern.view(-1)}')
+        self.multilog(f'{delu}  {self.weights}  {self.model.tasks_kern.view(-1)}')
 
         super().post_calculate(*args, **kwargs)
 

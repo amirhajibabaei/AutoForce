@@ -3,7 +3,7 @@ python -m theforce.calculator.calc_server &
 sleep 1
 
 # B. start MD
-mpirun -np 4 python relax.py
+mpirun -np 20 python relax.py
 
 # C. stop the calc server (optional)
 # you can leave it up for your next MD
