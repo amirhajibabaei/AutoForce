@@ -50,7 +50,6 @@ class GuidingCalculator(ActiveCalculator):
             calcs = [calcs]
         self._calcs = calcs
 
-
     def make_model(self):
         return GuidingPotential()
 
@@ -63,14 +62,27 @@ class GuidingCalculator(ActiveCalculator):
 
         super().post_calculate(*args, **kwargs)
 
+    def calculate(self, *args, **kwargs):
+        #calculate FF
+        _calc=self._calcs[1]
+        copy = self.atoms.copy()
+        e_ff, f_ff = super()._exact(copy, _calc=_calc)
+        #self._calcs[1].calculate(self, atoms, properties, system_changes)
+        #obtain guided calculation results
+        super().calculate(*args, **kwargs)
+        #add the correction - how to access energy and forces?
+        self.results['energy'] += e_ff
+        self.results['forces'] += f_ff
+
     def _exact(self, copy):
+        _calc=self._calcs[0]
         results = []
-        for task, _calc in enumerate(self._calcs):
-            e, f = super()._exact(copy, _calc=_calc, task=task)
-            results.append((e, f))
+        e, f = super()._exact(copy, _calc=_calc)
+        results.append((e, f))
         e, f = zip(*results)
-        e = np.array(e)
-        f = np.stack(f, axis=-1)
+        #learn the correction
+        e = np.array(e)-e_ff
+        f = np.stack(f, axis=-1)-f_ff
         return e, f
 
     def update_results(self, retain_graph=False):
