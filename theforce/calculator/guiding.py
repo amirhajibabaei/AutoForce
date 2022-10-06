@@ -22,11 +22,34 @@ class GuidingCalculator(ActiveCalculator):
     - calc1 is parameter force fields. 
 
     All other arguments are the same as ActiveCalculator.
-
     """
 
     def __init__(self, *args, guiding_calculator=None, guidinglogfile='guiding_active.log', **kwargs):
         super().__init__(*args, **kwargs)
+
+    @property
+    def tasks(self):
+        return len(self._calcs)
+
+    def get_task_results(self, task):
+        result = {
+            q: self.results[f'{q}_tasks'][..., task]
+            for q in ['energy', 'forces', 'stress']
+        }
+        return result
+
+    # -----------------------------------------------
+
+    @property
+    def _calc(self):
+        return self._calcs[0]
+
+    @_calc.setter
+    def _calc(self, calcs):
+        if not hasattr(calcs, '__iter__'):
+            calcs = [calcs]
+        self._calcs = calcs
+
 
     def make_model(self):
         return GuidingPotential()
@@ -40,3 +63,37 @@ class GuidingCalculator(ActiveCalculator):
 
         super().post_calculate(*args, **kwargs)
 
+    def _exact(self, copy):
+        results = []
+        for task, _calc in enumerate(self._calcs):
+            e, f = super()._exact(copy, _calc=_calc, task=task)
+            results.append((e, f))
+        e, f = zip(*results)
+        e = np.array(e)
+        f = np.stack(f, axis=-1)
+        return e, f
+
+    def update_results(self, retain_graph=False):
+        quant = ['energy', 'forces', 'stress']
+        local_numbers = [int(loc.number) for loc in self.atoms.loc]
+        energies = self.model.predict_multitask_energies(
+            self.cov, local_numbers)
+        results = []
+        for e in energies:
+            self.reduce(e, retain_graph=True)
+            results.append([self.results[q] for q in quant])
+        e, f, s = zip(*results)
+        e = np.array(e)
+        f = np.stack(f, axis=-1)
+        s = np.stack(s, axis=-1)
+        for q, v in zip(quant, [e, f, s]):
+            self.results[q] = v
+
+    def guidinglog(self, mssge, mode='a'):
+        if self.guidinglogfile and self.rank == 0:
+            with open(self.guidinglogfile, mode) as f:
+                f.write('{}{} {} {}\n'.format(
+                    self._logpref, date(), self.step, mssge))
+                if self.stdout:
+                    print('{}{} {} {}'.format(
+                        self._logpref, date(), self.step, mssge))

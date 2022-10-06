@@ -36,6 +36,8 @@ class GuidingPotential(PosteriorPotential):
                 atom_counts[i, z] = c
             energies.append(atoms.target_energy.view(-1))
             forces.append(atoms.target_forces.view(-1))
+
+        #cwm how is the energy stored in order?
         energies = torch.cat(energies)
         forces = torch.cat(forces)
         targets = torch.cat([energies, forces])
