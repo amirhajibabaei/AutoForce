@@ -37,7 +37,8 @@ class MultiTaskPotential(PosteriorPotential):
         # *** targets ***
         energies, forces = [], []
         atom_types = set()
-        atom_counts = torch.zeros(len(self.data), 119)
+        #for dummy atom type Z
+        atom_counts = torch.zeros(len(self.data), 120)
         for i, atoms in enumerate(self.data):
             for z, c in atoms.counts().items():
                 atom_types.add(z)
