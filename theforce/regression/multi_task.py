@@ -21,7 +21,7 @@ class MultiTaskPotential(PosteriorPotential):
         
     """
 
-    def __init__(self, tasks, *args, **kwargs):
+    def __init__(self, tasks, tasks_kern_optimization, niter_tasks, *args, **kwargs):
         """
         tasks: number of potential energy types.
         
@@ -31,6 +31,8 @@ class MultiTaskPotential(PosteriorPotential):
         self.tasks_kern_L = torch.eye(self.tasks)
         self.tasks_kern_L += 1e-2
         self.tasks_kern   = torch.eye(self.tasks)
+        self.tasks_kern_optimization=tasks_kern_optimization
+        self.niter_tasks=niter_tasks
 
     def make_munu(self, *args, **kwargs):
 
@@ -91,13 +93,11 @@ class MultiTaskPotential(PosteriorPotential):
         # for now we set it equal to correlation of forces in different
         # tasks.
 
-        tasks_kern_optimization=True
-        niter_tasks=1
         '''
         As the optimization of the intertask correlations is time-consuming, 
         an alternative is to (acvtively) optimize the intertask correlations over the course of the simulation.
         '''
-        if tasks_kern_optimization is True:
+        if self.tasks_kern_optimization is True:
             #self.tasks_kern_L = torch.eye(self.tasks)
             #self.tasks_kern_L += 1e-2
 
@@ -108,7 +108,7 @@ class MultiTaskPotential(PosteriorPotential):
             self.multi_mu = solution
             self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
-            for i,_ in enumerate(range(niter_tasks)):
+            for i,_ in enumerate(range(self.niter_tasks)):
                 # 2. Inter-task kernel W=L@L.T optimization ***
                 x1=self.tasks_kern_L[0][0].item()
                 x2=self.tasks_kern_L[1][0].item()
@@ -180,7 +180,7 @@ def optimize_task_kern_twobytwo(x,kern,solution,targets):
     err = (pred - targets).abs().mean()
     return err.numpy()
     
-def least_squares(design, targets, trials=10, driver='gels'):
+def least_squares(design, targets, trials=10, driver='gelsd'):
     """
     Minimizes 
         || design @ solution - targets ||
@@ -204,7 +204,7 @@ def least_squares(design, targets, trials=10, driver='gels'):
     best = None
     predictions = None
     for _ in range(trials):
-        sol = torch.linalg.lstsq(design,targets,driver='gels')
+        sol = torch.linalg.lstsq(design,targets,driver='gelsd')
         pred = design @ sol.solution
         err = (pred - targets).abs().mean()
         if not best or err < best:
