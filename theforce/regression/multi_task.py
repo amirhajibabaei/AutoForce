@@ -21,7 +21,7 @@ class MultiTaskPotential(PosteriorPotential):
         
     """
 
-    def __init__(self, tasks, tasks_kern_optimization, niter_tasks, *args, **kwargs):
+    def __init__(self, tasks, tasks_kern_optimization, niter_tasks, algo, *args, **kwargs):
         """
         tasks: number of potential energy types.
         
@@ -33,6 +33,7 @@ class MultiTaskPotential(PosteriorPotential):
         self.tasks_kern   = torch.eye(self.tasks)
         self.tasks_kern_optimization=tasks_kern_optimization
         self.niter_tasks=niter_tasks
+        self.algo=algo
 
     def make_munu(self, *args, **kwargs):
 
@@ -104,7 +105,7 @@ class MultiTaskPotential(PosteriorPotential):
             # decoupled optimizer for mu and W
             ## 1. Initial weights \mu optimization ***
             design = torch.kron(kern, self.tasks_kern)
-            solution, predictions = least_squares(design, targets)
+            solution, predictions = least_squares(design, targets, solver=self.algo)
             self.multi_mu = solution
             self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
@@ -121,7 +122,7 @@ class MultiTaskPotential(PosteriorPotential):
 
                 # 3. Re-optimization of weights \mu based on an updated W ***
                 design = torch.kron(kern, self.tasks_kern)
-                solution, predictions = least_squares(design, targets)
+                solution, predictions = least_squares(design, targets, solver=self.algo)
                 self.multi_mu = solution
                 self.multi_types = {z: i for i, z in enumerate(atom_types)}
                 #print(f'{i} Optimized tasks corrs: {self.tasks_kern}, Lower: {self.tasks_kern_L}, error: {res.fun}')
@@ -142,7 +143,7 @@ class MultiTaskPotential(PosteriorPotential):
     
             # *** solution ***
             design = torch.kron(kern, self.tasks_kern)
-            solution, predictions = least_squares(design, targets)
+            solution, predictions = least_squares(design, targets, solver=self.algo)
             self.multi_mu = solution
             self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
@@ -180,7 +181,7 @@ def optimize_task_kern_twobytwo(x,kern,solution,targets):
     err = (pred - targets).abs().mean()
     return err.numpy()
     
-def least_squares(design, targets, trials=10, driver='gelsd'):
+def least_squares(design, targets, trials=10, solver='gelsd'):
     """
     Minimizes 
         || design @ solution - targets ||
@@ -193,10 +194,7 @@ def least_squares(design, targets, trials=10, driver='gelsd'):
     the best solution of "trials" is return. 
 
     As the design (kern \otimes tasks_kern) matrix could fall into 
-    ill-conditioned form, xGELSY fails often (for some reason - update the origin). 
-    xGELSY uses the complete orthogonal factorization. 
-    Instead we choose xGELS (QR or LQ factorization to solve a overdetermined or underdetermined system),
-    which shows the better stability than xGELSY.
+    ill-conditioned form, xGELSY and xGELS fail often (for some reason - update the origin). 
 
     - https://pytorch.org/docs/stable/generated/torch.linalg.lstsq.html#torch.linalg.lstsq
     - https://www.smcm.iqfr.csic.es/docs/intel/mkl/mkl_manual/lse/lse_drllsp.htm
@@ -204,7 +202,7 @@ def least_squares(design, targets, trials=10, driver='gelsd'):
     best = None
     predictions = None
     for _ in range(trials):
-        sol = torch.linalg.lstsq(design,targets,driver='gelsd')
+        sol = torch.linalg.lstsq(design,targets,driver=solver)
         pred = design @ sol.solution
         err = (pred - targets).abs().mean()
         if not best or err < best:

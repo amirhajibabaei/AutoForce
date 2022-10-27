@@ -40,10 +40,12 @@ class MultiTaskCalculator(ActiveCalculator):
     """
 
     def __init__(self, *args, weights=None, weights_fin=None, weights_sample=None, 
-                 t_tieq=200000, multilogfile='multi_active.log', tasks_opt=True, niter_tasks_opt=1, **kwargs):
+                 t_tieq=200000, multilogfile='multi_active.log', tasks_opt=True, niter_tasks_opt=1, 
+                 algo='gelsd', **kwargs):
 
         self.tasks_opt=tasks_opt
         self.niter_tasks_opt=niter_tasks_opt
+        self.algo=algo
 
         super().__init__(*args, **kwargs)
 
@@ -90,7 +92,7 @@ class MultiTaskCalculator(ActiveCalculator):
         self._calcs = calcs
 
     def make_model(self, kern):
-        return MultiTaskPotential(self.tasks, self.tasks_opt, self.niter_tasks_opt, kern)
+        return MultiTaskPotential(self.tasks, self.tasks_opt, self.niter_tasks_opt, self.algo, kern)
 
     def post_calculate(self, *args, **kwargs):
         for q in ['energy', 'forces', 'stress']:
