@@ -95,6 +95,23 @@ class MultiTaskCalculator(ActiveCalculator):
         return MultiTaskPotential(self.tasks, self.tasks_opt, self.niter_tasks_opt, self.algo, kern)
 
     def post_calculate(self, *args, **kwargs):
+
+        #QMMM extension      
+        if self.ij is not None:
+            for task in range(self.tasks):
+                for pairs in self.ij:
+                    #bond
+                    r=self.atoms.get_distance(pairs[0],pairs[1],mic=True,vector=True)
+                    d=np.linalg.norm(r)
+                    e=self.k*(d-self.d0)**2
+                    f=-2.*self.k*(d-self.d0)/d*r
+
+                    self.results['energy'][task]+=2.*e
+                    self.results['forces'][...,task][pairs[0]]-=f
+                    self.results['forces'][...,task][pairs[1]]+=f
+        else:
+            pass
+
         for q in ['energy', 'forces', 'stress']:
             self.results[f'{q}_tasks'] = self.results[q]
             self.results[q] = (self.weights * self.results[q]).sum(axis=-1)
