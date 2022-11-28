@@ -41,7 +41,7 @@ class MultiTaskCalculator(ActiveCalculator):
 
     def __init__(self, *args, weights=None, weights_fin=None, weights_sample=None, 
                  t_tieq=200000, multilogfile='multi_active.log', tasks_opt=True, niter_tasks_opt=1, 
-                 algo='gelsd', **kwargs):
+                 algo='gelsd', k=1.0, d0=1.0, ij=None, **kwargs):
 
         self.tasks_opt=tasks_opt
         self.niter_tasks_opt=niter_tasks_opt
@@ -67,6 +67,11 @@ class MultiTaskCalculator(ActiveCalculator):
         self.weights_init = self.weights
         self.t_tieq  = t_tieq
         self.multilogfile=multilogfile
+
+        #QMMM
+        self.k=k
+        self.d0=d0
+        self.ij=ij
 
     @property
     def tasks(self):
