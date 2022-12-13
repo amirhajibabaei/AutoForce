@@ -129,7 +129,7 @@ class MultiTaskPotential(PosteriorPotential):
         else:
             # for predetermined tasks corr
             #self.tasks_kern = tasks_correlation(forces.view(self.tasks,-1),corr_coef='pearson')
-            self.tasks_kern = torch.eye(2)
+            self.tasks_kern = torch.eye(self.tasks)
     
             # for independent tasks, set:
             #self.tasks_kern = torch.eye(self.tasks)
