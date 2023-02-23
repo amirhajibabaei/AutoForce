@@ -101,7 +101,7 @@ class ActiveCalculator(Calculator):
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol, ioptim=1,
                  max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None,
-                 eps_dr=0.1, ignore=None, report_timings=False, step0_forced_fp=False):
+                 eps_dr=0.1, ignore=None, report_timings=False, step0_forced_fp=False, nbeads=1):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -299,6 +299,9 @@ class ActiveCalculator(Calculator):
         self.ignore = [] if ignore is None else ignore
         self.report_timings = report_timings
         self.step0_forced_fp = step0_forced_fp
+        self.nbeads=nbeads
+        if self.nbeads > 1:
+            self.log(f'You are going quantum (PIMD)! Number of beads: {self.nbeads}')
 
     @property
     def active(self):
@@ -429,17 +432,22 @@ class ActiveCalculator(Calculator):
         # active learning
         self.deltas = None
         self.covlog = ''
-        if self.active and not self.veto():
-            pre = self.results.copy()
-            m, n = self.update(**self._update_args)
-            if n > 0 or m > 0:
-                self.update_results(self.meta is not None)
-                if self.step > 0:
-                    self.deltas = {}
-                    for quant in ['energy', 'forces', 'stress']:
-                        self.deltas[quant] = self.results[quant] - pre[quant]
-            if self.size[0] == dat1:
-                self.distrib.unload(atoms)
+        # in case of PIMD, we only sample the first bead
+        if self.active and not self.veto(): 
+            if (self.step+1)%self.nbeads==1 or self.nbeads==1:
+                pre = self.results.copy()
+                m, n = self.update(**self._update_args)
+                if n > 0 or m > 0:
+                    self.update_results(self.meta is not None)
+                    if self.step > 0:
+                        self.deltas = {}
+                        for quant in ['energy', 'forces', 'stress']:
+                            self.deltas[quant] = self.results[quant] - pre[quant]
+                if self.size[0] == dat1:
+                    self.distrib.unload(atoms)
+            else:
+                if self.size[0] == dat1:
+                    self.distrib.unload(atoms)
         else:
             covloss_max = float(self.get_covloss().max())
             self.covlog = f'{covloss_max}'
