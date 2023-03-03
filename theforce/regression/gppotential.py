@@ -549,10 +549,13 @@ class PosteriorPotential(Module):
     def optimize_model_parameters(self, **kw):
         self.make_munu(algo=3, **kw)
 
-    def make_stats(self):
+    def make_stats(self, data_and_pred=None):
         n = len(self.data)
-        y = self.gp.Y(self.data)
-        yy = self.K@self.mu
+        if data_and_pred is None:
+            y = self.gp.Y(self.data)
+            yy = self.K@self.mu
+        else:
+            y, yy = data_and_pred
         diff = yy - y
         self._ediff = diff[:n]/torch.tensor(self.data.natoms)
         self._fdiff = diff[n:]

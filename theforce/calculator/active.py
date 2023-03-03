@@ -101,7 +101,7 @@ class ActiveCalculator(Calculator):
                  ediff=2*kcal_mol, ediff_lb=None, ediff_ub=None,
                  ediff_tot=4*kcal_mol, fdiff=3*kcal_mol, noise_f=kcal_mol, ioptim=1,
                  max_data=inf, max_inducing=inf, kernel_kw=None, veto=None, include_params=None,
-                 eps_dr=0.1, ignore=None, report_timings=False):
+                 eps_dr=0.1, ignore=None, report_timings=False, step0_forced_fp=False, nbeads=1):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
@@ -131,6 +131,7 @@ class ActiveCalculator(Calculator):
             ioptim:          a tag for hyper-parameter optimization
             veto:            dict, for vetoing ML updates e.g. {'forces': 5.}
             include_params:  used when include_data, include_tape is called
+            step0_forced_fp: if True, forces FP data addition at step 0
 
         callables:
             include_data     for modeling the existing data
@@ -297,6 +298,10 @@ class ActiveCalculator(Calculator):
         self.eps_dr = eps_dr
         self.ignore = [] if ignore is None else ignore
         self.report_timings = report_timings
+        self.step0_forced_fp = step0_forced_fp
+        self.nbeads=nbeads
+        if self.nbeads > 1:
+            self.log(f'You are going quantum (PIMD)! Number of beads: {self.nbeads}')
 
     @property
     def active(self):
@@ -315,10 +320,13 @@ class ActiveCalculator(Calculator):
             self.model = PosteriorPotentialFromFolder(
                 model, load_data=True, update_data=False, group=self.process_group, distrib=self.distrib)
             self._ready = False
-        elif type(model) == PosteriorPotential:
+        elif isinstance(model, PosteriorPotential):
             self.model = model
         else:
-            self.model = PosteriorPotential(model)
+            self.model = self.make_model(model)
+
+    def make_model(self, kern):
+        return PosteriorPotential(kern)
 
     def get_ready(self):
         if not self._ready:
@@ -424,17 +432,22 @@ class ActiveCalculator(Calculator):
         # active learning
         self.deltas = None
         self.covlog = ''
-        if self.active and not self.veto():
-            pre = self.results.copy()
-            m, n = self.update(**self._update_args)
-            if n > 0 or m > 0:
-                self.update_results(self.meta is not None)
-                if self.step > 0:
-                    self.deltas = {}
-                    for quant in ['energy', 'forces', 'stress']:
-                        self.deltas[quant] = self.results[quant] - pre[quant]
-            if self.size[0] == dat1:
-                self.distrib.unload(atoms)
+        # in case of PIMD, we only sample the first bead
+        if self.active and not self.veto(): 
+            if (self.step+1)%self.nbeads==1 or self.nbeads==1:
+                pre = self.results.copy()
+                m, n = self.update(**self._update_args)
+                if n > 0 or m > 0:
+                    self.update_results(self.meta is not None)
+                    if self.step > 0:
+                        self.deltas = {}
+                        for quant in ['energy', 'forces', 'stress']:
+                            self.deltas[quant] = self.results[quant] - pre[quant]
+                if self.size[0] == dat1:
+                    self.distrib.unload(atoms)
+            else:
+                if self.size[0] == dat1:
+                    self.distrib.unload(atoms)
         else:
             covloss_max = float(self.get_covloss().max())
             self.covlog = f'{covloss_max}'
@@ -443,10 +456,12 @@ class ActiveCalculator(Calculator):
                 tmp.calc = None
                 if self.rank == 0:
                     ase.io.Trajectory('active_uncertain.traj', 'a').write(tmp)
-        energy = self.results['energy']
 
         timings.append(time.time())  # node 4: active
+        self.post_calculate(timings)
 
+    def post_calculate(self, timings):
+        energy = self.results['energy']
         # test
         if self.active and self.test and self.step - self._last_test > self.test:
             self._test()
@@ -586,18 +601,22 @@ class ActiveCalculator(Calculator):
     def sample_rand_lces(self, indices=None, repeat=1, extend_cov=False):
         added = 0
         for _ in range(repeat):
+            self.log(f'1 added {added} randomly displaced LCEs')
             tmp = (self.atoms.as_ase() if self.to_ase else self.atoms).copy()
             shape = tmp.positions.shape
             tmp.positions += np.random.uniform(-0.05, 0.05, size=shape)
             tmp.calc = None
             atoms = TorchAtoms(ase_atoms=tmp)
+            self.log(f'2 added {added} randomly displaced LCEs')
             atoms.update(posgrad=False, cellgrad=False, dont_save_grads=True,
                          cutoff=self.model.cutoff, descriptors=self.model.descriptors)
             if indices is None:
                 indices = np.random.permutation(len(atoms.loc))
+            self.log(f'3 added {added} randomly displaced LCEs')
             for k in indices:
                 res = abs(self.update_lce(atoms.loc[k]))
                 added += res
+                self.log(f'4 added {added} randomly displaced LCEs')
                 if res > 0 and extend_cov:
                     cov = self.model.gp.kern(self.atoms, self.model.X[-1])
                     self.cov = torch.cat([self.cov, cov], dim=1)
@@ -624,9 +643,9 @@ class ActiveCalculator(Calculator):
         self._last_test = self.step
         return energy, forces
 
-    def _exact(self, copy):
+    def _exact(self, copy, _calc=None, task=None):
         tmp = copy.as_ase() if self.to_ase else copy
-        tmp.set_calculator(self._calc)
+        tmp.set_calculator(_calc or self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
         if self.tape:
@@ -635,8 +654,12 @@ class ActiveCalculator(Calculator):
         self.log('exact energy: {}'.format(energy))
         #
         if self.model.ndata > 0:
-            dE = self.results['energy'] - energy
-            df = abs(self.results['forces'] - forces)
+            if task is None:
+                dE = self.results['energy'] - energy
+                df = abs(self.results['forces'] - forces)
+            else:
+                dE = self.results['energy'][task] - energy
+                df = abs(self.results['forces'][..., task] - forces)
             self.log('errors (pre):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}'.format(
                 dE, df.max(), df.mean()))
         self._last_test = self.step
@@ -851,6 +874,15 @@ class ActiveCalculator(Calculator):
                                  internal=True, save_model=False)
         else:
             n = 0
+
+        # step 0 forced fp
+        if self.step == 0 and self.step0_forced_fp and data and n == 0:
+             self.log(f'forced data addition')
+             self.model.add_data([self.snapshot()])
+             self.log('added data: {} -> size: {} {}'.format(
+                 1, *self.size))
+             n = 1
+
         if m > 0 or n > 0:
             # TODO: if threshold is reached -> downsizes every time! fix this!
             ch1, ch2 = self.model.downsize(

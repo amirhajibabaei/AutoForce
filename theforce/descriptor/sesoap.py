@@ -128,7 +128,7 @@ class SeSoap(Module):
         self.flatten = flatten
         if flatten:
             self._shape = (self.dim,)
-        self._size = (119, 119, *self._shape)
+        self._size = (120, 120, *self._shape)
         self.normalize = normalize
         self.params = []
         # an numerical factor to amplify near-zero norms (if not normalized)
