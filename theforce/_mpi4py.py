@@ -1,8 +1,8 @@
 # +
-from mpi4py import MPI
-import numpy as np
 import sys
 
+import numpy as np
+from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
@@ -16,7 +16,7 @@ rank = comm.Get_rank()
 # and consider parallelism case by case.
 # For now, the ugly solution is:
 # sys.modules['_mpi4py'] = sys.modules['mpi4py']
-del sys.modules['mpi4py']
+del sys.modules["mpi4py"]
 
 
 def is_initialized():
@@ -32,8 +32,8 @@ class ReduceOp:
     SUM = MPI.SUM
 
 
-def init_process_group(arg='mpi'):
-    assert arg == 'mpi'
+def init_process_group(arg="mpi"):
+    assert arg == "mpi"
 
 
 def get_world_size(group=comm):

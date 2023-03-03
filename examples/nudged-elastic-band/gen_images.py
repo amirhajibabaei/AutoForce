@@ -1,16 +1,16 @@
 # Copied (and modified) from ASE tutorial at:
 # https://wiki.fysik.dtu.dk/ase/tutorials/neb/diffusion.html
-from ase.build import fcc100, add_adsorbate
-from ase.constraints import FixAtoms
+from ase.build import add_adsorbate, fcc100
 from ase.calculators.emt import EMT
-from ase.optimize import QuasiNewton
-from ase.neb import NEB
+from ase.constraints import FixAtoms
 from ase.io import Trajectory
+from ase.neb import NEB
+from ase.optimize import QuasiNewton
 
 # 2x2-Al(001) surface with 3 layers and an
 # Au atom adsorbed in a hollow site:
-slab = fcc100('Al', size=(2, 2, 3))
-add_adsorbate(slab, 'Au', 1.7, 'hollow')
+slab = fcc100("Al", size=(2, 2, 3))
+add_adsorbate(slab, "Au", 1.7, "hollow")
 slab.center(axis=2, vacuum=4.0)
 
 # Fix second and third layers:
@@ -46,6 +46,6 @@ neb = NEB(images)
 neb.interpolate()
 
 # write images
-traj = Trajectory('images.traj', 'w')
+traj = Trajectory("images.traj", "w")
 for atoms in images:
     traj.write(atoms)

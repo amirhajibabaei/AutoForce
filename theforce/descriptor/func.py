@@ -4,26 +4,25 @@ from torch.nn import Module
 
 
 def _positive(x):
-    return torch.log(1. + torch.exp(x))
+    return torch.log(1.0 + torch.exp(x))
 
 
 def _free(x):
-    return torch.log(torch.exp(x) - 1.)
+    return torch.log(torch.exp(x) - 1.0)
 
 
 class Func(Module):
-
     def __init__(self):
         super().__init__()
         self.params = []
 
     @property
     def state_args(self):
-        return ''
+        return ""
 
     @property
     def state(self):
-        return self.__class__.__name__+'({})'.format(self.state_args)
+        return self.__class__.__name__ + "({})".format(self.state_args)
 
     def __repr__(self):
         return self.state
@@ -39,7 +38,7 @@ class Func(Module):
             return Mul(self, other)
         else:
             if isinstance(self, Times):
-                return Times(self.f, self.r*other)
+                return Times(self.f, self.r * other)
             else:
                 return Times(self, other)
 
@@ -51,9 +50,9 @@ class Func(Module):
             return Div(self, other)
         else:
             if isinstance(self, Times):
-                return Times(self.f, self.r/other)
+                return Times(self.f, self.r / other)
             else:
-                return Times(self, 1./other)
+                return Times(self, 1.0 / other)
 
     def __pow__(self, n):
         return Pow(f=self, n=n)
@@ -73,11 +72,10 @@ class I(Func):
 
     @property
     def state_args(self):
-        return ''
+        return ""
 
 
 class Add(Func):
-
     def __init__(self, f, g):
         super().__init__()
         self.f = f
@@ -90,21 +88,20 @@ class Add(Func):
         if grad:
             f, df = f
             g, dg = g
-            return f+g, df+dg
+            return f + g, df + dg
         else:
-            return f+g
+            return f + g
 
     @property
     def state_args(self):
-        return '{}, {}'.format(self.f.state, self.g.state)
+        return "{}, {}".format(self.f.state, self.g.state)
 
     @property
     def state(self):
-        return '({}+{})'.format(self.f.state, self.g.state)
+        return "({}+{})".format(self.f.state, self.g.state)
 
 
 class Sub(Func):
-
     def __init__(self, f, g):
         super().__init__()
         self.f = f
@@ -117,21 +114,20 @@ class Sub(Func):
         if grad:
             f, df = f
             g, dg = g
-            return f-g, df-dg
+            return f - g, df - dg
         else:
-            return f-g
+            return f - g
 
     @property
     def state_args(self):
-        return '{}, {}'.format(self.f.state, self.g.state)
+        return "{}, {}".format(self.f.state, self.g.state)
 
     @property
     def state(self):
-        return '({}-{})'.format(self.f.state, self.g.state)
+        return "({}-{})".format(self.f.state, self.g.state)
 
 
 class Mul(Func):
-
     def __init__(self, f, g):
         super().__init__()
         self.f = f
@@ -144,17 +140,17 @@ class Mul(Func):
         if grad:
             f, df = f
             g, dg = g
-            return f*g, df*g + f*dg
+            return f * g, df * g + f * dg
         else:
-            return f*g
+            return f * g
 
     @property
     def state_args(self):
-        return '{}, {}'.format(self.f.state, self.g.state)
+        return "{}, {}".format(self.f.state, self.g.state)
 
     @property
     def state(self):
-        return '{}*{}'.format(self.f.state, self.g.state)
+        return "{}*{}".format(self.f.state, self.g.state)
 
 
 class Times(Func):
@@ -170,17 +166,16 @@ class Times(Func):
         f = self.f(x, grad=grad)
         if grad:
             f, g = f
-            return f*self.r, g*self.r
+            return f * self.r, g * self.r
         else:
-            return f*self.r
+            return f * self.r
 
     @property
     def state(self):
-        return '{}*{}'.format(self.r, self.f.state)
+        return "{}*{}".format(self.r, self.f.state)
 
 
 class Div(Func):
-
     def __init__(self, f, g):
         super().__init__()
         self.f = f
@@ -193,21 +188,22 @@ class Div(Func):
         if grad:
             f, df = f
             g, dg = g
-            return f/g, (df*g - f*dg)/g**2
+            return f / g, (df * g - f * dg) / g**2
         else:
-            return f/g
+            return f / g
 
     @property
     def state_args(self):
-        return '{}, {}'.format(self.f.state, self.g.state)
+        return "{}, {}".format(self.f.state, self.g.state)
 
     @property
     def state(self):
-        return '{}/{}'.format(self.f.state, self.g.state)
+        return "{}/{}".format(self.f.state, self.g.state)
 
 
 class Param:
     """example: Param(Real, 1.0, 'x')"""
+
     _params = {}
 
     def __new__(cls, _class, r, name, rg=True):
@@ -217,11 +213,12 @@ class Param:
             c = _class(r, rg=rg, name=name)
             Param._params[name] = c
             return c
+
+
 # In Real, Positive, and Negative the "name" kw is included for the benefit pf Param.
 
 
 class Real(Func):
-
     def __init__(self, r=1e-6, rg=False, name=None):
         super().__init__()
         self.r = torch.as_tensor(r)
@@ -237,18 +234,19 @@ class Real(Func):
 
     @property
     def state_args(self):
-        return '{}, rg={}'.format(self.r.data, self.r.requires_grad)
+        return "{}, rg={}".format(self.r.data, self.r.requires_grad)
 
     @property
     def state(self):
         if self.name:
-            return "Param({}, {}, name='{}')".format(self.__class__.__name__, self.state_args, self.name)
+            return "Param({}, {}, name='{}')".format(
+                self.__class__.__name__, self.state_args, self.name
+            )
         else:
             return super().state
 
 
 class Positive(Func):
-
     def __init__(self, r=1.0, rg=False, name=None):
         super().__init__()
         assert r > 0.0
@@ -265,18 +263,19 @@ class Positive(Func):
 
     @property
     def state_args(self):
-        return '{}, rg={}'.format(_positive(self._r.data), self._r.requires_grad)
+        return "{}, rg={}".format(_positive(self._r.data), self._r.requires_grad)
 
     @property
     def state(self):
         if self.name:
-            return "Param({}, {}, name='{}')".format(self.__class__.__name__, self.state_args, self.name)
+            return "Param({}, {}, name='{}')".format(
+                self.__class__.__name__, self.state_args, self.name
+            )
         else:
             return super().state
 
 
 class Negative(Func):
-
     def __init__(self, r=-1.0, rg=False, name=None):
         super().__init__()
         assert r < 0.0
@@ -293,18 +292,19 @@ class Negative(Func):
 
     @property
     def state_args(self):
-        return '{}, rg={}'.format(-_positive(self._r.data), self._r.requires_grad)
+        return "{}, rg={}".format(-_positive(self._r.data), self._r.requires_grad)
 
     @property
     def state(self):
         if self.name:
-            return "Param({}, {}, name='{}')".format(self.__class__.__name__, self.state_args, self.name)
+            return "Param({}, {}, name='{}')".format(
+                self.__class__.__name__, self.state_args, self.name
+            )
         else:
             return super().state
 
 
 class Pow(Func):  # TODO: Func**Func
-
     def __init__(self, f=I(), n=1):
         super().__init__()
         self.f = f
@@ -315,24 +315,23 @@ class Pow(Func):  # TODO: Func**Func
         f = self.f(x, grad=grad)
         if grad:
             f, g = f
-            return f**self.n, self.n*g*f**(self.n-1)
+            return f**self.n, self.n * g * f ** (self.n - 1)
         else:
             return f**self.n
 
     @property
     def state_args(self):
-        return 'f={}, n={}'.format(self.f.state, self.n)
+        return "f={}, n={}".format(self.f.state, self.n)
 
     @property
     def state(self):
         if self.n < 0:
-            return '{}**({})'.format(self.f.state, self.n)
+            return "{}**({})".format(self.f.state, self.n)
         else:
-            return '{}**{}'.format(self.f.state, self.n)
+            return "{}**{}".format(self.f.state, self.n)
 
 
 class Exp(Func):
-
     def __init__(self, f=I()):
         super().__init__()
         self.f = f
@@ -343,13 +342,13 @@ class Exp(Func):
         if grad:
             f, g = f
             y = f.exp()
-            return y, g*y
+            return y, g * y
         else:
             return f.exp()
 
     @property
     def state_args(self):
-        return 'f={}'.format(self.f.state)
+        return "f={}".format(self.f.state)
 
 
 def test_func(f):
@@ -362,17 +361,17 @@ def test_func(f):
 
 
 def test():
-    test_func(Exp((I()-Real(1.0))**2/Negative(-1/3)))
-    test_func(2*Exp((I()-0.5*Real(1.0))**2/0.5))
+    test_func(Exp((I() - Real(1.0)) ** 2 / Negative(-1 / 3)))
+    test_func(2 * Exp((I() - 0.5 * Real(1.0)) ** 2 / 0.5))
 
-    d = Real(1.)
+    d = Real(1.0)
     print(id(eval(d.state)) != id(d))
 
-    a = Param(Real, 1.0, 'x')
-    b = Param(Positive, 1.0, 'y')
-    c = Param(Negative, -1.0, 'z')
+    a = Param(Real, 1.0, "x")
+    b = Param(Positive, 1.0, "y")
+    c = Param(Negative, -1.0, "z")
     print([id(eval(v.state)) == id(v) for v in (a, b, c)])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test()

@@ -1,13 +1,13 @@
 # +
+import numpy as np
+import torch
+from ase.units import kB
+
 from theforce.analysis.kde import Gaussian_kde
 from theforce.descriptor.ql import Ql
-import torch
-import numpy as np
-from ase.units import kB
 
 
 class Meta:
-
     def __init__(self, colvar, sigma=0.1, w=0.01, tem=None):
         """
         colvar: a function which returns the CVs
@@ -23,18 +23,20 @@ class Meta:
         self.kde = Gaussian_kde(sigma)
         self.w = w
         self.tem = tem
-        with open('meta.hist', 'w') as hst:
-            hst.write(f'# {sigma}\n')
+        with open("meta.hist", "w") as hst:
+            hst.write(f"# {sigma}\n")
 
     def __call__(self, calc):
-        kwargs = {'op': '+=', 'is_meta': True}
+        kwargs = {"op": "+=", "is_meta": True}
         self.rank = calc.rank
         if calc.rank == 0:
-            cv = self.colvar(calc.atoms.numbers,
-                             calc.atoms.xyz,
-                             calc.atoms.lll,
-                             calc.atoms.pbc,
-                             calc.atoms.nl)
+            cv = self.colvar(
+                calc.atoms.numbers,
+                calc.atoms.xyz,
+                calc.atoms.lll,
+                calc.atoms.pbc,
+                calc.atoms.nl,
+            )
             energy = self.energy(cv)
             self._cv = cv.detach()
         else:
@@ -43,43 +45,41 @@ class Meta:
 
     def energy(self, cv):
         kde = self.kde(cv, density=False)
-        energy = self.w*kde
+        energy = self.w * kde
         if self.tem is not None:
-            gamma = 1./(kB*self.tem)
-            energy = (1 + energy*gamma).log()/gamma
+            gamma = 1.0 / (kB * self.tem)
+            energy = (1 + energy * gamma).log() / gamma
         return energy
 
     def update(self):
         if self.rank == 0:
             self.kde.count(self._cv)
-            with open('meta.hist', 'a') as hst:
+            with open("meta.hist", "a") as hst:
                 for f in self._cv:
-                    hst.write(f' {float(f)}')
-                hst.write('\n')
+                    hst.write(f" {float(f)}")
+                hst.write("\n")
 
 
 class Posvar:
-
     def __init__(self, index, select=None):
         self.index = index
         self.select = select
 
     def __call__(self, numbers, xyz, cell, pbc, nl):
         a = torch.ones(len(numbers), 1)
-        a[self.index] = 0.
+        a[self.index] = 0.0
         if self.select is None:
             p = xyz
         else:
             select = numbers == self.select
             a = a[select]
             p = xyz[select]
-        c = xyz[self.index] - (a*p).mean(dim=0)
+        c = xyz[self.index] - (a * p).mean(dim=0)
         return c
 
 
 class Qlvar:
-
-    def __init__(self, i, j, index=None, cutoff=4., l=[6]):
+    def __init__(self, i, j, index=None, cutoff=4.0, l=[6]):
         """
         i:      type of the atom (Z) for which ql will be calculated
         j:      type of the atoms (Z) in the environment which contribute to ql
@@ -98,10 +98,10 @@ class Qlvar:
             self.index = np.where(numbers == self.i)[0][0]
         i = self.index
         if numbers[i] != self.i:
-            raise RuntimeError(f'numbers[{i}] != {self.i}')
+            raise RuntimeError(f"numbers[{i}] != {self.i}")
         nei_i, off = nl.get_neighbors(i)
         off = torch.from_numpy(off).type(xyz.type())
-        off = (off[..., None]*cell).sum(dim=1)
+        off = (off[..., None] * cell).sum(dim=1)
         env = numbers[nei_i] == self.j
         r_ij = xyz[nei_i[env]] - xyz[i] + off[env]
         ql = self.var(r_ij).index_select(0, torch.tensor(self.l))
@@ -109,7 +109,6 @@ class Qlvar:
 
 
 class Catvar:
-
     def __init__(self, *var):
         self.var = var
 

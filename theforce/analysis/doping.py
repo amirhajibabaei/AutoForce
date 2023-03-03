@@ -4,7 +4,7 @@ import numpy as np
 
 def normalized_formula(formula):
     total = sum(formula.values())
-    return {s: c/total for s, c in formula.items()}
+    return {s: c / total for s, c in formula.items()}
 
 
 def sign(a):
@@ -25,9 +25,9 @@ def error_function(_a, _b):
     b = normalized_formula(_b)
     x = np.array([a[s] for s in species])
     y = np.array([b[s] for s in species])
-    rho = (x + y)/2
-    diff = abs(x-y)
-    err = diff.max() + (diff*np.exp(-rho)).mean()
+    rho = (x + y) / 2
+    diff = abs(x - y)
+    err = diff.max() + (diff * np.exp(-rho)).mean()
     return err
 
 
@@ -43,13 +43,13 @@ def configure_doping(prim, target, mul=(1, 2, 3, 4, 6)):
     def opt(mul):
         initial = {}
         for s in species:
-            initial[s] = numbers[s]*mul if s in numbers else 0
+            initial[s] = numbers[s] * mul if s in numbers else 0
             if s not in target:
                 target[s] = 0
         n = sum(initial.values())
         tar = normalized_formula(target)
         ini = normalized_formula(initial)
-        delta = {s: int(round((tar[s]-ini[s])*n)) for s in species}
+        delta = {s: int(round((tar[s] - ini[s]) * n)) for s in species}
         sol = {s: initial[s] + delta[s] for s in species}
         for s in species:
             if sol[s] < 0:
@@ -73,7 +73,7 @@ def configure_doping(prim, target, mul=(1, 2, 3, 4, 6)):
             res = sum(delta.values())
 
         assert [sol[s] > 0 for s in species]
-        assert [sol[s] == initial[s]+delta[s] for s in species]
+        assert [sol[s] == initial[s] + delta[s] for s in species]
         err = error_function(sol, target)
 
         return initial, sol, delta, err
@@ -99,14 +99,16 @@ def random_doping(atoms, delta, mask=None):
     to = []
     subs = []
     if mask is None:
-        mask = len(atoms)*[True]
+        mask = len(atoms) * [True]
     for a, b in delta.items():
         if b > 0:
-            to += b*[a]
+            to += b * [a]
         elif b < 0:
-            cand = [at.index for at in atoms if
-                    (at.number == a and mask[at.index]
-                     and at.index not in subs)]
+            cand = [
+                at.index
+                for at in atoms
+                if (at.number == a and mask[at.index] and at.index not in subs)
+            ]
             subs += np.random.choice(cand, abs(b), replace=False).tolist()
     subs = np.random.permutation(subs).tolist()
     doped = atoms.copy()

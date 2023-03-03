@@ -1,19 +1,19 @@
 # +
 import numpy as np
 from ase.atoms import Atoms
-from ase.calculators.vasp import Vasp
 from ase.calculators.emt import EMT
+from ase.calculators.vasp import Vasp
 from ase.optimize import LBFGS
-from theforce.util.flake import generate_random_cluster
-from theforce.calculator.active import ActiveCalculator, kcal_mol
 
+from theforce.calculator.active import ActiveCalculator, kcal_mol
+from theforce.util.flake import generate_random_cluster
 
 # random cluster generation
 ngold = 20
 min_dist = 2.5
 positions = generate_random_cluster(ngold, min_dist)
-atoms = Atoms(numbers=ngold*[79], positions=positions)
-atoms.center(vacuum=5.)
+atoms = Atoms(numbers=ngold * [79], positions=positions)
+atoms.center(vacuum=5.0)
 atoms.pbc = True
 
 
@@ -23,20 +23,21 @@ abinitio = EMT()
 
 
 # ML calculator
-active_kwargs = {'calculator': abinitio,
-                 'ediff': 1.0*kcal_mol,  # decrease for more accuracy but lower speed
-                 'fdiff': 1.0*kcal_mol,  # decrease for more accuracy but lower speed
-                 'kernel_kw': {'cutoff': 6., 'lmax': 3, 'nmax': 3},
-                 # 'kernel_kw': {'cutoff': 6., 'lmax': 3, 'nmax': 3, 'species': [79]}, # <- faster
-                 # 'veto': {'forces': 8.}  # for vetoing ML updates for very high energy structures
-                 }
+active_kwargs = {
+    "calculator": abinitio,
+    "ediff": 1.0 * kcal_mol,  # decrease for more accuracy but lower speed
+    "fdiff": 1.0 * kcal_mol,  # decrease for more accuracy but lower speed
+    "kernel_kw": {"cutoff": 6.0, "lmax": 3, "nmax": 3},
+    # 'kernel_kw': {'cutoff': 6., 'lmax': 3, 'nmax': 3, 'species': [79]}, # <- faster
+    # 'veto': {'forces': 8.}  # for vetoing ML updates for very high energy structures
+}
 calc = ActiveCalculator(**active_kwargs)
 atoms.calc = calc
 
 
 # relax
 maxforce = 0.01
-dyn = LBFGS(atoms, trajectory='relax.traj')
+dyn = LBFGS(atoms, trajectory="relax.traj")
 dyn.run(fmax=maxforce)
 # For history dependent algorithms such as LBFGS, if ML
 # updates becomes problematic, dyn.run can be replaced by:
@@ -77,4 +78,4 @@ print(report)
 
 # save the final structure
 # atoms.write('CONTCAR')
-atoms.write('optimized.xyz', format='extxyz')
+atoms.write("optimized.xyz", format="extxyz")

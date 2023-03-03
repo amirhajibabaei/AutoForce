@@ -1,42 +1,41 @@
-import numpy as np
-from ase.md.verlet import VelocityVerlet
 import math
 import warnings
 
+import numpy as np
+from ase.md.verlet import VelocityVerlet
+
 
 class Oscillator:
-
     def __init__(self, amplitude=0.05, period=1000):
         self.amp = amplitude
-        self.w = 2*math.pi/period
-        self.t = 0.
+        self.w = 2 * math.pi / period
+        self.t = 0.0
 
     @property
     def f(self):
-        return 1 + self.amp * np.sin(self.w*self.t)
+        return 1 + self.amp * np.sin(self.w * self.t)
 
     @property
     def df(self):
-        return self.amp * self.w * np.cos(self.w*self.t)
+        return self.amp * self.w * np.cos(self.w * self.t)
 
     @property
     def d2f(self):
-        return - self.amp * self.w**2 * np.sin(self.w*self.t)
+        return -self.amp * self.w**2 * np.sin(self.w * self.t)
 
     @property
     def a(self):
-        return self.df/self.f
+        return self.df / self.f
 
     @property
     def b(self):
-        return self.d2f/self.f
+        return self.d2f / self.f
 
     def step(self):
         self.t += 1
 
 
 class Wiggle(VelocityVerlet):
-
     def __init__(self, *args, amplitude=0.05, period=1000, **kwargs):
         super().__init__(*args, **kwargs)
         self.osc = Oscillator(amplitude=amplitude, period=period)
@@ -51,21 +50,22 @@ class Wiggle(VelocityVerlet):
         r = atoms.get_positions()
         p = atoms.get_momenta()
         masses = atoms.get_masses()[:, np.newaxis]
-        c = (atoms.get_scaled_positions()-0.5)@atoms.get_cell()  # added
-        f += (self.osc.b*c + 2*self.osc.a *
-              (p/masses - self.osc.a*c))*masses  # added
+        c = (atoms.get_scaled_positions() - 0.5) @ atoms.get_cell()  # added
+        f += (
+            self.osc.b * c + 2 * self.osc.a * (p / masses - self.osc.a * c)
+        ) * masses  # added
         p += 0.5 * self.dt * f
         atoms.set_positions(r + self.dt * p / masses)
-        gamma = 1 + self.dt*(self.osc.a + 0.5*self.dt*self.osc.b)  # added
-        atoms.set_cell(atoms.get_cell()*gamma, scale_atoms=False)  # added
+        gamma = 1 + self.dt * (self.osc.a + 0.5 * self.dt * self.osc.b)  # added
+        atoms.set_cell(atoms.get_cell() * gamma, scale_atoms=False)  # added
         if atoms.constraints:
             p = (atoms.get_positions() - r) * masses / self.dt
         atoms.set_momenta(p, apply_constraint=False)
         f = atoms.get_forces(md=True)
         self.osc.step()
-        c = (atoms.get_scaled_positions()-0.5)@atoms.get_cell()  # added
-        f += (self.osc.b*c + 2*self.osc.a *
-              (p/masses - self.osc.a*c))*masses  # added
+        c = (atoms.get_scaled_positions() - 0.5) @ atoms.get_cell()  # added
+        f += (
+            self.osc.b * c + 2 * self.osc.a * (p / masses - self.osc.a * c)
+        ) * masses  # added
         atoms.set_momenta(atoms.get_momenta() + 0.5 * self.dt * f)
         return f
-

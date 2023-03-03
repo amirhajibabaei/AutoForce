@@ -1,10 +1,9 @@
 # +
-from torch.distributions import LowRankMultivariateNormal, MultivariateNormal
 import torch
+from torch.distributions import LowRankMultivariateNormal, MultivariateNormal
 
 
 class Titias2009:
-
     def __init__(self, K, y, sigma, method="forward"):
         """
         K       spd matrix (nxn)
@@ -23,7 +22,7 @@ class Titias2009:
         Main method is .doit(MAE, MAXAE).
         example:
         >>> b = Titias2009(K, y, 0.01, 'backward')
-        >>> b.doit(0.01, 0.05) 
+        >>> b.doit(0.01, 0.05)
         """
         self.K = K
         self.y = y.view(-1)
@@ -69,25 +68,29 @@ class Titias2009:
     def mll(self):
         """Titsias's 2009 lower-bound"""
         a = self.active
-        q = (self.K[a][:, a].cholesky().inverse()@self.K[a]).T
-        f = (LowRankMultivariateNormal(self.loc, q, self.sigma**2*self.ones).log_prob(self.y)
-             - 0.5*(self.diag[~a].sum() - (q[~a]**2).sum())/self.sigma**2)
+        q = (self.K[a][:, a].cholesky().inverse() @ self.K[a]).T
+        f = (
+            LowRankMultivariateNormal(
+                self.loc, q, self.sigma**2 * self.ones
+            ).log_prob(self.y)
+            - 0.5 * (self.diag[~a].sum() - (q[~a] ** 2).sum()) / self.sigma**2
+        )
         return f
 
     def mll_upper_bound(self):
-        mvn = MultivariateNormal(self.loc, self.K+self.sigma**2*self.eye)
+        mvn = MultivariateNormal(self.loc, self.K + self.sigma**2 * self.eye)
         return mvn.log_prob(self.y)
 
     def projected(self):
         a = self.active
         L = self.K[a][:, a].cholesky()
         sigma = self.sigma
-        A = torch.cat([self.K[:, a]/sigma.view(-1, 1), L.t()])
+        A = torch.cat([self.K[:, a] / sigma.view(-1, 1), L.t()])
         O = torch.zeros(L.size(0)).type(L.type())
-        Y = torch.cat([self.y/sigma, O])
+        Y = torch.cat([self.y / sigma, O])
         Q, R = torch.qr(A)
-        mu = R.inverse()@Q.t()@Y
-        delta = ((self.K[:, a]@mu).view(-1)-self.y).abs()
+        mu = R.inverse() @ Q.t() @ Y
+        delta = ((self.K[:, a] @ mu).view(-1) - self.y).abs()
         return a, mu, delta.mean(), delta.max()
 
     def step(self):
@@ -118,16 +121,19 @@ class Titias2009:
         else:
             maxsteps = min(self.n - self.progress, maxsteps)
         if verbose:
-            print(f'steps\tMAE\tMAXAE\t(maxsteps={maxsteps})')
+            print(f"steps\tMAE\tMAXAE\t(maxsteps={maxsteps})")
         #
         active, mu, mean_ae, max_ae = self.projected()
-        converged = ((mean_ae < mae and max_ae < maxae) if self._method else
-                     (mean_ae > mae or max_ae > maxae))
+        converged = (
+            (mean_ae < mae and max_ae < maxae)
+            if self._method
+            else (mean_ae > mae or max_ae > maxae)
+        )
         if verbose:
-            print(f'0\t{mean_ae:.2g}\t{max_ae:.2g}')
+            print(f"0\t{mean_ae:.2g}\t{max_ae:.2g}")
         if converged:
             if verbose:
-                print('already converged!')
+                print("already converged!")
             return active, mu
         #
         steps = 0
@@ -136,9 +142,12 @@ class Titias2009:
                 steps += 1
                 active, mu, mean_ae, max_ae = self.step()
                 if verbose:
-                    print(f'{steps}\t{mean_ae:.2g}\t{max_ae:.2g}')
-                converged = ((mean_ae < mae and max_ae < maxae) if self._method else
-                             (mean_ae > mae or max_ae > maxae))
+                    print(f"{steps}\t{mean_ae:.2g}\t{max_ae:.2g}")
+                converged = (
+                    (mean_ae < mae and max_ae < maxae)
+                    if self._method
+                    else (mean_ae > mae or max_ae > maxae)
+                )
                 if steps >= maxsteps or converged:
                     break
         return active, mu

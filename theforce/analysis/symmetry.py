@@ -1,7 +1,8 @@
 # +
-from ase.spacegroup import Spacegroup
-import spglib
 import re
+
+import spglib
+from ase.spacegroup import Spacegroup
 
 
 def get_cell(atoms):
@@ -14,7 +15,7 @@ def get_cell(atoms):
 
 def tag_sites(atoms):
     name = spglib.get_spacegroup(get_cell(atoms))
-    number = int(re.search(r'\((.*?)\)', name).group(1))
+    number = int(re.search(r"\((.*?)\)", name).group(1))
     spg = Spacegroup(number)
     sites = spg.tag_sites(atoms.get_scaled_positions())
     return sites

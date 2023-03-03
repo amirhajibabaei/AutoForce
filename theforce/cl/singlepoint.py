@@ -1,6 +1,7 @@
 # +
-import theforce.cl as cline
 from ase.io import read
+
+import theforce.cl as cline
 
 
 def single_point(i, o):
@@ -12,13 +13,23 @@ def single_point(i, o):
         atoms.write(o)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(
-        description='single-point ML energy & forces')
-    parser.add_argument('-i', '--input', type=str, default='POSCAR',
-                        help='input file: name.xyz, POSCAR, ...')
-    parser.add_argument('-o', '--output', type=str, default='singlepoint.xyz',
-                        help='output file: out.xyz, CONTCAR, ...')
+
+    parser = argparse.ArgumentParser(description="single-point ML energy & forces")
+    parser.add_argument(
+        "-i",
+        "--input",
+        type=str,
+        default="POSCAR",
+        help="input file: name.xyz, POSCAR, ...",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default="singlepoint.xyz",
+        help="output file: out.xyz, CONTCAR, ...",
+    )
     args = parser.parse_args()
     single_point(args.input, args.output)

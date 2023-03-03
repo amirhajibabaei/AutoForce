@@ -1,6 +1,7 @@
 # +
-import torch
 import warnings
+
+import torch
 
 
 def padded(t, size):
@@ -8,17 +9,17 @@ def padded(t, size):
     tt = t
     for dim, (a, b) in enumerate(zip(*[t.size(), size])):
         s = list(tt.size())
-        s[dim] = b-a
+        s[dim] = b - a
         tt = torch.cat([tt, torch.zeros(*s)], dim=dim)
     return tt
 
 
-def nan_to_num(t, num=0.):
+def nan_to_num(t, num=0.0):
     return torch.where(torch.isnan(t), torch.as_tensor(num), t)
 
 
 def zero_to_tiny(t, tiny=1e-6):
-    return torch.where(t == 0., torch.as_tensor(tiny), t)
+    return torch.where(t == 0.0, torch.as_tensor(tiny), t)
 
 
 def cat(tensors, dim=0):
@@ -36,20 +37,20 @@ def stretch_tensor(a, dims):
     size = list(a.size())
     added = 0
     for dim in sorted(dims):
-        size.insert(added+dim, 1)
+        size.insert(added + dim, 1)
         added += 1
     return a.view(*size)
 
 
 class SparseTensor:
-
     def __init__(self, shape=(0,)):
         # configure the sparse dim (sdim)
         try:
             self.sdim = shape.index(0)
         except ValueError:
             raise RuntimeError(
-                "No sparse dim is defined by setting it to 0 in the input shape!")
+                "No sparse dim is defined by setting it to 0 in the input shape!"
+            )
         if shape.count(0) > 1:
             warnings.warn("Multiple 0's in the input shape")
         self.shape = shape
@@ -65,8 +66,7 @@ class SparseTensor:
             return
 
         # tensorify
-        _i, _j = torch.broadcast_tensors(torch.as_tensor(i),
-                                         torch.as_tensor(j))
+        _i, _j = torch.broadcast_tensors(torch.as_tensor(i), torch.as_tensor(j))
         _v = torch.as_tensor(v)
 
         # check if input is correct
@@ -97,7 +97,7 @@ class SparseTensor:
             del self._ispec, self._jspec, self._aspec
 
     def _sort(self, key=1):
-        """ key: 0->i, 1->j """
+        """key: 0->i, 1->j"""
         if type(self.i) == list:
             self._cat()
 
@@ -105,9 +105,12 @@ class SparseTensor:
         ij = [a.tolist() for a in [self.j, self.i]]
         if key == 0:
             ij = ij[1::-1]
-        _, argsort = zip(*sorted([([a, b], c) for a, b, c in
-                                  zip(*[*ij, range(self.i.size(0))])],
-                                 key=lambda x: x[0]))
+        _, argsort = zip(
+            *sorted(
+                [([a, b], c) for a, b, c in zip(*[*ij, range(self.i.size(0))])],
+                key=lambda x: x[0],
+            )
+        )
         argsort = torch.LongTensor(argsort)
 
         # sort tensors
@@ -130,7 +133,7 @@ def test():
     b = torch.rand(10, 8, 3)
     c = torch.rand(10, 9, 3)
     t, spec = cat([a, b, c], 1)
-    #print([a.shape for a in split(t, spec)])
+    # print([a.shape for a in split(t, spec)])
 
 
 def test_sparse():
@@ -141,10 +144,9 @@ def test_sparse():
     S.add(1, list(range(3)), a)
     S.add(2, list(range(4)), b)
     S.add(3, list(range(5)), c)
-    S.add([1, 1, 1], [list(range(3)), list(range(3)),
-                      list(range(3))], [a, a, a])
+    S.add([1, 1, 1], [list(range(3)), list(range(3)), list(range(3))], [a, a, a])
     S._cat()
-    #print(S.i.shape, S.j.shape, S.a.shape)
+    # print(S.i.shape, S.j.shape, S.a.shape)
 
     a = torch.rand(7, 3, 6)
     b = torch.rand(7, 4, 6)
@@ -156,7 +158,7 @@ def test_sparse():
     S._cat()
     S.add(3, list(range(5)), c)
     S._cat()
-    #print(S.i.shape, S.j.shape, S.a.shape)
+    # print(S.i.shape, S.j.shape, S.a.shape)
 
     # test full sorting
     s = SparseTensor(shape=(0,))
@@ -173,6 +175,6 @@ def test_sparse():
     print(s.a)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test()
     test_sparse()

@@ -1,7 +1,7 @@
 <!-- #region -->
 ### ActiveCalculator
-This calculator wraps the calculators defined in the 
-[ASE](https://wiki.fysik.dtu.dk/ase/) package and 
+This calculator wraps the calculators defined in the
+[ASE](https://wiki.fysik.dtu.dk/ase/) package and
 generates a machine learning model on-the-fly
 with the SGPR and adaptive sampling algorithms.
 For instance
@@ -12,24 +12,24 @@ from theforce.calculator.active import ActiveCalculator
 DFT_calc = Vasp(command='mpirun -n 12 vasp_std')
 ML_calc = ActiveCalculator(calculator=DFT_calc)
 ```
-Next, we create an `atoms` object 
+Next, we create an `atoms` object
 (see [ase.atoms.Atoms](https://wiki.fysik.dtu.dk/ase/ase/atoms.html))
 and set `ML_calc` as its calculator
 ```python
 atoms.set_calculator(ML_calc)
 ```
-After this, we can perform simulations such as 
+After this, we can perform simulations such as
 [molecular dynamics](https://wiki.fysik.dtu.dk/ase/ase/md.html)
 with on-the-fly machine learning.
 
-The above script runs in parallel for DFT but 
+The above script runs in parallel for DFT but
 it is serial for ML calculations.
-For notes on full parallelism of both DFT and ML 
+For notes on full parallelism of both DFT and ML
 see the section **Parallelism** in the following.
-Running examples can be found 
+Running examples can be found
 [here](https://github.com/amirhajibabaei/AutoForce/tree/master/examples).
 
-With `ML_calc`, the ML model will be generated 
+With `ML_calc`, the ML model will be generated
 automatically on-the-fly with our arbitrary
 ab-initio simulations.
 For training with existing data see the section
@@ -89,12 +89,12 @@ ML_calc = ActiveCalculator(covariance='model.pckl/', ...)
 The default is `covariance='pckl'` which is
 equivalent to `covariance=pckl` which means
 the input and output models are the same.
-Thus with default setting, the model will be 
+Thus with default setting, the model will be
 automatically saved and loaded in consecutive
 runs.
-If `None`, the default kernel will be used 
+If `None`, the default kernel will be used
 (see **Kernels**) with an empty initial model.
-In that case `kernel_kw` can be used for 
+In that case `kernel_kw` can be used for
 passing some parameters (e.g. cutoff) to
 the kernel instantiation.
 
@@ -122,9 +122,9 @@ If the model is loaded from a file,
 `kernel_kw` will have no effect.
 
 #### calculator
-The main DFT calculator can which be any ASE 
+The main DFT calculator can which be any ASE
 calculator or a `SocketCalculator` (see *Parallelism*).
-For using an existing ML model without further 
+For using an existing ML model without further
 training pass `calculator=None`.
 
 If `calculator=None`, the snapshots for which the uncertainty
@@ -161,13 +161,13 @@ as `covariance`
 ML_calc = ActiveCalculator(covariance='model.pckl')
 ```
 
-`tape` is used for saving the most essential 
-information during training (i.e. the sampled data) 
+`tape` is used for saving the most essential
+information during training (i.e. the sampled data)
 in a simple text format.
 Unlike pickled models, it occupies much less memory
 and can be used for rebuilding the model from scratch.
 The default name is `tape='model.sgpr'`.
-By design `tape`-files are never overwritten. 
+By design `tape`-files are never overwritten.
 These files can be used for retraining the model
 with different parameters or combining several
 trainig trajectories.
@@ -181,7 +181,7 @@ calculations during MD for on-the-fly assessment
 of the ML accuracy.
 The exact calculation will be saved in `'active_FP.traj'`
 and the ML predictions will be saved in `'active_ML.traj'`.
-A single point calculation is triggered if `test` 
+A single point calculation is triggered if `test`
 steps have passed from the last one.
 
 #### ediff, fdiff
@@ -189,19 +189,19 @@ These parameters control the sampling.
 `ediff` is mainly used for sampling of the LCEs
 as the inducing data for the sparse representation.
 `fdiff` control the sampling of DFT data.
-The default parameters should be appropriate for 
+The default parameters should be appropriate for
 starting the simulation.
 One can set `fdiff` equal to the desired accuracy
-for force predictions and if the model was unable 
-to reach this accuracy, `ediff` can be gradually 
+for force predictions and if the model was unable
+to reach this accuracy, `ediff` can be gradually
 decreased.
 For global exploration, we recommend increasing the
-accuracy gradually/iteratively rather than choosing 
+accuracy gradually/iteratively rather than choosing
 small values for these parameters from the beginning.
 
 #### noise_f
-In optimization of hyper-parameters, the 
-mean absolute error (MAE) of forces in fitting 
+In optimization of hyper-parameters, the
+mean absolute error (MAE) of forces in fitting
 is tuned to this value: MAE$\sim$`noise_f`.
 `noise_f` of 0 is also acceptable but
 there is a chance for overfitting.
@@ -209,7 +209,7 @@ For instance during on-the-fly training,
 choosing smaller `noise_f` may
 cause more sampling of DFT data without a
 significant increase in accuracy of predictions.
-But the value of 0 maybe used for fitting a 
+But the value of 0 maybe used for fitting a
 static data set without any issues.
 
 #### ioptim
@@ -248,7 +248,7 @@ predictions.
 Using `veto` one can bypass these structures.
 
 ### Training with existing data
-If some DFT data already exists, one can train a 
+If some DFT data already exists, one can train a
 model simply by
 ```python
 ML_calc.include_data(data)
@@ -257,11 +257,11 @@ where `data` is either a list of `Atoms` objects
 or path to a (`.traj`) file.
 
 ### Parallelism
-The main issue for ML parallelism is that `mpirun` 
+The main issue for ML parallelism is that `mpirun`
 can not be invoked twice in the same process.
 Thus we need two seperate processes for ML
 and DFT calculations.
-Currently, this is resolved by defining the DFT 
+Currently, this is resolved by defining the DFT
 calculator in a seperate script (e.g. `calc.py`)
 ```python
 # calc.py
@@ -281,10 +281,10 @@ def postprocess_atoms(atoms):
     pass
 ```
 The name `calc` should be defined in `calc.py`.
-One can also define optional functions 
+One can also define optional functions
 `preprocess_atoms` and `postprocess_atoms`.
-For instance `preprocess_atoms` can be used for 
-setting the initial magnetic moments for DFT 
+For instance `preprocess_atoms` can be used for
+setting the initial magnetic moments for DFT
 calculations.
 Then in the main python script (e.g. `md.py`)
 we write
@@ -307,21 +307,21 @@ python -m theforce.calculator.calc_server & # A
 sleep 1 # waits for the server to be up
 mpirun -np 6 python md.py # B
 ```
-The two processes `A` and `B` communicate 
+The two processes `A` and `B` communicate
 through the ip `localhost` and the port `6666` by default.
 ip and port can be set as optional args in command `A`
 and as kwargs in `SocketCalculator`.
 
 Commands `A` and `B` can be started on different nodes.
-For instance, one can start the process `A` on `nodeA` 
-and connect the nodes before starting the process `B` 
+For instance, one can start the process `A` on `nodeA`
+and connect the nodes before starting the process `B`
 on `nodeB` by
 ```sh
 # on nodeB
 ssh -N -f -L localhost:6666:localhost:6666 nodeA
 ```
-If the port (default=`6666`) is already occupied 
-by some other process, it can be cleared by 
+If the port (default=`6666`) is already occupied
+by some other process, it can be cleared by
 (before executing commands `A` or `B`)
 ```sh
 lsof -ti:6666 | xargs kill -9
@@ -338,7 +338,7 @@ lmax, nmax, exponent, cutoff = 3, 3, 4, 6.
 kernel = SeSoapKernel(lmax, nmax, exponent, cutoff)
 ```
 Using `SeSoapKernel` we don't need to worry about atomic types
-but it maybe slow in some cases. 
+but it maybe slow in some cases.
 Another option is `SubSeSoapKernel` which explicitly depends on the atomic species.
 By fixing the atomic species, it can be ~10 times faster, but it uses more memory.
 As an example

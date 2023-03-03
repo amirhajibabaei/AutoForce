@@ -1,21 +1,21 @@
 # +
-from torch.nn import Module
+import torch
 from torch import cat
-from theforce.util.util import iterable
+from torch.nn import Module
+
 from theforce.util.caching import method_caching
 from theforce.util.parallel import method_forker
-import torch
+from theforce.util.util import iterable
 
 
 class SimilarityKernel(Module):
-
     def __init__(self, kernel):
         super().__init__()
         self.kern = kernel
         self.params = self.kern.params
 
     @method_forker
-    def forward(self, first, second, operation='func'):
+    def forward(self, first, second, operation="func"):
         mat = [torch.empty(0)]
         for a in iterable(first):
             raw = [torch.empty(0)]
@@ -31,8 +31,8 @@ class SimilarityKernel(Module):
         return mat
 
     @method_forker
-    def diag(self, first, operation='func'):
-        return cat([getattr(self, operation+'diag')(a) for a in iterable(first)])
+    def diag(self, first, operation="func"):
+        return cat([getattr(self, operation + "diag")(a) for a in iterable(first)])
 
     @method_forker
     def funcdiag(self, first):
@@ -60,13 +60,15 @@ class SimilarityKernel(Module):
 
     def save_for_later(self, loc, keyvals):
         for key, val in keyvals.items():
-            setattr(loc, self.name+'_'+key, val)
+            setattr(loc, self.name + "_" + key, val)
 
     def saved(self, atoms_or_loc, key):
-        attr = self.name+'_'+key
+        attr = self.name + "_" + key
         try:
             # BUG: torch.epmpty(0) causes the entire (even if int) tensor to be converted to float
-            return torch.cat([loc.__dict__[attr] for loc in atoms_or_loc] + [torch.empty(0)])
+            return torch.cat(
+                [loc.__dict__[attr] for loc in atoms_or_loc] + [torch.empty(0)]
+            )
         except TypeError:
             return atoms_or_loc.__dict__[attr]
 
@@ -76,13 +78,13 @@ class SimilarityKernel(Module):
 
     @property
     def state(self):
-        return self.__class__.__name__+'({})'.format(self.state_args)
+        return self.__class__.__name__ + "({})".format(self.state_args)
 
     def __repr__(self):
         return self.state
 
     def call_descriptor(self, loc, grad):
-        raise NotImplementedError('implement in subclass')
+        raise NotImplementedError("implement in subclass")
 
 
 def lone_atoms(_p, _q):

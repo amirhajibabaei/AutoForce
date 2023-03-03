@@ -1,6 +1,6 @@
+import warnings
 
 import numpy as np
-import warnings
 
 
 def cat(arrays, axis=0):
@@ -15,14 +15,14 @@ def split(array, spec):
 
 
 class SparseArray:
-
     def __init__(self, shape=(0,)):
         # configure the sparse axis (saxis)
         try:
             self.saxis = shape.index(0)
         except ValueError:
             raise RuntimeError(
-                "No sparse axis is defined by setting it to 0 in the input shape!")
+                "No sparse axis is defined by setting it to 0 in the input shape!"
+            )
         if shape.count(0) > 1:
             warnings.warn("Multiple 0's in the input shape")
         self.shape = shape
@@ -69,7 +69,7 @@ class SparseArray:
             del self._ispec, self._jspec, self._aspec
 
     def _sort(self, key=1):
-        """ key: 0->i, 1->j """
+        """key: 0->i, 1->j"""
         if type(self.i) == list:
             self._cat()
 
@@ -77,9 +77,12 @@ class SparseArray:
         ij = [a.tolist() for a in [self.j, self.i]]
         if key == 0:
             ij = ij[1::-1]
-        _, argsort = zip(*sorted([([a, b], c) for a, b, c in
-                                  zip(*[*ij, range(self.i.shape[0])])],
-                                 key=lambda x: x[0]))
+        _, argsort = zip(
+            *sorted(
+                [([a, b], c) for a, b, c in zip(*[*ij, range(self.i.shape[0])])],
+                key=lambda x: x[0],
+            )
+        )
         argsort = np.array(argsort)
 
         # sort tensors
@@ -104,7 +107,7 @@ def test_cat_split():
     c = np.random.uniform(size=(10, 9, 3))
     t, spec = cat([a, b, c], 1)
     # print(t.shape)
-    #print([a.shape for a in split(t, spec)])
+    # print([a.shape for a in split(t, spec)])
 
 
 def test_sparse():
@@ -116,7 +119,7 @@ def test_sparse():
     S.add(2, list(range(4)), b)
     S.add(3, list(range(5)), c)
     S._cat()
-    #print(S.i.shape, S.j.shape, S.a.shape)
+    # print(S.i.shape, S.j.shape, S.a.shape)
 
     a = np.random.uniform(size=(7, 3, 6))
     b = np.random.uniform(size=(7, 4, 6))
@@ -145,7 +148,6 @@ def test_sparse():
     print(s.a)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_cat_split()
     test_sparse()
-

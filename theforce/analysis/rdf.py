@@ -1,8 +1,9 @@
 # +
-from math import pi
-import torch
-import numpy as np
 import itertools
+from math import pi
+
+import numpy as np
+import torch
 
 
 def get_numbers_pairs(atoms_numbers, numbers, pairs):
@@ -11,14 +12,14 @@ def get_numbers_pairs(atoms_numbers, numbers, pairs):
     else:
         if numbers is None:
             numbers = np.unique(atoms_numbers)
-        #pairs = [a for a in itertools.product(numbers, numbers)]
+        # pairs = [a for a in itertools.product(numbers, numbers)]
         pairs = [(a, a) for a in numbers]
         pairs += [a for a in itertools.combinations(numbers, 2)]
-    print(f'numbers: {numbers} \npairs: {pairs}')
+    print(f"numbers: {numbers} \npairs: {pairs}")
     return numbers, pairs
 
 
-def rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
+def rdf(data, rmax, bins=100, rmin=0.0, numbers=None, pairs=None):
 
     # numbers, pairs
     numbers, pairs = get_numbers_pairs(data[0].numbers, numbers, pairs)
@@ -37,7 +38,7 @@ def rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
         nums, freq = atoms.tnumbers.unique(return_counts=True)
         for n, f in zip(*[nums.tolist(), freq.tolist()]):
             try:
-                density[n] += f/atoms.get_volume()
+                density[n] += f / atoms.get_volume()
             except:
                 pass
 
@@ -49,24 +50,25 @@ def rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
                     continue
                 loc.select(*pair, bothways=True)
                 count[pair] += 1
-                hist[pair] += torch.histc(loc.r.pow(2).sum(dim=-1).sqrt(),
-                                          **binargs)
+                hist[pair] += torch.histc(loc.r.pow(2).sum(dim=-1).sqrt(), **binargs)
     for number in numbers:
         density[number] /= snaps
 
     r = torch.linspace(rmin, rmax, bins)
-    dr = r[1]-r[0]
-    r += dr/2
-    g = {pair: hist[pair]/(count[pair]*4*pi*r**2*dr*density[pair[1]])
-         for pair in pairs}
+    dr = r[1] - r[0]
+    r += dr / 2
+    g = {
+        pair: hist[pair] / (count[pair] * 4 * pi * r**2 * dr * density[pair[1]])
+        for pair in pairs
+    }
 
     return r, g
 
 
-def _rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
+def _rdf(data, rmax, bins=100, rmin=0.0, numbers=None, pairs=None):
     """
     This uses all distances rather than neighborlist which may be faster
-    if the number of atoms is not too large but it may fail for a small 
+    if the number of atoms is not too large but it may fail for a small
     box because it doesn't consider images due to pbc.
     """
 
@@ -87,7 +89,7 @@ def _rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
         nums, freq = np.unique(atoms.numbers, return_counts=True)
         for n, f in zip(*[nums.tolist(), freq.tolist()]):
             try:
-                density[n] += f/atoms.get_volume()
+                density[n] += f / atoms.get_volume()
             except:
                 pass
 
@@ -98,15 +100,16 @@ def _rdf(data, rmax, bins=100, rmin=0., numbers=None, pairs=None):
             j = torch.from_numpy(atoms.numbers == pair[1])
             r = dij[i][:, j]
             count[pair] += r.shape[0]
-            hist[pair] += torch.histc(r.view(-1),
-                                      **binargs)
+            hist[pair] += torch.histc(r.view(-1), **binargs)
     for number in numbers:
         density[number] /= snaps
 
     r = torch.linspace(rmin, rmax, bins)
-    dr = r[1]-r[0]
-    r += dr/2
-    g = {pair: hist[pair]/(count[pair]*4*pi*r**2*dr*density[pair[1]])
-         for pair in pairs}
+    dr = r[1] - r[0]
+    r += dr / 2
+    g = {
+        pair: hist[pair] / (count[pair] * 4 * pi * r**2 * dr * density[pair[1]])
+        for pair in pairs
+    }
 
     return r, g

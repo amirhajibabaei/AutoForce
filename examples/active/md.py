@@ -1,28 +1,35 @@
 # +
-from theforce.calculator.socketcalc import SocketCalculator
-from theforce.calculator.active import ActiveCalculator, FilterDeltas
-from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
-from theforce.util.parallel import mpi_init
-from theforce.util.aseutil import init_velocities, make_cell_upper_triangular
+from ase import units
 from ase.build import bulk
 from ase.md.npt import NPT
-from ase import units
+
+from theforce.calculator.active import ActiveCalculator, FilterDeltas
+from theforce.calculator.socketcalc import SocketCalculator
+from theforce.similarity.sesoap import SeSoapKernel
+from theforce.util.aseutil import init_velocities  # , make_cell_upper_triangular
+from theforce.util.parallel import mpi_init
 
 # A. the main dft calculator (see calc_emt.py), we use the fast emt for getting started
-main_calc = SocketCalculator(script='calc_emt.py') # or calc_vasp.py
+main_calc = SocketCalculator(script="emt_calc.py")  # or vasp_calc.py
 
 # B. the kernel and the active learning calculator
-lmax, nmax, exponent, cutoff = 3, 3, 4, 6.
-# kern = SubSeSoapKernel(lmax, nmax, exponent,cutoff, 79, [79])    # <- fixed atoms types (faster?)
-kern = SeSoapKernel(lmax, nmax, exponent, cutoff) # <- universal (all atoms types)
-calc = ActiveCalculator(covariance=kern,          # kern, if None the default is used
-                        calculator=main_calc,     # main (DFT) calc
-                        ediff=0.01, fdiff=0.05,   # control params for accuracy/speed tradeoff
-                        process_group=mpi_init(), # for mpi parallelism
-                        pckl='model.pckl/',       # for continuous pickling (saving) the model
-                        tape='Au.sgpr',           # for saving the training data step by step
-                        test=100,                 # test 100 steps after last dft (None for no test)
-                        )
+lmax, nmax, exponent, cutoff = 3, 3, 4, 6.0
+
+# alternative kernel: fixed atoms types (faster?)
+# from theforce.similarity.sesoap import SubSeSoapKernel
+# kern = SubSeSoapKernel(lmax, nmax, exponent,cutoff, 79, [79])
+
+kern = SeSoapKernel(lmax, nmax, exponent, cutoff)  # <- universal (all atoms types)
+calc = ActiveCalculator(
+    covariance=kern,  # kern, if None the default is used
+    calculator=main_calc,  # main (DFT) calc
+    ediff=0.01,
+    fdiff=0.05,  # control params for accuracy/speed tradeoff
+    process_group=mpi_init(),  # for mpi parallelism
+    pckl="model.pckl/",  # for continuous pickling (saving) the model
+    tape="Au.sgpr",  # for saving the training data step by step
+    test=100,  # test 100 steps after last dft (None for no test)
+)
 # note that, all of the above have default values.
 # for a minimal  example, you only need to set
 # main_calc and process_group.
@@ -36,7 +43,7 @@ calc = ActiveCalculator(covariance=kern,          # kern, if None the default is
 # will be loaded but it will not be updated.
 
 # C. define the system and set its calculator
-atoms = bulk('Au', cubic=True).repeat(3*[3])
+atoms = bulk("Au", cubic=True).repeat(3 * [3])
 atoms.set_calculator(calc)
 
 # D. intitial state with all-forces=0 is problematic
@@ -60,19 +67,28 @@ atoms.rattle(0.1)
 # 4. you need to make the cell upper triangular
 #    (if it already isn't) before using ase.md.npt.NPT.
 npt = False
-tem = 1000.
-stress = 0.
-dt = 1.
-ttime = 25*units.fs
-ptime = 100*units.fs
-bulk_modulus = 137.
-pfactor = (ptime**2)*bulk_modulus*units.GPa
+tem = 1000.0
+stress = 0.0
+dt = 1.0
+ttime = 25 * units.fs
+ptime = 100 * units.fs
+bulk_modulus = 137.0
+pfactor = (ptime**2) * bulk_modulus * units.GPa
 init_velocities(atoms, tem)
 # make_cell_upper_triangular(atoms)
 filtered = FilterDeltas(atoms)
-dyn = NPT(filtered, dt*units.fs, temperature_K=tem, externalstress=stress*units.GPa,
-          ttime=ttime, pfactor=pfactor if npt else None, mask=None, trajectory='md.traj',
-          append_trajectory=False, loginterval=1)
+dyn = NPT(
+    filtered,
+    dt * units.fs,
+    temperature_K=tem,
+    externalstress=stress * units.GPa,
+    ttime=ttime,
+    pfactor=pfactor if npt else None,
+    mask=None,
+    trajectory="md.traj",
+    append_trajectory=False,
+    loginterval=1,
+)
 
 # F. run md
 dyn.run(1000)
