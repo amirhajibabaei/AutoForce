@@ -10,14 +10,13 @@ mpirun -np 6 python md.py
 echo end | netcat localhost 6666 # stops the calc_server
 
 # Notes:
-# 1. the default ip and port are 
+# 1. the default ip and port are
 #    ip: localhost
 #    port: 6666
 #    for changing these, pass them as args when
 #    starting the server in step A and in defining
 #    the SocketCalculator in md.py step B
 #
-# 2. Note that A and B can be executed on different 
-#    nodes/machines. Just use ssh forwarding to connect 
+# 2. Note that A and B can be executed on different
+#    nodes/machines. Just use ssh forwarding to connect
 #    ip and ports
-

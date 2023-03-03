@@ -1,11 +1,11 @@
 <!-- #region -->
 ### Gaussian
-For the machine learning accelerated molecular dynamics (MLMD) 
+For the machine learning accelerated molecular dynamics (MLMD)
 using the Gaussian software from the command line, we generate
 the input file for Gaussian (default=`Gaussian.gjf`) as usual.
 This file contains the parameters for ab initio calculations
 as well as the inital coordinates of atoms.
-The type of calculation should be set to single-point 
+The type of calculation should be set to single-point
 energy and force calculation (use the `Force` keyword).
 As an example:
 ```
@@ -18,11 +18,11 @@ O                 0.0000000000        0.0000000000        0.1192620000
 H                 0.0000000000        0.7632390000       -0.4770470000
 H                 0.0000000000       -0.7632390000       -0.4770470000
 ```
-During MLMD this file will be copied for all ab initio calculations, 
+During MLMD this file will be copied for all ab initio calculations,
 only the coordinates of atoms will be changed.
 
 #### ARGS (MLMD related)
-All parameters related to ML (input and output models, target accuracy, etc) 
+All parameters related to ML (input and output models, target accuracy, etc)
 and task specification (MD, relaxation, etc) should be set
 in the `ARGS` file (see
 [theforce/cl/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/cl)).
@@ -36,7 +36,7 @@ Lets assume that 20 cores are available.
 We split these cores to 12 for Gaussian and 8 for ML.
 Specification of 12 cores for Gaussian should be done
 in its input file.
-Optionally in a file named `COMMAND` we may write 
+Optionally in a file named `COMMAND` we may write
 ```sh
 Gaussian_exe < input.gjf > output.log
 ```
@@ -44,7 +44,7 @@ If `COMMAND` is not present, the following is assumed
 ```sh
 (g16|g09|g03) < Gaussian.gjf > Gaussian.log
 ```
-After this, the simulation can be started with 
+After this, the simulation can be started with
 the following script
 ```sh
 python -m theforce.calculator.calc_server &

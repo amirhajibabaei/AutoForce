@@ -1,4 +1,4 @@
-### LAMMPS 
+### LAMMPS
 
 #### Coupled with on-the-fly ML-IAP using VASP
 In this example, LAMMPS is used for MD where
@@ -40,4 +40,3 @@ This time all 20 CPUs are used for LAMMPS+AutoForce
 since no on-the-fly training with VASP is performed.
 This is also possible just by setting `calculator = None`
 in `ARGS`.
-

@@ -1,9 +1,10 @@
 # +
+import torch
+
+import theforce.distributed as dist
 from theforce.regression.gppotential import PosteriorPotentialFromFolder
 from theforce.regression.scores import cd
-import torch
 from theforce.util.parallel import mpi_init
-import theforce.distributed as dist
 
 
 def least_important(A, y, rank, size):
@@ -12,10 +13,10 @@ def least_important(A, y, rank, size):
     i_local = []
     r_local = []
     for i in range(rank, A.size(1), size):
-        B = torch.cat([A[:, :i], A[:, i+1:]], dim=1)
+        B = torch.cat([A[:, :i], A[:, i + 1 :]], dim=1)
         mu = torch.linalg.lstsq(B, y).solution
         i_local.append(i)
-        r_local.append(cd(B@mu, y))
+        r_local.append(cd(B @ mu, y))
     i = torch.argmax(torch.stack(r_local))
     i_glob[rank] = i_local[i]
     r_glob[rank] = r_local[i]
@@ -30,9 +31,7 @@ def main(pckl, inducing, R2, out):
         mpi_init()
     rank = dist.get_rank()
     size = dist.get_world_size()
-    model = PosteriorPotentialFromFolder(pckl,
-                                         load_data=True,
-                                         update_data=False)
+    model = PosteriorPotentialFromFolder(pckl, load_data=True, update_data=False)
     A = model.Kf.clone()
     y = torch.cat([atoms.target_forces.view(-1) for atoms in model.data])
     m = A.size(1)
@@ -42,7 +41,7 @@ def main(pckl, inducing, R2, out):
         i, score = least_important(A, y, rank, size)
         if score < R2:
             break
-        A = torch.cat([A[:, :i], A[:, i+1:]], dim=1)
+        A = torch.cat([A[:, :i], A[:, i + 1 :]], dim=1)
         dumped.append(indices.pop(i))
         m -= 1
         if rank == 0:
@@ -59,34 +58,32 @@ def main(pckl, inducing, R2, out):
         model.to_folder(out)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='Compression of SGPR models'
+    parser = argparse.ArgumentParser(description="Compression of SGPR models")
+
+    parser.add_argument(
+        "-p", "--pckl", default="model.pckl", type=str, help="path to a .pckl forlder"
     )
 
-    parser.add_argument('-p', '--pckl',
-                        default='model.pckl',
-                        type=str,
-                        help="path to a .pckl forlder")
+    parser.add_argument(
+        "-o",
+        "--out",
+        default=None,
+        type=str,
+        help="output .pckl folder " "(if not given, the input will be overwritten)",
+    )
 
-    parser.add_argument('-o', '--out',
-                        default=None,
-                        type=str,
-                        help="output .pckl folder "
-                             "(if not given, the input will be overwritten)"
-                        )
+    parser.add_argument(
+        "-i",
+        "--inducing",
+        default=100000,
+        type=int,
+        help="minimum number of inducing points",
+    )
 
-    parser.add_argument('-i', '--inducing',
-                        default=100000,
-                        type=int,
-                        help=f'minimum number of inducing points')
-
-    parser.add_argument('-r', '--r2',
-                        default=1.,
-                        type=float,
-                        help='minimum force R2')
+    parser.add_argument("-r", "--r2", default=1.0, type=float, help="minimum force R2")
 
     args = parser.parse_args()
 

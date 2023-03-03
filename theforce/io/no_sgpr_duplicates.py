@@ -1,6 +1,8 @@
 # +
 from collections import Counter
+
 import numpy as np
+
 from theforce.io.sgprio import SgprIO
 
 
@@ -27,42 +29,42 @@ def no_sgpr_duplicates(tape):
             unique += [data[i]]
 
     # write
-    with open(tape, 'w') as f:
-        f.write('\n')
+    with open(tape, "w") as f:
+        f.write("\n")
     new = SgprIO(tape)
     for a, b in unique:
         new.write(b)
 
     #
-    print(f'unique count: {count(unique)}')
+    print(f"unique count: {count(unique)}")
     return unique
 
 
 def same_atoms(a, b):
-    check = (len(a) == len(b) and
-             (a.numbers == b.numbers).all() and
-             np.allclose(a.positions, b.positions) and
-             np.allclose(a.cell, b.cell) and
-             (a.pbc == b.pbc).all()
-             )
+    check = (
+        len(a) == len(b)
+        and (a.numbers == b.numbers).all()
+        and np.allclose(a.positions, b.positions)
+        and np.allclose(a.cell, b.cell)
+        and (a.pbc == b.pbc).all()
+    )
     return check
 
 
 def same_locals(a, b):
-    check = (a.number == b.number and
-             len(a._b) == len(b._b) and
-             (a._b == b._b).all() and
-             a._r.allclose(b._r)
-             )
+    check = (
+        a.number == b.number
+        and len(a._b) == len(b._b)
+        and (a._b == b._b).all()
+        and a._r.allclose(b._r)
+    )
     return check
 
 
 def the_same(a, b, eq=None):
     if eq is None:
-        eq = {'atoms': same_atoms, 'local': same_locals}
-    check = (a[0] == b[0] and
-             eq[a[0]](a[1], b[1])
-             )
+        eq = {"atoms": same_atoms, "local": same_locals}
+    check = a[0] == b[0] and eq[a[0]](a[1], b[1])
     return check
 
 
@@ -73,7 +75,7 @@ def count(data):
     return c
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
 
     tapes = sys.argv[1:]

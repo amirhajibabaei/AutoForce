@@ -1,16 +1,17 @@
 # +
-import torch
-from torch.nn import Module
-from theforce.util.util import iterable
-from theforce.descriptor.func import Negative, Positive, Real, Pow, Param, I
-from theforce.descriptor.cutoff import PolyCut
-from torch.autograd import grad
-from ase.calculators.calculator import Calculator, all_changes
 import itertools
+
+import torch
+from ase.calculators.calculator import Calculator, all_changes
+from torch.autograd import grad
+from torch.nn import Module
+
+from theforce.descriptor.cutoff import PolyCut
+from theforce.descriptor.func import I, Negative, Param, Positive, Pow, Real
+from theforce.util.util import iterable
 
 
 class ParametricPotential(Module):
-
     def __init__(self):
         super().__init__()
         self.params = []
@@ -38,7 +39,7 @@ class ParametricPotential(Module):
         if other == 0:
             return self
         else:
-            raise RuntimeError('This is not ok: {} + {}'.format(self, other))
+            raise RuntimeError("This is not ok: {} + {}".format(self, other))
 
     def __repr__(self):
         return self.state
@@ -55,17 +56,17 @@ class ParametricPotential(Module):
 
     @property
     def state(self):
-        return self.__class__.__name__+'({})'.format(self.state_args)
+        return self.__class__.__name__ + "({})".format(self.state_args)
 
-    def to_file(self, file, flag='', mode='a'):
+    def to_file(self, file, flag="", mode="a"):
         from theforce.util.util import one_liner
+
         with open(file, mode) as f:
-            f.write('\n\n\n#flag: {}\n'.format(flag))
+            f.write("\n\n\n#flag: {}\n".format(flag))
             f.write(one_liner(self.state))
 
 
 class AddedPotentials(ParametricPotential):
-
     def __init__(self, a, b):
         super().__init__()
         self.a = a
@@ -84,15 +85,14 @@ class AddedPotentials(ParametricPotential):
 
     @property
     def state_args(self):
-        return '{}, {}'.format(self.a.state, self.b.state)
+        return "{}, {}".format(self.a.state, self.b.state)
 
     @property
     def state(self):
-        return '{} + {}'.format(self.a.state, self.b.state)
+        return "{} + {}".format(self.a.state, self.b.state)
 
 
 class PairPot(ParametricPotential):
-
     def __init__(self, a, b, radial):
         super().__init__()
         self.a = a
@@ -109,23 +109,26 @@ class PairPot(ParametricPotential):
         e = self.radial(d, grad=forces)
         if forces:
             e, g = e
-            f = -g*loc.r/d
-            f = torch.zeros(loc.natoms, 3).index_add(
-                0, loc.j, f).index_add(0, loc.i, -f)
+            f = -g * loc.r / d
+            f = (
+                torch.zeros(loc.natoms, 3)
+                .index_add(0, loc.j, f)
+                .index_add(0, loc.i, -f)
+            )
             return e.sum(), f
         else:
             return e.sum()
 
     @property
     def state_args(self):
-        return '{}, {}, {}'.format(self.a, self.b, self.radial.state)
+        return "{}, {}, {}".format(self.a, self.b, self.radial.state)
 
 
 def get_coulomb_terms(numbers, cutoff, setting={}, default_order=0.01):
     """
-    If a setting is passed, it should be a dictionary in the form of 
-    {atomic_number: c} where c contains the constraint and optionally 
-    the initial value. Acceptable constraints are 
+    If a setting is passed, it should be a dictionary in the form of
+    {atomic_number: c} where c contains the constraint and optionally
+    the initial value. Acceptable constraints are
     '+': positive
     '-': negative
     'r': real (no constraints)
@@ -144,54 +147,70 @@ def get_coulomb_terms(numbers, cutoff, setting={}, default_order=0.01):
             # constraint and initial value
             c = setting[a]
             if type(c) == str:
-                if c == '+' or c == 'r':
+                if c == "+" or c == "r":
                     ini = default_order
-                elif c == '-':
+                elif c == "-":
                     ini = -default_order
-                elif c == 'f':
-                    raise RuntimeError('f (=fixed) constraint needs a value')
+                elif c == "f":
+                    raise RuntimeError("f (=fixed) constraint needs a value")
                 else:
-                    raise RuntimeError('unknown constraint {}'.format(c))
+                    raise RuntimeError("unknown constraint {}".format(c))
             else:
                 c, ini = c
             # class of constraint
-            if c == '+':
+            if c == "+":
                 _cls = Positive
                 rg = True
-            elif c == '-':
+            elif c == "-":
                 _cls = Negative
                 rg = True
-            elif c == 'r':
+            elif c == "r":
                 _cls = Real
                 rg = True
-            elif c == 'f':
+            elif c == "f":
                 _cls = Real
                 rg = False
             else:
-                raise RuntimeError('unknown constraint {}'.format(c))
+                raise RuntimeError("unknown constraint {}".format(c))
             # create charge
-            charges[a] = Param(_cls, ini, 'q_{}'.format(a), rg=rg)
+            charges[a] = Param(_cls, ini, "q_{}".format(a), rg=rg)
         except KeyError:
-            charges[a] = Param(Real, default_order, 'q_{}'.format(a), rg=True)
+            charges[a] = Param(Real, default_order, "q_{}".format(a), rg=True)
     # create terms
-    pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
-             [(a, a) for a in numbers])
+    pairs = [(a, b) for a, b in itertools.combinations(numbers, 2)] + [
+        (a, a) for a in numbers
+    ]
 
-    terms = sum([PairPot(*pair, PolyCut(cutoff)*charges[pair[0]]*charges[pair[1]]*Pow(n=-1))
-                 for pair in pairs])
+    terms = sum(
+        [
+            PairPot(
+                *pair, PolyCut(cutoff) * charges[pair[0]] * charges[pair[1]] * Pow(n=-1)
+            )
+            for pair in pairs
+        ]
+    )
     return terms
 
 
 def get_lj_terms(numbers, cutoff, default_order=0.01):
     # create terms
-    pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
-             [(a, a) for a in numbers])
-    A = {pair: Param(Positive, default_order, 'A_{}_{}'.format(*pair))
-         for pair in pairs}
-    B = {pair: Param(Positive, default_order, 'B_{}_{}'.format(*pair))
-         for pair in pairs}
-    terms = sum([PairPot(*pair, PolyCut(cutoff)*(A[pair]*Pow(n=-12) - B[pair]*Pow(n=-6)))
-                 for pair in pairs])
+    pairs = [(a, b) for a, b in itertools.combinations(numbers, 2)] + [
+        (a, a) for a in numbers
+    ]
+    A = {
+        pair: Param(Positive, default_order, "A_{}_{}".format(*pair)) for pair in pairs
+    }
+    B = {
+        pair: Param(Positive, default_order, "B_{}_{}".format(*pair)) for pair in pairs
+    }
+    terms = sum(
+        [
+            PairPot(
+                *pair, PolyCut(cutoff) * (A[pair] * Pow(n=-12) - B[pair] * Pow(n=-6))
+            )
+            for pair in pairs
+        ]
+    )
     return terms
 
 
@@ -200,52 +219,55 @@ def load_parametric_potential(state):
 
 
 class ParametricCalculator(Calculator):
-    implemented_properties = ['energy', 'forces', 'free_energy', 'stress']
+    implemented_properties = ["energy", "forces", "free_energy", "stress"]
 
     def __init__(self, potential, **kwargs):
         Calculator.__init__(self, **kwargs)
         self.potential = potential
 
-    def calculate(self, atoms=None, properties=['energy'], system_changes=all_changes):
+    def calculate(self, atoms=None, properties=["energy"], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
         self.atoms.update(posgrad=False, cellgrad=True, forced=True)
 
         # energy, forces
-        energy, forces = self.potential(
-            self.atoms, forces=True, enable_grad=True)
+        energy, forces = self.potential(self.atoms, forces=True, enable_grad=True)
 
         # stress
-        stress1 = (forces[:, None]*self.atoms.xyz[..., None]).sum(dim=0)
-        cellgrad, = grad(energy, self.atoms.lll)
-        stress2 = (cellgrad[:, None]*self.atoms.lll[..., None]).sum(dim=0)
+        stress1 = (forces[:, None] * self.atoms.xyz[..., None]).sum(dim=0)
+        (cellgrad,) = grad(energy, self.atoms.lll)
+        stress2 = (cellgrad[:, None] * self.atoms.lll[..., None]).sum(dim=0)
         try:
             volume = self.atoms.get_volume()
         except ValueError:
             volume = -2  # here stress2=0, thus trace(stress) = virial (?)
         stress = (stress1 + stress2).detach().numpy() / volume
 
-        self.results['energy'] = energy.detach().numpy()
-        self.results['forces'] = forces.detach().numpy()
-        self.results['free_energy'] = self.results['energy']
-        self.results['stress'] = stress.flat[[0, 4, 8, 5, 2, 1]]
+        self.results["energy"] = energy.detach().numpy()
+        self.results["forces"] = forces.detach().numpy()
+        self.results["free_energy"] = self.results["energy"]
+        self.results["stress"] = stress.flat[[0, 4, 8, 5, 2, 1]]
 
 
 def test():
     from theforce.descriptor.atoms import TorchAtoms
     from theforce.descriptor.radial import RepulsiveCore
+
     torch.set_default_tensor_type(torch.DoubleTensor)
 
     V = PairPot(55, 55, RepulsiveCore()) + PairPot(55, 55, RepulsiveCore())
-    a = TorchAtoms(positions=[(0, 0, 0), (2, 0, 0), (0, 2, 0)],
-                   numbers=[55, 55, 55], cell=[10, 10, 10], pbc=False)
-    a.update(cutoff=5., posgrad=True)
+    a = TorchAtoms(
+        positions=[(0, 0, 0), (2, 0, 0), (0, 2, 0)],
+        numbers=[55, 55, 55],
+        cell=[10, 10, 10],
+        pbc=False,
+    )
+    a.update(cutoff=5.0, posgrad=True)
     e, f = V(a, forces=True)
     e.backward()
     print(a.xyz.grad.allclose(-f))
     print(V.state)
-    print(sum([PairPot(55, 55, RepulsiveCore()),
-               PairPot(55, 55, RepulsiveCore())]))
+    print(sum([PairPot(55, 55, RepulsiveCore()), PairPot(55, 55, RepulsiveCore())]))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test()

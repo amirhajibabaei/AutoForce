@@ -1,24 +1,24 @@
 # +
+from math import pi
+
 import torch
 from torch.nn import Parameter
-from math import pi
+
 from theforce.regression.algebra import free_form, positive
 
 
 def bordered(m, c, r, d):
     if r is None:
         r = c.T
-    mm = torch.cat([torch.cat([m, c], dim=1),
-                    torch.cat([r, d], dim=1)])
+    mm = torch.cat([torch.cat([m, c], dim=1), torch.cat([r, d], dim=1)])
     return mm
 
 
 def entropy(a):
-    return -(a*a.log()).sum()
+    return -(a * a.log()).sum()
 
 
 class SPD(torch.Tensor):
-
     def __init__(self, data, lbound=1e-3):
         self.data = data
         self.lbound = lbound
@@ -32,31 +32,35 @@ class SPD(torch.Tensor):
     def append_(self, column, diagonal, lbound=None):
         a = column.view(-1, 1)
         i = torch.as_tensor(diagonal).view(1, 1)
-        alpha = self.inverse()@a
-        v = (i-a.T@alpha)
+        alpha = self.inverse() @ a
+        v = i - a.T @ alpha
         if v < (lbound if lbound else self.lbound):
             return False
         beta = v.sqrt()
         self.data = bordered(self.data, a, a.T, i)
-        self._inverse = bordered(self.inverse() + (alpha@alpha.T)/v,
-                                 -alpha/v, None, torch.ones(1, 1)/v)
+        self._inverse = bordered(
+            self.inverse() + (alpha @ alpha.T) / v,
+            -alpha / v,
+            None,
+            torch.ones(1, 1) / v,
+        )
         return True
 
     def pop_(self, i):
-        k = torch.cat([torch.arange(i), torch.arange(i+1, self.size(0))])
+        k = torch.cat([torch.arange(i), torch.arange(i + 1, self.size(0))])
         self.data = self.data.index_select(0, k).index_select(1, k)
         alpha = self._inverse[i].index_select(0, k).view(-1, 1)
         beta = self._inverse[i, i]
-        self._inverse = (self._inverse.index_select(0, k).index_select(1, k) -
-                         alpha@alpha.T/beta)
+        self._inverse = (
+            self._inverse.index_select(0, k).index_select(1, k) - alpha @ alpha.T / beta
+        )
 
     def test(self):
-        a = (self.data@self.inverse() - torch.eye(self.size(0))).abs().max()
+        a = (self.data @ self.inverse() - torch.eye(self.size(0))).abs().max()
         return a
 
 
 class CholSPD(torch.Tensor):
-
     def __init__(self, data, lbound=1e-3):
         self.data = data
         self.lbound = lbound
@@ -77,30 +81,37 @@ class CholSPD(torch.Tensor):
     def append_(self, column, diagonal, lbound=None):
         a = column.view(-1, 1)
         i = torch.as_tensor(diagonal).view(1, 1)
-        alpha = self.inverse()@a
-        v = (i-a.T@alpha)
+        alpha = self.inverse() @ a
+        v = i - a.T @ alpha
         if v < (lbound if lbound else self.lbound):
             return False
         beta = v.sqrt()
         self.data = bordered(self.data, a, a.T, i)
-        self._cholesky = bordered(self._cholesky, torch.zeros_like(a),
-                                  (self._inverse_of_cholesky@a).T, beta)
-        self._inverse_of_cholesky = bordered(self._inverse_of_cholesky,
-                                             torch.zeros_like(a),
-                                             -alpha.T/beta, 1./beta)
-        self._inverse = bordered(self._inverse + (alpha@alpha.T)/v,
-                                 -alpha/v, None, torch.ones(1, 1)/v)
+        self._cholesky = bordered(
+            self._cholesky, torch.zeros_like(a), (self._inverse_of_cholesky @ a).T, beta
+        )
+        self._inverse_of_cholesky = bordered(
+            self._inverse_of_cholesky, torch.zeros_like(a), -alpha.T / beta, 1.0 / beta
+        )
+        self._inverse = bordered(
+            self._inverse + (alpha @ alpha.T) / v,
+            -alpha / v,
+            None,
+            torch.ones(1, 1) / v,
+        )
         return True
 
     def log_prob(self, _y):
         y = torch.as_tensor(_y).view(-1, 1)
-        f = -0.5*(y.T@self.inverse()@y + 2*self._cholesky.diag().log().sum() +
-                  y.size(0)*torch.log(torch.tensor(2*pi)))
+        f = -0.5 * (
+            y.T @ self.inverse() @ y
+            + 2 * self._cholesky.diag().log().sum()
+            + y.size(0) * torch.log(torch.tensor(2 * pi))
+        )
         return f
 
 
 class Manifold:
-
     def __init__(self, K, y, backend=CholSPD):
         """
         With backend CholSPD, log_prob becomes available.
@@ -112,12 +123,12 @@ class Manifold:
         self._mu = None
 
     def __call__(self, col):
-        return col@self.mu
+        return col @ self.mu
 
     @property
     def mu(self):
         if self._mu is None:
-            self._mu = self.K.inverse()@self.y
+            self._mu = self.K.inverse() @ self.y
         return self._mu
 
     def append_(self, col, diag, y):
@@ -130,7 +141,7 @@ class Manifold:
 
     def pop_(self, j):
         self.K.pop_(j)
-        self.y = torch.cat([self.y[:j], self.y[j+1:]])
+        self.y = torch.cat([self.y[:j], self.y[j + 1 :]])
         self._mu = None
 
     def forward_(self, col, diag, y, diff=None):
@@ -140,11 +151,11 @@ class Manifold:
         False      rejected because delta<diff
         0          rejected because v<lbound
         """
-        v = diag - col.view(1, -1)@self.K.inverse()@col.view(-1, 1)
+        v = diag - col.view(1, -1) @ self.K.inverse() @ col.view(-1, 1)
         if v < self.K.lbound:
             return 0
         beta = v.sqrt()
-        delta = self(col)-y
+        delta = self(col) - y
         if delta.abs() > (diff if diff else beta):
             return self.append_(col, diag, y)
         else:
@@ -154,9 +165,9 @@ class Manifold:
         indices = list(range(self.K.size(0)))
         for j in indices[-1::-1]:
             Lambda = self.K.inverse()[j]
-            beta = 1./Lambda[j].sqrt()
-            Lambda = (Lambda*beta).view(-1, 1)
-            delta = (self.K[j]@Lambda)@(Lambda.T@self.y)
+            beta = 1.0 / Lambda[j].sqrt()
+            Lambda = (Lambda * beta).view(-1, 1)
+            delta = (self.K[j] @ Lambda) @ (Lambda.T @ self.y)
             if delta.abs() < (diff if diff else beta):
                 self.pop_(j)
                 del indices[j]
@@ -169,23 +180,23 @@ class Manifold:
             j = col.argmax()
         # inverse without j'th col
         lam1 = self.K.inverse()[j]
-        beta = 1./lam1[j].sqrt()
-        lam1 = (lam1*beta).view(-1, 1)
-        Ki = self.K.inverse() - lam1@lam1.T
+        beta = 1.0 / lam1[j].sqrt()
+        lam1 = (lam1 * beta).view(-1, 1)
+        Ki = self.K.inverse() - lam1 @ lam1.T
         # inverse with new col
-        alpha = Ki@col
-        beta = (diag - col@alpha).sqrt()
+        alpha = Ki @ col
+        beta = (diag - col @ alpha).sqrt()
         if beta**2 < self.K.lbound:
             return None
-        alpha[j] = -1.
-        lam2 = (alpha/beta).view(-1, 1)
-        Ki = Ki + lam2@lam2.T
+        alpha[j] = -1.0
+        lam2 = (alpha / beta).view(-1, 1)
+        Ki = Ki + lam2 @ lam2.T
         # old y with altered model
-        mu = Ki@self.y+Ki[:, j].view(-1, 1)*(y-self.y[j])
-        yj = self.K[j].view(1, -1)@mu + (col[j]-self.K[j, j])*mu[j]
+        mu = Ki @ self.y + Ki[:, j].view(-1, 1) * (y - self.y[j])
+        yj = self.K[j].view(1, -1) @ mu + (col[j] - self.K[j, j]) * mu[j]
         # swap
-        del1 = self(col)-y
-        del2 = yj-self.y[j]
+        del1 = self(col) - y
+        del2 = yj - self.y[j]
         if del2.abs() < del1.abs():
             self.K[j] = self.K[:, j] = col
             self.K[j, j] = diag
@@ -201,7 +212,6 @@ class Manifold:
 
 
 class Model:
-
     def __init__(self, kern, cat=True, signal=None, noise=1e-3, force_norm=False):
         """
         noise (=sigma^2) is chosen 1e-3, equal to default K.lbound
@@ -218,7 +228,7 @@ class Model:
 
     @property
     def signal(self):
-        return 1. if self._signal is None else positive(self._signal)
+        return 1.0 if self._signal is None else positive(self._signal)
 
     @signal.setter
     def signal(self, value):
@@ -232,7 +242,7 @@ class Model:
 
     @property
     def noise(self):
-        return 0. if self._noise is None else positive(self._noise)
+        return 0.0 if self._noise is None else positive(self._noise)
 
     @noise.setter
     def noise(self, value):
@@ -246,17 +256,17 @@ class Model:
 
     def kernel(self, x):
         alpha = self.kern(x, x)
-        norm = alpha.sqrt() if self.force_norm else 1.
+        norm = alpha.sqrt() if self.force_norm else 1.0
         if self.force_norm and len(self.norm) > 0:
             norm_all = torch.cat(self.norm).view(1, -1)
         else:
-            norm_all = 1.
-        diag = (alpha/norm**2+self.noise)*self.signal
+            norm_all = 1.0
+        diag = (alpha / norm**2 + self.noise) * self.signal
         if len(self.x) == 0:
             return norm, diag, None
         else:
             xx = torch.cat(self.x) if self.cat else self.x
-            a = self.kern(x, xx)*self.signal/(norm*norm_all)
+            a = self.kern(x, xx) * self.signal / (norm * norm_all)
             return norm, diag, a
 
     def forward_(self, x, y, diff=None):
@@ -295,40 +305,48 @@ class Model:
         opt.step()
         return loss
 
-    def optimize(self, opt, delta=None, per_data=False, maxsteps=1000, diff=None, verbose=True):
+    def optimize(
+        self, opt, delta=None, per_data=False, maxsteps=1000, diff=None, verbose=True
+    ):
         _loss = self.opt_step(opt, diff=diff)
-        for step in range(maxsteps-1):
+        for step in range(maxsteps - 1):
             loss = self.opt_step(opt, diff=diff)
             if verbose:
-                print(step, float(loss), len(self.x), float(loss)/len(self.x))
-            if delta and (loss-_loss).abs() < delta*(len(self.x) if per_data else 1.):
+                print(step, float(loss), len(self.x), float(loss) / len(self.x))
+            if delta and (loss - _loss).abs() < delta * (
+                len(self.x) if per_data else 1.0
+            ):
                 break
             _loss = loss
-        return step+1, loss
+        return step + 1, loss
 
 
 def test_spd(self):
-    a = (self.data@self.inverse() - torch.eye(self.size(0))).abs().max()
-    b = (self._cholesky@self._inverse_of_cholesky -
-         torch.eye(self.size(0))).abs().max()
-    c = (self.data - self._cholesky@self._cholesky.T).abs().max()
+    a = (self.data @ self.inverse() - torch.eye(self.size(0))).abs().max()
+    b = (
+        (self._cholesky @ self._inverse_of_cholesky - torch.eye(self.size(0)))
+        .abs()
+        .max()
+    )
+    c = (self.data - self._cholesky @ self._cholesky.T).abs().max()
     return a, b, c
 
 
 def test_rbf():
     from theforce.regression.stationary import RBF
-    kern = RBF(signal=1.)
+
+    kern = RBF(signal=1.0)
     x = torch.randn(1)
     K = SPD(kern(x, x))
     for _ in range(1000):
         xx = torch.randn(1)
         a = kern(xx, x)
-        if K.append_(a, 1.):
+        if K.append_(a, 1.0):
             x = torch.cat([x, xx])
     K.pop_(3)
     K.pop_(0)
     print(K.test())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_rbf()

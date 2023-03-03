@@ -54,7 +54,7 @@ atoms.set_calculator(calc)
 # proceed with the desired calculations
 # ...
 ```
-For detailed information see 
+For detailed information see
 [theforce/calculator/README.md](https://github.com/amirhajibabaei/AutoForce/tree/master/theforce/calculator).
 
 ### Optional coupling with LAMMPS

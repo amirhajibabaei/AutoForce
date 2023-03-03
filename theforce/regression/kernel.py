@@ -1,7 +1,8 @@
 # +
 import torch
 from torch.nn import Module, Parameter
-from theforce.regression.algebra import positive, free_form
+
+from theforce.regression.algebra import free_form, positive
 
 
 def atleast2d(t, force2d=False):
@@ -38,28 +39,28 @@ class Kernel(Module):
             return t, tt, s
 
     # main mathods
-    def forward(self, x, xx=None, diag=False, method='func'):
+    def forward(self, x, xx=None, diag=False, method="func"):
         t, tt, s = self.checkout_inputs(x, xx, diag)
-        k = getattr(self, 'get_'+method)(t, tt)
+        k = getattr(self, "get_" + method)(t, tt)
         if k.size(-1) == 1 or (not diag and k.size(-2) == 1):
-            k = torch.ones_like(t[0])*k  # TODO: use .expand instead
+            k = torch.ones_like(t[0]) * k  # TODO: use .expand instead
         return k
 
     def func(self, x, xx=None, diag=False):
-        return self.forward(x, xx, diag, method='func')
+        return self.forward(x, xx, diag, method="func")
 
     def leftgrad(self, x, xx=None, diag=False):
-        return self.forward(x, xx, diag, method='leftgrad')
+        return self.forward(x, xx, diag, method="leftgrad")
 
     def rightgrad(self, x, xx=None, diag=False):
-        return self.forward(x, xx, diag, method='rightgrad')
+        return self.forward(x, xx, diag, method="rightgrad")
 
     def gradgrad(self, x, xx=None, diag=False):
-        return self.forward(x, xx, diag, method='gradgrad')
+        return self.forward(x, xx, diag, method="gradgrad")
 
     @property
     def state(self):
-        return self.__class__.__name__+'({})'.format(self.state_args)
+        return self.__class__.__name__ + "({})".format(self.state_args)
 
     # Operators
     def __add__(self, other):
@@ -83,31 +84,26 @@ class Kernel(Module):
     # overload the following methods
     @property
     def state_args(self):
-        return ''
+        return ""
 
     def get_func(self, x, xx):
         """output shape: (m, n)"""
-        raise NotImplementedError(
-            'get_func in {}'.format(self.__class__.__name__))
+        raise NotImplementedError("get_func in {}".format(self.__class__.__name__))
 
     def get_leftgrad(self, x, xx):
         """output shape: (d, m, n)"""
-        raise NotImplementedError(
-            'get_leftgrad in {}'.format(self.__class__.__name__))
+        raise NotImplementedError("get_leftgrad in {}".format(self.__class__.__name__))
 
     def get_rightgrad(self, x, xx):
         """output shape: (d, m, n)"""
-        raise NotImplementedError(
-            'get_rightgrad in {}'.format(self.__class__.__name__))
+        raise NotImplementedError("get_rightgrad in {}".format(self.__class__.__name__))
 
     def get_gradgrad(self, x, xx):
         """output shape: (d, d, m, n)"""
-        raise NotImplementedError(
-            'get_gradgrad in {}'.format(self.__class__.__name__))
+        raise NotImplementedError("get_gradgrad in {}".format(self.__class__.__name__))
 
 
 class BinaryOperator(Kernel):
-
     def __init__(self, a, b):
         super().__init__()
         self.a = a
@@ -116,11 +112,10 @@ class BinaryOperator(Kernel):
 
     @property
     def state_args(self):
-        return '{}, {}'.format(self.a.state, self.b.state)
+        return "{}, {}".format(self.a.state, self.b.state)
 
 
 class Add(BinaryOperator):
-
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -141,7 +136,6 @@ class Add(BinaryOperator):
 
 
 class Sub(BinaryOperator):
-
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -162,33 +156,35 @@ class Sub(BinaryOperator):
 
 
 class Mul(BinaryOperator):
-
     def __init__(self, *args):
         super().__init__(*args)
 
     def get_func(self, x, xx):
-        return self.a.get_func(x, xx)*self.b.get_func(x, xx)
+        return self.a.get_func(x, xx) * self.b.get_func(x, xx)
 
     def get_leftgrad(self, x, xx):
-        k = (self.a.get_func(x, xx)*self.b.get_leftgrad(x, xx) +
-             self.b.get_func(x, xx)*self.a.get_leftgrad(x, xx))
+        k = self.a.get_func(x, xx) * self.b.get_leftgrad(x, xx) + self.b.get_func(
+            x, xx
+        ) * self.a.get_leftgrad(x, xx)
         return k
 
     def get_rightgrad(self, x, xx):
-        k = (self.a.get_func(x, xx)*self.b.get_rightgrad(x, xx) +
-             self.b.get_func(x, xx)*self.a.get_rightgrad(x, xx))
+        k = self.a.get_func(x, xx) * self.b.get_rightgrad(x, xx) + self.b.get_func(
+            x, xx
+        ) * self.a.get_rightgrad(x, xx)
         return k
 
     def get_gradgrad(self, x, xx):
-        k = (self.a.get_func(x, xx)*self.b.get_gradgrad(x, xx) +
-             self.b.get_func(x, xx)*self.a.get_gradgrad(x, xx) +
-             self.b.get_leftgrad(x, xx)[:, None]*self.a.get_rightgrad(x, xx)[None] +
-             self.a.get_leftgrad(x, xx)[:, None]*self.b.get_rightgrad(x, xx)[None])
+        k = (
+            self.a.get_func(x, xx) * self.b.get_gradgrad(x, xx)
+            + self.b.get_func(x, xx) * self.a.get_gradgrad(x, xx)
+            + self.b.get_leftgrad(x, xx)[:, None] * self.a.get_rightgrad(x, xx)[None]
+            + self.a.get_leftgrad(x, xx)[:, None] * self.b.get_rightgrad(x, xx)[None]
+        )
         return k
 
 
 class Pow(Kernel):
-
     def __init__(self, kern, eta):
         super().__init__()
         self.kern = kern
@@ -197,25 +193,38 @@ class Pow(Kernel):
 
     @property
     def state_args(self):
-        return '{}, {}'.format(self.kern.state, self.eta)
+        return "{}, {}".format(self.kern.state, self.eta)
 
     def get_func(self, x, xx):
-        return self.kern.get_func(x, xx)**self.eta
+        return self.kern.get_func(x, xx) ** self.eta
 
     def get_leftgrad(self, x, xx):
-        k = (self.eta*self.kern.get_func(x, xx)**(self.eta-1) *
-             self.kern.get_leftgrad(x, xx))
+        k = (
+            self.eta
+            * self.kern.get_func(x, xx) ** (self.eta - 1)
+            * self.kern.get_leftgrad(x, xx)
+        )
         return k
 
     def get_rightgrad(self, x, xx):
-        k = (self.eta*self.kern.get_func(x, xx)**(self.eta-1) *
-             self.kern.get_rightgrad(x, xx))
+        k = (
+            self.eta
+            * self.kern.get_func(x, xx) ** (self.eta - 1)
+            * self.kern.get_rightgrad(x, xx)
+        )
         return k
 
     def get_gradgrad(self, x, xx):
-        k = (self.eta*self.kern.get_func(x, xx)**(self.eta-1)*self.kern.get_gradgrad(x, xx) +
-             self.eta*(self.eta-1)*self.kern.get_func(x, xx)**(self.eta-2) *
-             self.kern.get_leftgrad(x, xx)[:, None]*self.kern.get_rightgrad(x, xx)[None])
+        k = (
+            self.eta
+            * self.kern.get_func(x, xx) ** (self.eta - 1)
+            * self.kern.get_gradgrad(x, xx)
+            + self.eta
+            * (self.eta - 1)
+            * self.kern.get_func(x, xx) ** (self.eta - 2)
+            * self.kern.get_leftgrad(x, xx)[:, None]
+            * self.kern.get_rightgrad(x, xx)[None]
+        )
         return k
 
 
@@ -227,50 +236,51 @@ class Exp(Kernel):
 
     @property
     def state_args(self):
-        return '{}'.format(self.kern.state)
+        return "{}".format(self.kern.state)
 
     def get_func(self, x, xx):
         return self.kern.get_func(x, xx).exp()
 
     def get_leftgrad(self, x, xx):
-        k = self.kern.get_leftgrad(x, xx)*self.kern.get_func(x, xx).exp()
+        k = self.kern.get_leftgrad(x, xx) * self.kern.get_func(x, xx).exp()
         return k
 
     def get_rightgrad(self, x, xx):
-        k = self.kern.get_rightgrad(x, xx)*self.kern.get_func(x, xx).exp()
+        k = self.kern.get_rightgrad(x, xx) * self.kern.get_func(x, xx).exp()
         return k
 
     def get_gradgrad(self, x, xx):
-        k = (self.kern.get_gradgrad(x, xx) + self.kern.get_leftgrad(x, xx)[:, None] *
-             self.kern.get_rightgrad(x, xx)[None])*self.kern.get_func(x, xx).exp()
+        k = (
+            self.kern.get_gradgrad(x, xx)
+            + self.kern.get_leftgrad(x, xx)[:, None]
+            * self.kern.get_rightgrad(x, xx)[None]
+        ) * self.kern.get_func(x, xx).exp()
         return k
 
 
 class Real(Kernel):
-
     def __init__(self, value):
         super().__init__()
         self.value = torch.as_tensor(value)
 
     @property
     def state_args(self):
-        return '{}'.format(self.value)
+        return "{}".format(self.value)
 
     def get_func(self, x, xx):
-        return self.value.view((x.dim()-1)*[1])
+        return self.value.view((x.dim() - 1) * [1])
 
     def get_leftgrad(self, x, xx):
-        return torch.zeros(x.dim()*[1])
+        return torch.zeros(x.dim() * [1])
 
     def get_rightgrad(self, x, xx):
-        return torch.zeros(x.dim()*[1])
+        return torch.zeros(x.dim() * [1])
 
     def get_gradgrad(self, x, xx):
-        return torch.zeros((x.dim()+1)*[1])
+        return torch.zeros((x.dim() + 1) * [1])
 
 
 class Positive(Kernel):
-
     def __init__(self, signal=1.0, requires_grad=False):
         super().__init__()
         self.signal = signal
@@ -297,23 +307,24 @@ class Positive(Kernel):
 
     @property
     def state_args(self):
-        return 'signal={}, requires_grad={}'.format(self.signal.data, self.requires_grad)
+        return "signal={}, requires_grad={}".format(
+            self.signal.data, self.requires_grad
+        )
 
     def get_func(self, x, xx):
-        return self.signal.view((x.dim()-1)*[1])
+        return self.signal.view((x.dim() - 1) * [1])
 
     def get_leftgrad(self, x, xx):
-        return torch.zeros(x.dim()*[1])
+        return torch.zeros(x.dim() * [1])
 
     def get_rightgrad(self, x, xx):
-        return torch.zeros(x.dim()*[1])
+        return torch.zeros(x.dim() * [1])
 
     def get_gradgrad(self, x, xx):
-        return torch.zeros((x.dim()+1)*[1])
+        return torch.zeros((x.dim() + 1) * [1])
 
 
 class White(Kernel):
-
     def __init__(self, signal=1e-3, requires_grad=False):
         super().__init__()
         self.signal = signal
@@ -340,64 +351,63 @@ class White(Kernel):
 
     @property
     def state_args(self):
-        return 'signal={}, requires_grad={}'.format(self.signal.data, self.requires_grad)
+        return "signal={}, requires_grad={}".format(
+            self.signal.data, self.requires_grad
+        )
 
     def get_func(self, x, xx):
-        return self.signal*x.isclose(xx).all(dim=0).type(x.type())
+        return self.signal * x.isclose(xx).all(dim=0).type(x.type())
 
 
 class SqD(Kernel):
-
     def __init__(self):
         super().__init__()
 
     @property
     def state_args(self):
-        return ''
+        return ""
 
     def get_func(self, x, xx):
-        return (x-xx).pow(2).sum(dim=0)
+        return (x - xx).pow(2).sum(dim=0)
 
     def get_leftgrad(self, x, xx):
-        return 2*(x-xx)
+        return 2 * (x - xx)
 
     def get_rightgrad(self, x, xx):
-        return -2*(x-xx)
+        return -2 * (x - xx)
 
     def get_gradgrad(self, x, xx):
         # Note: output.expand(d, d, *trail) may be needed
         d = x.size(0)
         trail = x.size()[1:]
-        return -2*torch.eye(d).view(d, d, *(len(trail)*[1]))
+        return -2 * torch.eye(d).view(d, d, *(len(trail) * [1]))
 
 
 class DotProd(Kernel):
-
     def __init__(self):
         super().__init__()
 
     @property
     def state_args(self):
-        return ''
+        return ""
 
     def get_func(self, x, xx):
-        return (x*xx).sum(dim=0)
+        return (x * xx).sum(dim=0)
 
     def get_leftgrad(self, x, xx):
-        return torch.ones_like(x)*xx
+        return torch.ones_like(x) * xx
 
     def get_rightgrad(self, x, xx):
-        return x*torch.ones_like(xx)
+        return x * torch.ones_like(xx)
 
     def get_gradgrad(self, x, xx):
         # Note: output.expand(d, d, *trail) may be needed
         d = x.size(0)
         trail = x.size()[1:]
-        return torch.eye(d).view(d, d, *(len(trail)*[1]))
+        return torch.eye(d).view(d, d, *(len(trail) * [1]))
 
 
 class Normed(Kernel):
-
     def __init__(self, kern):
         super().__init__()
         self.kern = kern
@@ -411,38 +421,43 @@ class Normed(Kernel):
     def get_func(self, x, xx):
         n = x.norm(dim=0).clamp(min=self.eps)
         nn = xx.norm(dim=0).clamp(min=self.eps)
-        return self.kern.get_func(x/n, xx/nn)
+        return self.kern.get_func(x / n, xx / nn)
 
     def get_leftgrad(self, x, xx):
         n = x.norm(dim=0).clamp(min=self.eps)
         nn = xx.norm(dim=0).clamp(min=self.eps)
-        y = x/n
-        yy = xx/nn
+        y = x / n
+        yy = xx / nn
         f = self.kern.get_leftgrad(y, yy)
-        return f/n - (f*x).sum(dim=0)*x/n**3
+        return f / n - (f * x).sum(dim=0) * x / n**3
 
     def get_rightgrad(self, x, xx):
         n = x.norm(dim=0).clamp(min=self.eps)
         nn = xx.norm(dim=0).clamp(min=self.eps)
-        y = x/n
-        yy = xx/nn
+        y = x / n
+        yy = xx / nn
         f = self.kern.get_rightgrad(y, yy)
-        return f/nn - (f*xx).sum(dim=0)*xx/nn**3
+        return f / nn - (f * xx).sum(dim=0) * xx / nn**3
 
     def get_gradgrad(self, x, xx):
         n = x.norm(dim=0).clamp(min=self.eps)
         nn = xx.norm(dim=0).clamp(min=self.eps)
-        y = x/n
-        yy = xx/nn
+        y = x / n
+        yy = xx / nn
         f = self.kern.get_gradgrad(y, yy)
-        gg = (f/(n*nn) - (f*x[:, None]).sum(dim=0)*x[:, None]/(n**3*nn) -
-              (f*xx[None]).sum(dim=1, keepdim=True)*xx/(n*nn**3) +
-              (f*x[:, None]*xx[None]).sum(dim=(0, 1)) * x[:, None]*xx[None]/(n**3*nn**3))
+        gg = (
+            f / (n * nn)
+            - (f * x[:, None]).sum(dim=0) * x[:, None] / (n**3 * nn)
+            - (f * xx[None]).sum(dim=1, keepdim=True) * xx / (n * nn**3)
+            + (f * x[:, None] * xx[None]).sum(dim=(0, 1))
+            * x[:, None]
+            * xx[None]
+            / (n**3 * nn**3)
+        )
         return gg
 
 
 class ScaledInput(Kernel):
-
     def __init__(self, kern, scale=1.0):
         super().__init__()
         self.kern = kern
@@ -451,7 +466,7 @@ class ScaledInput(Kernel):
 
     @property
     def state_args(self):
-        return '{}, scale={}'.format(self.kern.state, self.scale.data)
+        return "{}, scale={}".format(self.kern.state, self.scale.data)
 
     @property
     def scale(self):
@@ -468,25 +483,27 @@ class ScaledInput(Kernel):
         scale = self.scale
         while scale.dim() < x.dim():
             scale = scale[..., None]
-        return self.kern.get_func(x/scale, xx/scale)
+        return self.kern.get_func(x / scale, xx / scale)
 
     def get_leftgrad(self, x, xx):
         scale = self.scale
         while scale.dim() < x.dim():
             scale = scale[..., None]
-        return self.kern.get_leftgrad(x/scale, xx/scale)/scale
+        return self.kern.get_leftgrad(x / scale, xx / scale) / scale
 
     def get_rightgrad(self, x, xx):
         scale = self.scale
         while scale.dim() < x.dim():
             scale = scale[..., None]
-        return self.kern.get_rightgrad(x/scale, xx/scale)/scale
+        return self.kern.get_rightgrad(x / scale, xx / scale) / scale
 
     def get_gradgrad(self, x, xx):
         scale = self.scale
         while scale.dim() < x.dim():
             scale = scale[..., None]
-        return self.kern.get_gradgrad(x/scale, xx/scale)/(scale[:, None]*scale[None])
+        return self.kern.get_gradgrad(x / scale, xx / scale) / (
+            scale[:, None] * scale[None]
+        )
 
 
 def test_kernel_gradients(kern, dim=3):
@@ -496,45 +513,53 @@ def test_kernel_gradients(kern, dim=3):
 
     kern(x, xx).sum().backward()
     g = kern.leftgrad(x, xx).sum(dim=(2)).t()
-    print(g.allclose(x.grad), (g-x.grad).abs().max().data)
+    print(g.allclose(x.grad), (g - x.grad).abs().max().data)
 
     g = kern.rightgrad(x, xx).sum(dim=(1)).t()
-    print(g.allclose(xx.grad), (g-xx.grad).abs().max().data)
+    print(g.allclose(xx.grad), (g - xx.grad).abs().max().data)
 
     x.grad *= 0
     kern.rightgrad(x, xx).sum().backward()
     g = kern.gradgrad(x, xx).sum(dim=(1, 3)).t()
-    print(g.allclose(x.grad), (g-x.grad).abs().max().data)
+    print(g.allclose(x.grad), (g - x.grad).abs().max().data)
 
     xx.grad *= 0
     kern.leftgrad(x, xx).sum().backward()
     g = kern.gradgrad(x, xx).sum(dim=(0, 2)).t()
-    print(g.allclose(xx.grad), (g-xx.grad).abs().max().data)
+    print(g.allclose(xx.grad), (g - xx.grad).abs().max().data)
 
 
 def example():
-    polynomial = Positive(requires_grad=True) * \
-        (DotProd() + Positive(1e-4, requires_grad=True))**2
-    squaredexp = (SqD()*Real(-0.5)).exp()
+    polynomial = (
+        Positive(requires_grad=True)
+        * (DotProd() + Positive(1e-4, requires_grad=True)) ** 2
+    )
+    squaredexp = (SqD() * Real(-0.5)).exp()
 
 
 def test():
-    from theforce.regression.core import SquaredExp
     from theforce.deprecated.regression.gp import Covariance
+    from theforce.regression.core import SquaredExp
 
     x = torch.rand(23, 7)
     xx = torch.rand(19, 7)
     old = Covariance(SquaredExp(dim=7))
-    new = (SqD()*Real(-0.5)).exp()
+    new = (SqD() * Real(-0.5)).exp()
     func = old(x, xx).allclose(new(x, xx))
-    leftgrad = old.leftgrad(x, xx).allclose(new.leftgrad(
-        x, xx).permute(1, 0, 2).reshape(x.numel(), xx.size(0)))
-    rightgrad = old.rightgrad(x, xx).allclose(new.rightgrad(
-        x, xx).permute(1, 2, 0).reshape(x.size(0), xx.numel()))
-    gradgrad = old.gradgrad(x, xx).allclose(new.gradgrad(
-        x, xx).permute(2, 0, 3, 1).reshape(x.numel(), xx.numel()))
-    print('Squared-Exponential kernel with two different methods: \n{}\n{}\n{}\n{}'.format(
-        func, leftgrad, rightgrad, gradgrad))
+    leftgrad = old.leftgrad(x, xx).allclose(
+        new.leftgrad(x, xx).permute(1, 0, 2).reshape(x.numel(), xx.size(0))
+    )
+    rightgrad = old.rightgrad(x, xx).allclose(
+        new.rightgrad(x, xx).permute(1, 2, 0).reshape(x.size(0), xx.numel())
+    )
+    gradgrad = old.gradgrad(x, xx).allclose(
+        new.gradgrad(x, xx).permute(2, 0, 3, 1).reshape(x.numel(), xx.numel())
+    )
+    print(
+        "Squared-Exponential kernel with two different methods: \n{}\n{}\n{}\n{}".format(
+            func, leftgrad, rightgrad, gradgrad
+        )
+    )
 
     # try empty tensor
     x = torch.rand(0, 7)
@@ -542,11 +567,12 @@ def test():
 
     # test kernels gradients
     kern = ScaledInput(Normed(DotProd()), scale=torch.rand(3))
-    print('test gradients of kernel: {}'.format(kern.state))
+    print("test gradients of kernel: {}".format(kern.state))
     test_kernel_gradients(kern)
     from torch import tensor
+
     assert eval(kern.state).state == kern.state
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test()

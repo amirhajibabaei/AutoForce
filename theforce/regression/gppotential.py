@@ -1,79 +1,85 @@
 # +
+import copy
+import functools
+import os
+import warnings
+from collections import Counter
+from math import pi
+
 import torch
+from scipy.optimize import minimize
+from torch.distributions import LowRankMultivariateNormal, MultivariateNormal
 from torch.nn import Module
-from torch.distributions import MultivariateNormal, LowRankMultivariateNormal
+
+import theforce.distributed as distrib
+from theforce.descriptor.atoms import AtomsData, Local, LocalsData, TorchAtoms
+from theforce.regression.algebra import (
+    jitcholesky,
+    projected_process_auxiliary_matrices_D,
+)
 from theforce.regression.kernel import White
-from theforce.regression.algebra import jitcholesky, projected_process_auxiliary_matrices_D
 from theforce.regression.scores import coeff_of_determination
 from theforce.similarity.similarity import SimilarityKernel
-from theforce.util.util import iterable, mkdir_p, safe_dirname
 from theforce.util.parallel import if_master
-from theforce.descriptor.atoms import Local, TorchAtoms, AtomsData, LocalsData
-import theforce.distributed as distrib
-from collections import Counter
-from scipy.optimize import minimize
-from math import pi
-import copy
-import os
-import functools
-import warnings
+from theforce.util.util import iterable, mkdir_p, safe_dirname
 
 
 class EnergyForceKernel(Module):
-
     def __init__(self, similaritykernels):
         super().__init__()
         self.kernels = iterable(similaritykernels)
         self.name_kernels()
 
     def add_kernels(self, kernels):
-        self.kernels = [kern for kern in self.kernels] + \
-            [kern for kern in iterable(kernels)]
+        self.kernels = [kern for kern in self.kernels] + [
+            kern for kern in iterable(kernels)
+        ]
         self.name_kernels()
 
     def name_kernels(self):
         for i, kern in enumerate(self.kernels):
-            kern.name = 'kern_{}'.format(i)
+            kern.name = "kern_{}".format(i)
 
     @property
     def params(self):
         return [par for kern in self.kernels for par in kern.params]
 
-    def forward(self, first, second=None, cov='energy_energy', inducing=None):
+    def forward(self, first, second=None, cov="energy_energy", inducing=None):
         sec = first if second is None else second
         if inducing is None:
             return getattr(self, cov)(first, sec)
         else:
-            middle = getattr(self, 'energy_energy')(inducing, inducing)
+            middle = getattr(self, "energy_energy")(inducing, inducing)
             chol, _ = jitcholesky(middle)
             invchol = chol.inverse()
-            lcov, rcov = cov.split('_')
-            left = getattr(self, lcov+'_energy')(first, inducing) @ invchol.t()
+            lcov, rcov = cov.split("_")
+            left = getattr(self, lcov + "_energy")(first, inducing) @ invchol.t()
             if second is None and rcov == lcov:
                 right = left.t()
             else:
-                right = invchol @ getattr(self, 'energy_'+rcov)(inducing, sec)
+                right = invchol @ getattr(self, "energy_" + rcov)(inducing, sec)
             return left, right
 
     def energy_energy(self, first, second):
-        return self.base_kerns(first, second, 'func')
+        return self.base_kerns(first, second, "func")
 
     def forces_energy(self, first, second):
-        return -self.base_kerns(first, second, 'leftgrad')
+        return -self.base_kerns(first, second, "leftgrad")
 
     def energy_forces(self, first, second):
-        return -self.base_kerns(first, second, 'rightgrad')
+        return -self.base_kerns(first, second, "rightgrad")
 
     def forces_forces(self, first, second):
-        return self.base_kerns(first, second, 'gradgrad')
+        return self.base_kerns(first, second, "gradgrad")
 
     def base_kerns(self, first, second, operation):
-        return torch.stack([kern(first, second, operation=operation)
-                            for kern in self.kernels]).sum(dim=0)
+        return torch.stack(
+            [kern(first, second, operation=operation) for kern in self.kernels]
+        ).sum(dim=0)
 
     # diagonal elements:
-    def diag(self, data, operation='energy'):
-        return getattr(self, operation+'_diag')(data)
+    def diag(self, data, operation="energy"):
+        return getattr(self, operation + "_diag")(data)
 
     def full_diag(self, data):
         return self.energy_forces_diag(data)
@@ -82,26 +88,29 @@ class EnergyForceKernel(Module):
         return torch.cat([self.energy_diag(data), self.forces_diag(data)])
 
     def energy_diag(self, data):
-        return self.base_kerns_diag(data, 'func')
+        return self.base_kerns_diag(data, "func")
 
     def forces_diag(self, data):
-        return self.base_kerns_diag(data, 'gradgrad')
+        return self.base_kerns_diag(data, "gradgrad")
 
     def base_kerns_diag(self, data, operation):
-        return torch.stack([kern.diag(data, operation=operation)
-                            for kern in self.kernels]).sum(dim=0)
+        return torch.stack(
+            [kern.diag(data, operation=operation) for kern in self.kernels]
+        ).sum(dim=0)
 
     @property
     def method_caching(self):
-        return [kern.method_caching if hasattr(kern, 'method_caching') else False
-                for kern in self.kernels]
+        return [
+            kern.method_caching if hasattr(kern, "method_caching") else False
+            for kern in self.kernels
+        ]
 
     @method_caching.setter
     def method_caching(self, value):
-        if hasattr(value, '__iter__'):
+        if hasattr(value, "__iter__"):
             val = value
         else:
-            val = len(self.kernels)*[value]
+            val = len(self.kernels) * [value]
         for kern, v in zip(*[self.kernels, val]):
             kern.method_caching = v
 
@@ -114,15 +123,14 @@ class EnergyForceKernel(Module):
 
     @property
     def state_args(self):
-        return '[{}]'.format(', '.join([kern.state for kern in self.kernels]))
+        return "[{}]".format(", ".join([kern.state for kern in self.kernels]))
 
     @property
     def state(self):
-        return 'EnergyForceKernel({})'.format(self.state_args)
+        return "EnergyForceKernel({})".format(self.state_args)
 
 
 class ConstMean:
-
     def __init__(self):
         self.per_atom = torch.zeros([])
         self.unique_params = []
@@ -130,11 +138,11 @@ class ConstMean:
     def set_data(self, data):
         n = torch.as_tensor(data.natoms).view(-1)
         e = torch.stack([atoms.target_energy for atoms in data]).view(-1)
-        self.per_atom = (e/n).mean()
+        self.per_atom = (e / n).mean()
 
     def __call__(self, atoms, forces=False):
         n = len(atoms)
-        e = n*self.per_atom
+        e = n * self.per_atom
         if forces:
             return e, torch.zeros(n, 3)
         else:
@@ -150,18 +158,17 @@ def mean_energy_per_atom_type(data):
             X[i, indices[z]] = c
     N = torch.tensor(data.natoms)
     Y = data.target_energy
-    mean = (Y/N).mean()
-    cov = X.t()@X
+    mean = (Y / N).mean()
+    cov = X.t() @ X
     L, ridge = jitcholesky(cov)
     inv = L.cholesky_inverse()
-    mu = inv@X.t()@(Y-mean*N) + mean
+    mu = inv @ X.t() @ (Y - mean * N) + mean
     weights = {z: w for z, w in zip(types, mu)}
     # max_err = (X@mu-Y).abs().max()
     return weights
 
 
 class DefaultMean:
-
     def __init__(self, weights=None):
         self.weights = {} if weights is None else weights
         self.unique_params = []
@@ -173,7 +180,7 @@ class DefaultMean:
         e = torch.zeros([])
         for number, count in atoms.counts().items():
             if number in self.weights:
-                e += count*self.weights[number]
+                e += count * self.weights[number]
         if forces:
             return e, torch.zeros(len(atoms), 3)
         else:
@@ -185,7 +192,6 @@ class DefaultMean:
 
 
 class AutoMean:
-
     def __init__(self):
         self.weights = {}
 
@@ -199,30 +205,30 @@ class AutoMean:
 
     def set_data(self, data):
         # self._weights = mean_energy_per_atom_type(data) # unstable?
-        self._weights = {z: 0. for z in data.counts().keys()}
+        self._weights = {z: 0.0 for z in data.counts().keys()}
         for z in self._weights.keys():
             if z not in self.weights:
-                self.weights[z] = torch.tensor(0.)
+                self.weights[z] = torch.tensor(0.0)
 
     def __call__(self, atoms, forces=False):
         e = torch.zeros([])
         for z, count in atoms.counts().items():
             if z in self.weights:
-                e += count*(self.weights[z]+self._weights[z])
+                e += count * (self.weights[z] + self._weights[z])
         if forces:
             return e, torch.zeros(len(atoms), 3)
         else:
             return e
 
     def __repr__(self):
-        w = {z: float(self.weights[z]+self._weights[z])
-             for z in self.weights.keys()}
+        w = {z: float(self.weights[z] + self._weights[z]) for z in self.weights.keys()}
         return f"AutoMean({w})"
 
 
 class GaussianProcessPotential(Module):
-
-    def __init__(self, kernels, noise=White(signal=0.01, requires_grad=True), parametric=None):
+    def __init__(
+        self, kernels, noise=White(signal=0.01, requires_grad=True), parametric=None
+    ):
         super().__init__()
         self.kern = EnergyForceKernel(kernels)
         self.noise = noise
@@ -261,27 +267,46 @@ class GaussianProcessPotential(Module):
 
     def forward(self, data, inducing=None):
         if inducing is None:
-            L = torch.cat([self.kern(data, cov='energy_energy'),
-                           self.kern(data, cov='forces_energy')], dim=0)
-            R = torch.cat([self.kern(data, cov='energy_forces'),
-                           self.kern(data, cov='forces_forces')], dim=0)
-            return MultivariateNormal(torch.zeros(L.size(0)),
-                                      covariance_matrix=torch.cat([L, R], dim=1) +
-                                      torch.eye(L.size(0))*self.noise.signal**2)
+            L = torch.cat(
+                [
+                    self.kern(data, cov="energy_energy"),
+                    self.kern(data, cov="forces_energy"),
+                ],
+                dim=0,
+            )
+            R = torch.cat(
+                [
+                    self.kern(data, cov="energy_forces"),
+                    self.kern(data, cov="forces_forces"),
+                ],
+                dim=0,
+            )
+            return MultivariateNormal(
+                torch.zeros(L.size(0)),
+                covariance_matrix=torch.cat([L, R], dim=1)
+                + torch.eye(L.size(0)) * self.noise.signal**2,
+            )
         else:
-            Q = torch.cat([self.kern(data, cov='energy_energy', inducing=inducing)[0],
-                           self.kern(data, cov='forces_forces', inducing=inducing)[0]], dim=0)
-            return LowRankMultivariateNormal(torch.zeros(Q.size(0)), Q, self.diagonal_ridge(data))
+            Q = torch.cat(
+                [
+                    self.kern(data, cov="energy_energy", inducing=inducing)[0],
+                    self.kern(data, cov="forces_forces", inducing=inducing)[0],
+                ],
+                dim=0,
+            )
+            return LowRankMultivariateNormal(
+                torch.zeros(Q.size(0)), Q, self.diagonal_ridge(data)
+            )
 
-    def diagonal_ridge(self, data, operation='full'):
+    def diagonal_ridge(self, data, operation="full"):
         s = self.noise.signal**2
         e_diag = torch.tensor(data.natoms, dtype=s.dtype) * s
-        f_diag = torch.ones(3*sum(data.natoms)) * s
-        if operation == 'energy':
+        f_diag = torch.ones(3 * sum(data.natoms)) * s
+        if operation == "energy":
             return e_diag
-        elif operation == 'forces':
+        elif operation == "forces":
             return f_diag
-        elif operation == 'full':
+        elif operation == "full":
             return torch.cat([e_diag, f_diag])
 
     def mean(self, data, forces=True, cat=True):
@@ -307,16 +332,23 @@ class GaussianProcessPotential(Module):
                 return torch.cat([_e.view(-1) for _e in e])
 
     def Y(self, data):
-        y = torch.cat([torch.tensor([sys.target_energy for sys in data])] +
-                      [sys.target_forces.view(-1) for sys in data])
+        y = torch.cat(
+            [torch.tensor([sys.target_energy for sys in data])]
+            + [sys.target_forces.view(-1) for sys in data]
+        )
         return y - self.mean(data)
 
     def loss(self, data, Y=None, inducing=None, logprob_loss=True, cov_loss=False):
         p = self(data, inducing=inducing)
-        if hasattr(p, 'cov_factor'):
+        if hasattr(p, "cov_factor"):
             if cov_loss:
-                covariance_loss = 0.5 * ((self.kern.diag(data, 'full') - p.cov_factor.pow(2).sum(dim=-1)
-                                          )/self.diagonal_ridge(data)).sum()
+                covariance_loss = (
+                    0.5
+                    * (
+                        (self.kern.diag(data, "full") - p.cov_factor.pow(2).sum(dim=-1))
+                        / self.diagonal_ridge(data)
+                    ).sum()
+                )
             else:
                 covariance_loss = 0
         else:
@@ -340,7 +372,7 @@ class GaussianProcessPotential(Module):
             self.kern.clear_cached()
         else:
             for x in iterable(X):
-                if hasattr(x, 'UID'):
+                if hasattr(x, "UID"):
                     UID = x.UID()
                     for a in self.cached:
                         for b in a.values():
@@ -350,17 +382,18 @@ class GaussianProcessPotential(Module):
 
     @property
     def cached(self):
-        return [kern.cached if hasattr(kern, 'cached') else {}
-                for kern in self.kern.kernels]
+        return [
+            kern.cached if hasattr(kern, "cached") else {} for kern in self.kern.kernels
+        ]
 
     @cached.setter
     def cached(self, values):
-        for kern, val in zip(*[self.kern.kernels, value]):
+        for kern, val in zip(*[self.kern.kernels, values]):
             kern.cached = val
 
     def del_cached(self):
         for kern in self.kern.kernels:
-            if hasattr(kern, 'cached'):
+            if hasattr(kern, "cached"):
                 del kern.cached
 
     def attach_process_group(self, group=distrib.group.WORLD):
@@ -373,26 +406,27 @@ class GaussianProcessPotential(Module):
 
     @property
     def state_args(self):
-        return '{}, noise={}, parametric={}'.format(self.kern.state_args, self.noise.state,
-                                                    self.parametric)
+        return "{}, noise={}, parametric={}".format(
+            self.kern.state_args, self.noise.state, self.parametric
+        )
 
     @property
     def state(self):
-        return 'GaussianProcessPotential({})'.format(self.state_args)
+        return "GaussianProcessPotential({})".format(self.state_args)
 
     def __repr__(self):
         return self.state
 
-    def to_file(self, file, flag='', mode='w'):
+    def to_file(self, file, flag="", mode="w"):
         from theforce.util.util import one_liner
+
         with open(file, mode) as f:
-            f.write('\n#flag: {}\n'.format(flag))
+            f.write("\n#flag: {}\n".format(flag))
             f.write(one_liner(self.state))
-            f.write('\n')
+            f.write("\n")
 
 
 def context_setting(method):
-
     @functools.wraps(method)
     def wrapper(self, *args, use_caching=False, enable_grad=False, **kwargs):
         caching_status = self.gp.method_caching
@@ -406,7 +440,6 @@ def context_setting(method):
 
 
 class PosteriorPotential(Module):
-
     def __init__(self, gp, data=None, inducing=None, group=None, **setting):
         super().__init__()
         if type(gp) == GaussianProcessPotential:
@@ -416,7 +449,7 @@ class PosteriorPotential(Module):
         elif issubclass(gp.__class__, SimilarityKernel):
             self.gp = GaussianProcessPotential([gp])
         else:
-            raise RuntimeError(f'type {type(gp)} is not recognized')
+            raise RuntimeError(f"type {type(gp)} is not recognized")
         if group is not None:
             self.attach_process_group(group)
         else:
@@ -442,20 +475,21 @@ class PosteriorPotential(Module):
         self.data = data
         if inducing is None:
             raise RuntimeWarning(
-                'This (inducing=None) has not been used in long while!')
+                "This (inducing=None) has not been used in long while!"
+            )
             p = self.gp(data, inducing)
             self.X = copy.deepcopy(data)  # TODO: consider not copying
-            self.mu = p.precision_matrix @ (gp.Y(data)-p.loc)
+            self.mu = p.precision_matrix @ (self.gp.Y(data) - p.loc)
             self.nu = p.precision_matrix
             self.has_target_forces = True
         else:
             X = inducing.subset(self.gp.species)
-            self.Ke = self.gp.kern(data, X, cov='energy_energy')
-            self.Kf = self.gp.kern(data, X, cov='forces_energy')
+            self.Ke = self.gp.kern(data, X, cov="energy_energy")
+            self.Kf = self.gp.kern(data, X, cov="forces_energy")
             if data.is_distributed:
                 distrib.all_reduce(self.Ke)
                 distrib.all_reduce(self.Kf)
-            self.M = self.gp.kern(X, X, cov='energy_energy')
+            self.M = self.gp.kern(X, X, cov="energy_energy")
             self.X = X
             self.make_munu()
             self.has_target_forces = False
@@ -511,21 +545,31 @@ class PosteriorPotential(Module):
         if rank == 0:
             if algo == 0:
                 # allocates too much memory
-                self.mu, self.nu, self.ridge, self.choli = projected_process_auxiliary_matrices_D(
-                    self.K, self.M, self.gp.Y(self.data), self.gp.diagonal_ridge(self.data), chol_inverse=True)
+                (
+                    self.mu,
+                    self.nu,
+                    self.ridge,
+                    self.choli,
+                ) = projected_process_auxiliary_matrices_D(
+                    self.K,
+                    self.M,
+                    self.gp.Y(self.data),
+                    self.gp.diagonal_ridge(self.data),
+                    chol_inverse=True,
+                )
             elif algo == 1:
                 L, ridge = jitcholesky(self.M)
                 self.ridge = torch.as_tensor(ridge)
-                #sigma = self.gp.diagonal_ridge(self.data).sqrt()
-                sigma = self.gp.noise.signal*self.M.diag().mean()
+                # sigma = self.gp.diagonal_ridge(self.data).sqrt()
+                sigma = self.gp.noise.signal * self.M.diag().mean()
                 if not noisegrad:
                     sigma = sigma.detach()
-                #A = torch.cat((self.K/sigma.view(-1, 1), L.t()))
-                A = torch.cat((self.K, sigma.view(1)*L.t()))
-                #Y = torch.cat((self.gp.Y(self.data)/sigma, torch.zeros(L.size(0))))
+                # A = torch.cat((self.K/sigma.view(-1, 1), L.t()))
+                A = torch.cat((self.K, sigma.view(1) * L.t()))
+                # Y = torch.cat((self.gp.Y(self.data)/sigma, torch.zeros(L.size(0))))
                 Y = torch.cat((self.gp.Y(self.data), torch.zeros(L.size(0))))
                 Q, R = torch.qr(A)
-                self.mu = (R.inverse()@Q.t()@Y).contiguous()
+                self.mu = (R.inverse() @ Q.t() @ Y).contiguous()
                 # self.nu = None # is not needed anymore
                 self.choli = L.inverse().contiguous()
             elif algo == 2:
@@ -542,8 +586,8 @@ class PosteriorPotential(Module):
             distrib.broadcast(self.choli, 0)
             self.mean.sync_params()
         if not noisegrad and (self.mu.requires_grad or self.choli.requires_grad):
-            warnings.warn('mu or choli requires grad!')
-        self.Mi = self.choli.t()@self.choli
+            warnings.warn("mu or choli requires grad!")
+        self.Mi = self.choli.t() @ self.choli
         self.make_stats()
 
     def optimize_model_parameters(self, **kw):
@@ -553,16 +597,20 @@ class PosteriorPotential(Module):
         n = len(self.data)
         if data_and_pred is None:
             y = self.gp.Y(self.data)
-            yy = self.K@self.mu
+            yy = self.K @ self.mu
         else:
             y, yy = data_and_pred
         diff = yy - y
-        self._ediff = diff[:n]/torch.tensor(self.data.natoms)
+        self._ediff = diff[:n] / torch.tensor(self.data.natoms)
         self._fdiff = diff[n:]
         self._force_r2 = coeff_of_determination(yy[n:], y[n:])
-        self._stats = [self._ediff.mean(), self._ediff.abs().mean(),
-                       self._fdiff.mean(), self._fdiff.abs().mean(),
-                       self._force_r2]
+        self._stats = [
+            self._ediff.mean(),
+            self._ediff.abs().mean(),
+            self._fdiff.mean(),
+            self._fdiff.abs().mean(),
+            self._force_r2,
+        ]
         # forces info
         self._f_max = y[n:].abs().max()
         self._f_std = y[n:].var().sqrt()
@@ -579,10 +627,10 @@ class PosteriorPotential(Module):
         # _vscale *[ k(x,x) - k(x,m)k(m,m)^{-1}k(m,x) ]
         self.indu_numbers = torch.tensor([x.number for x in self.X])
         self._vscale = {}
-        mu = self.mu*(self.M@self.mu)
+        mu = self.mu * (self.M @ self.mu)
         for z in self.indu_counts.keys():
             I = self.indu_numbers == z
-            self._vscale[z] = mu[I].sum()/I.sum()
+            self._vscale[z] = mu[I].sum() / I.sum()
 
     @property
     def sigma_e(self):
@@ -593,24 +641,24 @@ class PosteriorPotential(Module):
         return self._stats[3]
 
     def is_ok(self):
-        e_ok = (self._stats[0]-self._stats[1]) * \
-            (self._stats[0]+self._stats[1]) < 0
-        f_ok = (self._stats[2]-self._stats[3]) * \
-            (self._stats[2]+self._stats[3]) < 0
+        e_ok = (self._stats[0] - self._stats[1]) * (self._stats[0] + self._stats[1]) < 0
+        f_ok = (self._stats[2] - self._stats[3]) * (self._stats[2] + self._stats[3]) < 0
         return e_ok and f_ok
 
     def is_well(self, a=None, b=None):
-        x = True if a is None else abs(self._stats[0]) < a*self._stats[1]
-        y = True if b is None else abs(self._stats[2]) < b*self._stats[3]
+        x = True if a is None else abs(self._stats[0]) < a * self._stats[1]
+        y = True if b is None else abs(self._stats[2]) < b * self._stats[3]
         return all([self.is_ok(), x, y])
 
-    def tune_noise(self, a=None, b=None, lr=1., min_steps=0, weighted=lambda a: a, verbose=False):
-
+    def tune_noise(
+        self, a=None, b=None, lr=1.0, min_steps=0, weighted=lambda a: a, verbose=False
+    ):
         def step():
             opt.zero_grad()
             self.make_munu(noisegrad=True)
-            losses = -torch.distributions.normal.Normal(
-                0., self._stats[1]).log_prob(self._ediff)
+            losses = -torch.distributions.normal.Normal(0.0, self._stats[1]).log_prob(
+                self._ediff
+            )
             loss = weighted(losses).sum()
             loss.backward()
             opt.step()
@@ -630,21 +678,22 @@ class PosteriorPotential(Module):
                 _min_step = steps
             if verbose:
                 print(
-                    f'{steps}  loss: {loss}  noise: {self.gp.noise.signal}  global: ({_min_step})')
+                    f"{steps}  loss: {loss}  noise: {self.gp.noise.signal}  global: ({_min_step})"
+                )
         self.make_munu(noisegrad=False)
         return steps, _min, _min_arg
 
     @property
     def ref_M(self):
-        return self.M + self.ridge*torch.eye(self.M.size(0))
+        return self.M + self.ridge * torch.eye(self.M.size(0))
 
     @context_setting
     def leakage(self, loc):
-        a = self.gp.kern(self.X, loc, cov='energy_energy')
+        a = self.gp.kern(self.X, loc, cov="energy_energy")
         b = self.choli @ a
-        c = b.t()@b
-        d = self.gp.kern(loc, loc, cov='energy_energy') + self.ridge
-        return (1-c/d).view(1)
+        c = b.t() @ b
+        d = self.gp.kern(loc, loc, cov="energy_energy") + self.ridge
+        return (1 - c / d).view(1)
 
     def leakages(self, X):
         return torch.cat([self.leakage(x) for x in iterable(X)])
@@ -655,7 +704,7 @@ class PosteriorPotential(Module):
 
     def add_kernels(self, kernels, remake_all=True):
         self.gp.add_kernels(kernels)
-        self.data.apply('add_descriptors', kernels, dont_save_grads=False)
+        self.data.apply("add_descriptors", kernels, dont_save_grads=False)
         self.inducing.stage(kernels, dont_save_grads=True)
         if remake_all:
             self.remake_all()
@@ -663,9 +712,9 @@ class PosteriorPotential(Module):
     @context_setting
     def add_data(self, data, remake=True):
         assert data[0].includes_species(self.gp.species)
-        Ke = self.gp.kern(data, self.X, cov='energy_energy')
-        Kf = self.gp.kern(data, self.X, cov='forces_energy')
-        if (data[0].is_distributed if type(data) == list else data.is_distributed):
+        Ke = self.gp.kern(data, self.X, cov="energy_energy")
+        Kf = self.gp.kern(data, self.X, cov="forces_energy")
+        if data[0].is_distributed if type(data) == list else data.is_distributed:
             distrib.all_reduce(Ke)
             distrib.all_reduce(Kf)
         self.Ke = torch.cat([self.Ke, Ke], dim=0)
@@ -677,8 +726,8 @@ class PosteriorPotential(Module):
     @context_setting
     def add_inducing(self, X, col=None, remake=True):
         assert X.number in self.gp.species
-        Ke = self.gp.kern(self.data, X, cov='energy_energy')
-        Kf = self.gp.kern(self.data, X, cov='forces_energy')
+        Ke = self.gp.kern(self.data, X, cov="energy_energy")
+        Kf = self.gp.kern(self.data, X, cov="forces_energy")
         if self.data.is_distributed:
             distrib.all_reduce(Ke)
             distrib.all_reduce(Kf)
@@ -689,19 +738,18 @@ class PosteriorPotential(Module):
             self.Ke = Ke
             self.Kf = Kf
         if col is None:
-            a = self.gp.kern(self.X, X, cov='energy_energy')
+            a = self.gp.kern(self.X, X, cov="energy_energy")
         else:
             a = col
-        b = self.gp.kern(X, X, cov='energy_energy')
-        self.M = torch.cat(
-            [torch.cat([self.M, a.t()]), torch.cat([a, b])], dim=1)
+        b = self.gp.kern(X, X, cov="energy_energy")
+        self.M = torch.cat([torch.cat([self.M, a.t()]), torch.cat([a, b])], dim=1)
         self.X += X
         if remake:
             self.make_munu()
 
     def pop_1data(self, remake=True, clear_cached=True):
         self.Ke = self.Ke[:-1]
-        self.Kf = self.Kf[:-3*self.data[-1].natoms]
+        self.Kf = self.Kf[: -3 * self.data[-1].natoms]
         if clear_cached:
             self.gp.clear_cached([self.data.X[-1]])
         del self.data.X[-1]
@@ -720,7 +768,7 @@ class PosteriorPotential(Module):
 
     def popfirst_1data(self, remake=True, clear_cached=True):
         self.Ke = self.Ke[1:]
-        self.Kf = self.Kf[3*self.data[0].natoms:]
+        self.Kf = self.Kf[3 * self.data[0].natoms :]
         if clear_cached:
             self.gp.clear_cached([self.data.X[0]])
         del self.data.X[0]
@@ -742,7 +790,7 @@ class PosteriorPotential(Module):
         lii: remove least important inducing
         """
         if any([x.requires_grad for x in (self.M, self.Ke, self.Kf)]):
-            raise RuntimeError('cov matrices require grad!')
+            raise RuntimeError("cov matrices require grad!")
         ch1 = 0
         while len(self.data) > n:
             if first:
@@ -767,41 +815,39 @@ class PosteriorPotential(Module):
         return ch1, ch2
 
     def add_1atoms(self, atoms, ediff, fdiff):
-        """ ediff here is ediff_tot """
+        """ediff here is ediff_tot"""
         if not atoms.includes_species(self.gp.species):
             return 0, 0, 0
-        kwargs = {'use_caching': True}
+        kwargs = {"use_caching": True}
         #
         if len(self.data) == 0:
             if len(self.X) > 0:
                 self.add_data([atoms], **kwargs)
             else:
                 self.data.append(atoms)
-            return 1, float('inf'), float('inf')
+            return 1, float("inf"), float("inf")
         #
-        use_forces = fdiff < float('inf') and not self.ignore_forces
+        use_forces = fdiff < float("inf") and not self.ignore_forces
         #
         e1 = self([atoms], all_reduce=atoms.is_distributed, **kwargs)
         if use_forces:
-            f1 = self([atoms], 'forces',
-                      all_reduce=atoms.is_distributed, **kwargs)
+            f1 = self([atoms], "forces", all_reduce=atoms.is_distributed, **kwargs)
         self.add_data([atoms], **kwargs)
         e2 = self([atoms], all_reduce=atoms.is_distributed, **kwargs)
         if use_forces:
-            f2 = self([atoms], 'forces',
-                      all_reduce=atoms.is_distributed, **kwargs)
+            f2 = self([atoms], "forces", all_reduce=atoms.is_distributed, **kwargs)
         #
-        de = abs(e1-e2)
-        df = 0.
+        de = abs(e1 - e2)
+        df = 0.0
         if not use_forces:
             reject = de < ediff
         else:
             # TODO: better algorithm!
-            d = (f2-f1).view(-1)
+            d = (f2 - f1).view(-1)
             df = d.abs().mean()
             df_max = d.abs().max()
-            #reject = de < ediff and df < fdiff and df_max < 3*fdiff
-            N = torch.distributions.Normal(0., fdiff)
+            # reject = de < ediff and df < fdiff and df_max < 3*fdiff
+            N = torch.distributions.Normal(0.0, fdiff)
             reject = de < ediff and N.log_prob(d).mean() > N.log_prob(fdiff)
         #
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
@@ -813,27 +859,27 @@ class PosteriorPotential(Module):
         return added, de, df
 
     def add_1atoms_fast(self, atoms, ediff, fdiff, xyz, cov, is_distributed):
-        """ ediff here is ediff_tot """
+        """ediff here is ediff_tot"""
         if not atoms.includes_species(self.gp.species):
             return 0, 0, 0
-        kwargs = {'use_caching': True}
+        kwargs = {"use_caching": True}
         #
         if len(self.data) == 0:
             if len(self.X) > 0:
                 self.add_data([atoms], **kwargs)
             else:
                 self.data.append(atoms)
-            return 1, float('inf'), float('inf')
+            return 1, float("inf"), float("inf")
         #
-        use_forces = fdiff < float('inf') and not self.ignore_forces
+        use_forces = fdiff < float("inf") and not self.ignore_forces
         f1 = torch.zeros_like(xyz)
         f2 = torch.zeros_like(xyz)
         #
-        e1 = (cov@self.mu).sum().view(1)
+        e1 = (cov @ self.mu).sum().view(1)
         if e1.grad_fn and use_forces:
             f1 = -torch.autograd.grad(e1, xyz, retain_graph=True)[0]
         self.add_data([atoms], **kwargs)
-        e2 = (cov@self.mu).sum().view(1)
+        e2 = (cov @ self.mu).sum().view(1)
         if e2.grad_fn and use_forces:
             f2 = -torch.autograd.grad(e2, xyz, retain_graph=True)[0]
         if is_distributed:
@@ -843,21 +889,20 @@ class PosteriorPotential(Module):
                 distrib.all_reduce(f1)
                 distrib.all_reduce(f2)
         #
-        de = abs(e1-e2)
-        df = 0.
+        de = abs(e1 - e2)
+        df = 0.0
         if not use_forces:
             reject = de < ediff
         else:
             # TODO: better algorithm!
-            d = (f2-f1).view(-1)
+            d = (f2 - f1).view(-1)
             df = d.abs().mean()
             df_max = d.abs().max()
             fdiff_t = torch.tensor(fdiff)
-            #reject = de < ediff and df < fdiff and df_max < 3*fdiff
-            N = torch.distributions.Normal(0., fdiff_t)
+            # reject = de < ediff and df < fdiff and df_max < 3*fdiff
+            N = torch.distributions.Normal(0.0, fdiff_t)
             # reject = de < ediff and N.log_prob(d).mean() > N.log_prob(fdiff_t)
-            reject = (N.log_prob(d).mean() > N.log_prob(fdiff_t) and
-                      df_max < 3*fdiff)
+            reject = N.log_prob(d).mean() > N.log_prob(fdiff_t) and df_max < 3 * fdiff
         #
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
         if reject and not blind:
@@ -869,8 +914,8 @@ class PosteriorPotential(Module):
 
     def add_1inducing(self, _loc, ediff, detach=True):
         if _loc.number not in self.gp.species:
-            return 0, 0.
-        kwargs = {'use_caching': True}
+            return 0, 0.0
+        kwargs = {"use_caching": True}
         if detach:
             loc = _loc.detach()
             loc.stage(self.gp.kern.kernels, dont_save_grads=True)
@@ -882,14 +927,14 @@ class PosteriorPotential(Module):
                 self.add_inducing(loc, **kwargs)
             else:
                 self.X += loc
-            return 1, float('inf')
+            return 1, float("inf")
         #
         e1 = self(loc, **kwargs)
         self.add_inducing(loc, **kwargs)
         e2 = self(loc, **kwargs)
-        de = abs(e1-e2)
+        de = abs(e1 - e2)
         blind = torch.cat([e1, e2]).allclose(torch.zeros(1))
-        if (de < ediff and not blind) or self.ridge > 0.:
+        if (de < ediff and not blind) or self.ridge > 0.0:
             self.pop_1inducing(clear_cached=True)
             added = 0
         else:
@@ -897,11 +942,12 @@ class PosteriorPotential(Module):
         return added, de
 
     def add_ninducing(self, _locs, ediff, detach=True, descending=True, leaks=None):
-        selected = torch.as_tensor([i for i, loc in enumerate(_locs)
-                                    if loc.number in self.gp.species])
+        selected = torch.as_tensor(
+            [i for i, loc in enumerate(_locs) if loc.number in self.gp.species]
+        )
         locs = [_locs[i] for i in selected]
         if len(locs) == 0:
-            return 0, 0.
+            return 0, 0.0
         if descending:
             if leaks is None:
                 _leaks = self.leakages(locs)
@@ -931,8 +977,12 @@ class PosteriorPotential(Module):
         else:
             if group is None and distrib.is_initialized():
                 group = distrib.group.WORLD
-            obj = TorchAtoms(ase_atoms=_obj, cutoff=self.cutoff,
-                             descriptors=self.descriptors, group=group)
+            obj = TorchAtoms(
+                ase_atoms=_obj,
+                cutoff=self.cutoff,
+                descriptors=self.descriptors,
+                group=group,
+            )
         return obj
 
     def eat(self, _atoms, ediff, fdiff, group=None):
@@ -977,7 +1027,8 @@ class PosteriorPotential(Module):
         self.is_distributed = False
 
     def train(self, *args, **kwargs):
-        train_gpp(self.gp, *args, **kwargs)
+        # train_gpp(self.gp, *args, **kwargs)
+        raise RuntimeError
 
     def save(self, file, supress_warnings=True):
         cached = self.gp.cached
@@ -993,59 +1044,64 @@ class PosteriorPotential(Module):
         self.gp.cahced = cached
 
     @if_master
-    def to_folder(self, folder, info=None, overwrite=True, supress_warnings=True, pickle_data=False,
-                  to_traj=False):
+    def to_folder(
+        self,
+        folder,
+        info=None,
+        overwrite=True,
+        supress_warnings=True,
+        pickle_data=False,
+        to_traj=False,
+    ):
         if pickle_data and self.data.is_distributed:
             raise NotImplementedError(
-                'trying to pickle data which is distributed! call gathere_() first!')
+                "trying to pickle data which is distributed! call gathere_() first!"
+            )
         if not overwrite:
             folder = safe_dirname(folder)
         mkdir_p(folder)
-        with open(os.path.join(folder, 'cutoff'), 'w') as file:
-            file.write('{}\n'.format(self.cutoff))
+        with open(os.path.join(folder, "cutoff"), "w") as file:
+            file.write("{}\n".format(self.cutoff))
         if to_traj:  # not necessary, data will be pickled as self._raw_data
-            self.data.to_traj(os.path.join(folder, 'data.traj'))
-            self.X.to_traj(os.path.join(folder, 'inducing.traj'))
-        self.gp.to_file(os.path.join(folder, 'gp'))
-        self.save(os.path.join(folder, 'model'),
-                  supress_warnings=supress_warnings)
+            self.data.to_traj(os.path.join(folder, "data.traj"))
+            self.X.to_traj(os.path.join(folder, "inducing.traj"))
+        self.gp.to_file(os.path.join(folder, "gp"))
+        self.save(os.path.join(folder, "model"), supress_warnings=supress_warnings)
         # pickles (inducing are pickled with model)
         if pickle_data:
             with warnings.catch_warnings():
                 if supress_warnings:
                     warnings.simplefilter("ignore")
-                torch.save(self.data, os.path.join(folder, 'data.pckl'))
+                torch.save(self.data, os.path.join(folder, "data.pckl"))
         # info
-        with open(os.path.join(folder, 'info'), 'w') as file:
-            file.write('data: {}, inducing: {}\n'.format(
-                len(self.data), len(self.X)))
+        with open(os.path.join(folder, "info"), "w") as file:
+            file.write("data: {}, inducing: {}\n".format(len(self.data), len(self.X)))
             if info is not None:
                 if type(info) == str:
-                    file.write('{}\n'.format(info))
-                elif hasattr(info, '__iter__'):
+                    file.write("{}\n".format(info))
+                elif hasattr(info, "__iter__"):
                     for inf in info:
-                        file.write('{}\n'.format(inf))
+                        file.write("{}\n".format(inf))
                 else:
-                    file.write('{}\n'.format(info))
+                    file.write("{}\n".format(info))
         # stats
-        with open(os.path.join(folder, 'stats'), 'w') as file:
+        with open(os.path.join(folder, "stats"), "w") as file:
             e1, e2, f1, f2, r2 = (float(v) for v in self._stats)
-            file.write(f'ediff -> mean: {e1} std: {e2}  ')
-            file.write(f'fdiff -> mean: {f1} std: {f2}  ')
-            file.write(f'R2: {r2}\n')
+            file.write(f"ediff -> mean: {e1} std: {e2}  ")
+            file.write(f"fdiff -> mean: {f1} std: {f2}  ")
+            file.write(f"R2: {r2}\n")
 
     @context_setting
-    def forward(self, test, quant='energy', variance=False, all_reduce=False):
-        shape = {'energy': (-1,), 'forces': (-1, 3)}
-        A = self.gp.kern(test, self.X, cov=quant+'_energy')
+    def forward(self, test, quant="energy", variance=False, all_reduce=False):
+        shape = {"energy": (-1,), "forces": (-1, 3)}
+        A = self.gp.kern(test, self.X, cov=quant + "_energy")
         if self.has_target_forces:
-            A = torch.cat([A, self.gp.kern(test, self.X, cov=quant+'_forces')],
-                          dim=1)
+            A = torch.cat([A, self.gp.kern(test, self.X, cov=quant + "_forces")], dim=1)
         out = (A @ self.mu).view(*shape[quant])
         if all_reduce:
             distrib.all_reduce(out)
         # mean is not distributed!
-        if quant == 'energy':
+        if quant == "energy":
             mean = self.mean(test, forces=False)
         else:
             _, mean = self.mean(test, forces=True)
@@ -1053,9 +1109,11 @@ class PosteriorPotential(Module):
         if variance:
             if all_reduce:
                 raise NotImplementedError(
-                    'all_reduce with variance=True is not implemented')
-            var = (self.gp.kern.diag(test, quant) -
-                   (A @ self.nu @ A.t()).diag()).view(*shape[quant])
+                    "all_reduce with variance=True is not implemented"
+                )
+            var = (self.gp.kern.diag(test, quant) - (A @ self.nu @ A.t()).diag()).view(
+                *shape[quant]
+            )
             return out, var
         else:
             return out
@@ -1064,14 +1122,13 @@ class PosteriorPotential(Module):
     def predict(self, test, variance=False):
         if self.gp.parametric is not None:
             raise NotImplementedError(
-                'this method is not updated to include parametric potential')
-        A = self.gp.kern(test, self.X, cov='energy_energy')
-        B = self.gp.kern(test, self.X, cov='forces_energy')
+                "this method is not updated to include parametric potential"
+            )
+        A = self.gp.kern(test, self.X, cov="energy_energy")
+        B = self.gp.kern(test, self.X, cov="forces_energy")
         if self.has_target_forces:
-            A = torch.cat([A, self.gp.kern(test, self.X, cov='energy_forces')],
-                          dim=1)
-            B = torch.cat([B, self.gp.kern(test, self.X, cov='forces_forces')],
-                          dim=1)
+            A = torch.cat([A, self.gp.kern(test, self.X, cov="energy_forces")], dim=1)
+            B = torch.cat([B, self.gp.kern(test, self.X, cov="forces_forces")], dim=1)
 
         em, fm = self.mean(test, forces=True)
         energy = A @ self.mu + em
@@ -1080,21 +1137,23 @@ class PosteriorPotential(Module):
         out = (energy, forces.view(-1, 3))
 
         if variance:
-            energy_var = (self.gp.kern.diag(test, 'energy') -
-                          (A @ self.nu @ A.t()).diag())
-            forces_var = (self.gp.kern.diag(test, 'forces') -
-                          (B @ self.nu @ B.t()).diag())
+            energy_var = (
+                self.gp.kern.diag(test, "energy") - (A @ self.nu @ A.t()).diag()
+            )
+            forces_var = (
+                self.gp.kern.diag(test, "forces") - (B @ self.nu @ B.t()).diag()
+            )
             out += (energy_var, forces_var.view(-1, 3))
 
         return out
 
 
 def to_0_1(x):
-    return 1/x.neg().exp().add(1.)
+    return 1 / x.neg().exp().add(1.0)
 
 
 def to_inf_inf(y):
-    return (y/y.neg().add(1.)).log()
+    return (y / y.neg().add(1.0)).log()
 
 
 def kldiv_normal(y, sigma):
@@ -1102,36 +1161,38 @@ def kldiv_normal(y, sigma):
     may be unstable because of often small length of y
     compared to the number of bins.
     """
-    delta = sigma/10
-    width = 10*sigma
+    delta = sigma / 10
+    width = 10 * sigma
     x = torch.arange(0, width, delta)
     x = torch.cat([-x.flip(0)[:-1], x])
-    p = (y.view(-1)-x.view(-1, 1)).div(delta).pow(2).mul(-0.5).exp().sum(dim=1)
-    nrm = torch.tensor(2*pi).sqrt()*delta
-    p = (p/(y.numel()*nrm)).clamp(min=1e-8)
-    q = torch.distributions.Normal(0., sigma)
-    #loss = -(p*q.log_prob(x)).sum()
-    loss = (p.log()-q.log_prob(x)).mul(p).sum()*delta
+    p = (y.view(-1) - x.view(-1, 1)).div(delta).pow(2).mul(-0.5).exp().sum(dim=1)
+    nrm = torch.tensor(2 * pi).sqrt() * delta
+    p = (p / (y.numel() * nrm)).clamp(min=1e-8)
+    q = torch.distributions.Normal(0.0, sigma)
+    # loss = -(p*q.log_prob(x)).sum()
+    loss = (p.log() - q.log_prob(x)).mul(p).sum() * delta
     return loss
 
 
-def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=True, wjac=True):
+def _regression(
+    self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=True, wjac=True
+):
 
     if self.ignore_forces:
-        raise RuntimeError('ignore_forces is deprecated!')
+        raise RuntimeError("ignore_forces is deprecated!")
 
-    if not hasattr(self, '_noise'):
+    if not hasattr(self, "_noise"):
         self._noise = {}
 
     if noise_f is None:
-        noise_f = 0.
+        noise_f = 0.0
 
     #
     scale = {}
     if same_sigma:
-        if 'all' not in self._noise:
-            self._noise['all'] = to_inf_inf(self.gp.noise.signal.detach())
-        scale['all'] = self.M.diag().mean() * max_noise
+        if "all" not in self._noise:
+            self._noise["all"] = to_inf_inf(self.gp.noise.signal.detach())
+        scale["all"] = self.M.diag().mean() * max_noise
     else:
         numbers = torch.tensor([x.number for x in self.X])
         zset = numbers.unique().tolist()
@@ -1152,13 +1213,13 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
 
     def make_mu(with_energies=None):
         if same_sigma:
-            sigma = to_0_1(self._noise['all'])*scale['all']
-            sigma = sigma*torch.eye(L.shape[0])
+            sigma = to_0_1(self._noise["all"]) * scale["all"]
+            sigma = sigma * torch.eye(L.shape[0])
         else:
             sigma = 0
             for z in zset:
-                sigma_z = to_0_1(self._noise[z])*scale[z]
-                sigma = sigma + (numbers == z).type(L.type())*sigma_z
+                sigma_z = to_0_1(self._noise[z]) * scale[z]
+                sigma = sigma + (numbers == z).type(L.type()) * sigma_z
             sigma = sigma.diag()
         if with_energies is None:
             _K = self.Kf
@@ -1166,10 +1227,10 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
         else:
             _K = self.K
             _Y = torch.cat([with_energies, Y])
-        A = torch.cat((_K, sigma@L.t()))
+        A = torch.cat((_K, sigma @ L.t()))
         Q, R = torch.qr(A)
-        self.mu = (R.inverse()@Q.t()@_Y).contiguous()
-        diff = self.Kf@self.mu - forces
+        self.mu = (R.inverse() @ Q.t() @ _Y).contiguous()
+        diff = self.Kf @ self.mu - forces
         return diff
 
     # ------------ optimize mu ------------
@@ -1213,10 +1274,9 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
     # make mu
     make_mu()
     if self.mu.requires_grad:
-        warnings.warn('why does mu require grad?!')
+        warnings.warn("why does mu require grad?!")
         self.mu = self.mu.detach()
-    self.scaled_noise = {a: float(to_0_1(b)*scale[a])
-                         for a, b in self._noise.items()}
+    self.scaled_noise = {a: float(to_0_1(b) * scale[a]) for a, b in self._noise.items()}
 
     # ------------ optimize mean ------------
     def objective_mean(w, keys, jac):
@@ -1225,7 +1285,7 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
             if jac:
                 self.mean.weights[key].requires_grad = True
         mean = self.gp.mean(data, forces=False)
-        diff = (mean - delta_energies)/N
+        diff = (mean - delta_energies) / N
         loss = diff.pow(2).mean()
         if jac:
             loss.backward()
@@ -1236,7 +1296,7 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
 
     if optimize:
         N = torch.tensor(data.natoms)
-        delta_energies = energies - self.Ke@self.mu
+        delta_energies = energies - self.Ke @ self.mu
         keys = sorted(self.mean.weights.keys())
         x0 = [float(self.mean.weights[key]) for key in keys]
         res = minimize(objective_mean, x0=x0, jac=wjac, args=(keys, wjac))
@@ -1248,26 +1308,30 @@ def _regression(self, optimize=False, noise_f=None, max_noise=0.99, same_sigma=T
     make_mu(with_energies=residual)
 
 
-def PosteriorPotentialFromFolder(folder, load_data=True, update_data=True, group=None, distrib=None):
+def PosteriorPotentialFromFolder(
+    folder, load_data=True, update_data=True, group=None, distrib=None
+):
     from theforce.descriptor.atoms import AtomsData
     from theforce.util.caching import strip_uid
-    self = torch.load(os.path.join(folder, 'model'))
+
+    self = torch.load(os.path.join(folder, "model"))
     strip_uid(self.X)
     if load_data:
-        if os.path.isfile(os.path.join(folder, 'data.pckl')):
-            self.data = torch.load(os.path.join(folder, 'data.pckl'))
+        if os.path.isfile(os.path.join(folder, "data.pckl")):
+            self.data = torch.load(os.path.join(folder, "data.pckl"))
             strip_uid(self.data)
             if group:
                 self.data.distribute_(group)
         else:
-            if hasattr(self, '_raw_data'):
+            if hasattr(self, "_raw_data"):
                 self.data = AtomsData(
-                    self._raw_data, convert=True, group=group, ranks=distrib)
+                    self._raw_data, convert=True, group=group, ranks=distrib
+                )
                 del self._raw_data
             else:  # for backward compatibility
-                self.data = AtomsData(traj=os.path.join(folder, 'data.traj'),
-                                      group=group, ranks=distrib)
+                self.data = AtomsData(
+                    traj=os.path.join(folder, "data.traj"), group=group, ranks=distrib
+                )
             if update_data:
-                self.data.update(
-                    cutoff=self.cutoff, descriptors=self.gp.kern.kernels)
+                self.data.update(cutoff=self.cutoff, descriptors=self.gp.kern.kernels)
     return self

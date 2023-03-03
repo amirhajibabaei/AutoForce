@@ -1,16 +1,27 @@
 # +
-import theforce.cl as cline
-from theforce.calculator.active import FilterDeltas
-from ase import optimize
-from ase.constraints import UnitCellFilter
-from ase.io import read
-from ase import units
-import numpy as np
 import os
 
+import numpy as np
+from ase import optimize, units
+from ase.constraints import UnitCellFilter
+from ase.io import read
 
-def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='relax.traj', rattle=0.02,
-          clear_hist=False, confirm=True, calc=None):
+import theforce.cl as cline
+from theforce.calculator.active import FilterDeltas
+
+
+def relax(
+    atoms,
+    fmax=0.01,
+    cell=False,
+    mask=None,
+    algo="BFGS",
+    trajectory="relax.traj",
+    rattle=0.02,
+    clear_hist=False,
+    confirm=True,
+    calc=None,
+):
     """
     atoms:        ASE atoms
     fmax:         maximum forces
@@ -57,8 +68,8 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='rela
             else:
                 break
 
-        ML = ('ML', calc.results['energy'], calc.results['forces'])
-        Ab = ('Ab initio', *calc._test())
+        ML = ("ML", calc.results["energy"], calc.results["forces"])
+        Ab = ("Ab initio", *calc._test())
         for method, energy, forces in [ML, Ab]:
             f_rms = np.sqrt(np.mean(forces**2))
             f_max = abs(forces).max()
@@ -72,17 +83,29 @@ def relax(atoms, fmax=0.01, cell=False, mask=None, algo='BFGS', trajectory='rela
                 print(report)
 
     if master:
-        print(f'\tTotal number of Ab initio calculations: {load2-load1}\n')
+        print(f"\tTotal number of Ab initio calculations: {load2-load1}\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(
-        description='Machine Learning accelerated relaxation')
-    parser.add_argument('-i', '--input', default='POSCAR', type=str,
-                        help='the initial coordinates of atoms, POSCAR, xyz, cif, etc.')
-    parser.add_argument('-o', '--output', default='CONTCAR', type=str,
-                        help='the final coordinates of atoms')
+        description="Machine Learning accelerated relaxation"
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        default="POSCAR",
+        type=str,
+        help="the initial coordinates of atoms, POSCAR, xyz, cif, etc.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="CONTCAR",
+        type=str,
+        help="the final coordinates of atoms",
+    )
     args = parser.parse_args()
     atoms = read(args.input)
     kwargs = cline.get_default_args(relax)
@@ -92,7 +115,8 @@ if __name__ == '__main__':
         atoms.write(args.output)
     except:
         import warnings
-        alt = 'active_optimized.xyz'
-        msg = f'writing to {args.output} failed -> wrote {alt}'
+
+        alt = "active_optimized.xyz"
+        msg = f"writing to {args.output} failed -> wrote {alt}"
         warnings.warn(msg)
-        atoms.write(alt, format='extxyz')
+        atoms.write(alt, format="extxyz")

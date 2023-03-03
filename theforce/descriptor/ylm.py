@@ -1,34 +1,36 @@
 # +
+from math import pi as math_pi
+
 import torch
 from torch.nn.modules import Module
-from math import pi as math_pi
+
 pi = torch.tensor(math_pi)
 
 
 def split_and_rotate_tiny_if_too_close_to_zaxis(xyz, tiny_angle=1e-2):
     """
-    tiny_angle is chosen such that the calculated gradients (in Ylm) are 
+    tiny_angle is chosen such that the calculated gradients (in Ylm) are
     consistent with torch.autograd.
     This depends both on precision and scale of xyz.
     """
-    tol = tiny_angle*xyz[:, 2].abs()
+    tol = tiny_angle * xyz[:, 2].abs()
     if ((xyz[:, 0].abs() < tol) & (xyz[:, 1].abs() < tol)).any():
         x = xyz[:, 0]
-        y = xyz[:, 1] - tiny_angle*xyz[:, 2]
-        z = tiny_angle*xyz[:, 1] + xyz[:, 2]
+        y = xyz[:, 1] - tiny_angle * xyz[:, 2]
+        z = tiny_angle * xyz[:, 1] + xyz[:, 2]
         return x, y, z, tiny_angle
     else:
         return xyz[:, 0], xyz[:, 1], xyz[:, 2], 0
 
 
 def cart_coord_to_trig(x, y, z):
-    rxy_sq = x*x + y*y
+    rxy_sq = x * x + y * y
     rxy = rxy_sq.sqrt()
-    r = (rxy_sq + z*z).sqrt()
-    sin_theta = rxy/r
-    cos_theta = z/r
-    sin_phi = y/rxy
-    cos_phi = x/rxy
+    r = (rxy_sq + z * z).sqrt()
+    sin_theta = rxy / r
+    cos_theta = z / r
+    sin_phi = y / rxy
+    cos_phi = x / rxy
     return r, sin_theta, cos_theta, sin_phi, cos_phi
 
 
@@ -51,39 +53,57 @@ class Ylm(Module):
         self.lmax = lmax
 
         # pre-calculate
-        self.Yoo = torch.sqrt(1./(4*pi))
-        self.alp_al = 2*[[]] + [torch.tensor([torch.tensor((4.*l*l-1.)/(l*l-m*m)).sqrt()
-                                              for m in range(l-1)])[:, None]
-                                for l in range(2, lmax+1)]
-        self.alp_bl = 2*[[]] + [torch.tensor([-torch.tensor(((l-1.)**2-m*m)/(4*(l-1.)**2-1)).sqrt()
-                                              for m in range(l-1)])[:, None]
-                                for l in range(2, lmax+1)]
-        self.alp_cl = [torch.tensor(2.*l+1.).sqrt()
-                       for l in range(lmax+1)]
-        self.alp_dl = [[]] + [-torch.tensor(1.+1./(2.*l)).sqrt()
-                              for l in range(1, lmax+1)]
+        self.Yoo = torch.sqrt(1.0 / (4 * pi))
+        self.alp_al = 2 * [[]] + [
+            torch.tensor(
+                [
+                    torch.tensor((4.0 * l * l - 1.0) / (l * l - m * m)).sqrt()
+                    for m in range(l - 1)
+                ]
+            )[:, None]
+            for l in range(2, lmax + 1)
+        ]
+        self.alp_bl = 2 * [[]] + [
+            torch.tensor(
+                [
+                    -torch.tensor(
+                        ((l - 1.0) ** 2 - m * m) / (4 * (l - 1.0) ** 2 - 1)
+                    ).sqrt()
+                    for m in range(l - 1)
+                ]
+            )[:, None]
+            for l in range(2, lmax + 1)
+        ]
+        self.alp_cl = [torch.tensor(2.0 * l + 1.0).sqrt() for l in range(lmax + 1)]
+        self.alp_dl = [[]] + [
+            -torch.tensor(1.0 + 1.0 / (2.0 * l)).sqrt() for l in range(1, lmax + 1)
+        ]
 
         # indices: for traversing diagonals
-        self.I = [[l+k for l in range(lmax-k+1)] for k in range(lmax+1)]
-        self.J = [[l for l in range(lmax-k+1)] for k in range(lmax+1)]
+        self.I = [[l + k for l in range(lmax - k + 1)] for k in range(lmax + 1)]
+        self.J = [[l for l in range(lmax - k + 1)] for k in range(lmax + 1)]
 
         # l,m tables
-        self.l = torch.tensor([[l for m in range(l)] +
-                               [m for m in range(l, self.lmax+1)]
-                               for l in range(self.lmax+1)])[:, :, None]
+        self.l = torch.tensor(
+            [
+                [l for m in range(l)] + [m for m in range(l, self.lmax + 1)]
+                for l in range(self.lmax + 1)
+            ]
+        )[:, :, None]
         self.m = torch.zeros_like(self.l)
-        for m in range(self.lmax+1):
+        for m in range(self.lmax + 1):
             self.m[self.I[m], self.J[m]] = m
             self.m[self.J[m], self.I[m]] = m
 
         # lower triangle indices
-        one = torch.ones(lmax+1, lmax+1)
-        self.sign = (-torch.tril(one, diagonal=-1) +
-                     torch.triu(one))[..., None]
+        one = torch.ones(lmax + 1, lmax + 1)
+        self.sign = (-torch.tril(one, diagonal=-1) + torch.triu(one))[..., None]
 
         # l,m related coeffs
-        self.coef = (((self.l-self.m)*(self.l+self.m)*(2*self.l+1)).float()
-                     / (2*self.l-1).float())[1:, 1:].sqrt()
+        self.coef = (
+            ((self.l - self.m) * (self.l + self.m) * (2 * self.l + 1)).float()
+            / (2 * self.l - 1).float()
+        )[1:, 1:].sqrt()
 
         # floats
         self.l_float = self.l.type(one.type())
@@ -119,39 +139,59 @@ class Ylm(Module):
         x, y, z, angle = split_and_rotate_tiny_if_too_close_to_zaxis(xyz)
         r, sin_theta, cos_theta, sin_phi, cos_phi = cart_coord_to_trig(x, y, z)
         _r = r if with_r is None else torch.as_tensor(with_r).type(xyz.type())
-        r2 = _r*_r
-        r_sin_theta = _r*sin_theta
-        r_cos_theta = _r*cos_theta
+        r2 = _r * _r
+        r_sin_theta = _r * sin_theta
+        r_cos_theta = _r * cos_theta
         # Associated Legendre polynomials
         alp = [[torch.full_like(sin_theta, self.Yoo)]]
-        for l in range(1, self.lmax+1):
-            alp += [[self.alp_al[l][m] * (r_cos_theta*alp[l-1][m] + r2*self.alp_bl[l][m] *
-                                          alp[l-2][m]) for m in range(l-1)]
-                    + [self.alp_cl[l] * r_cos_theta * alp[l-1][l-1]]
-                    + [self.alp_dl[l] * r_sin_theta * alp[l-1][l-1]]]
+        for l in range(1, self.lmax + 1):
+            alp += [
+                [
+                    self.alp_al[l][m]
+                    * (
+                        r_cos_theta * alp[l - 1][m]
+                        + r2 * self.alp_bl[l][m] * alp[l - 2][m]
+                    )
+                    for m in range(l - 1)
+                ]
+                + [self.alp_cl[l] * r_cos_theta * alp[l - 1][l - 1]]
+                + [self.alp_dl[l] * r_sin_theta * alp[l - 1][l - 1]]
+            ]
         # sin, cos of m*phi
         sin = [torch.zeros_like(sin_phi), sin_phi]
         cos = [torch.ones_like(cos_phi), cos_phi]
-        for m in range(2, self.lmax+1):
-            s = sin_phi*cos[-1] + cos_phi*sin[-1]
-            c = cos_phi*cos[-1] - sin_phi*sin[-1]
+        for m in range(2, self.lmax + 1):
+            s = sin_phi * cos[-1] + cos_phi * sin[-1]
+            c = cos_phi * cos[-1] - sin_phi * sin[-1]
             sin += [s]
             cos += [c]
         # Spherical Harmonics
         n = sin_theta.size(0)
         Yr = torch.cat(
-            [torch.cat([(alp[l][m]*cos[m]).view(1, n) for m in range(l, -1, -1)] +
-                       [torch.zeros(self.lmax-l, n)]).view(self.lmax+1, 1, n) for l in range(self.lmax+1)
-             ], dim=1).permute(1, 0, 2)
+            [
+                torch.cat(
+                    [(alp[l][m] * cos[m]).view(1, n) for m in range(l, -1, -1)]
+                    + [torch.zeros(self.lmax - l, n)]
+                ).view(self.lmax + 1, 1, n)
+                for l in range(self.lmax + 1)
+            ],
+            dim=1,
+        ).permute(1, 0, 2)
         Yi = torch.cat(
-            [torch.cat([(alp[l][m]*sin[m]).view(1, n) for m in range(l, -1, -1)] +
-                       [torch.zeros(self.lmax-l, n)]).view(self.lmax+1, 1, n) for l in range(self.lmax+1)
-             ], dim=1)
+            [
+                torch.cat(
+                    [(alp[l][m] * sin[m]).view(1, n) for m in range(l, -1, -1)]
+                    + [torch.zeros(self.lmax - l, n)]
+                ).view(self.lmax + 1, 1, n)
+                for l in range(self.lmax + 1)
+            ],
+            dim=1,
+        )
         Y = Yr + Yi
         # partial derivatives
         if grad:
             if with_r is None:
-                Y_r = self.l_float*Y/r
+                Y_r = self.l_float * Y / r
             else:
                 Y_r = torch.zeros_like(Y)
             Y_theta = cos_theta * self.l_float * Y / sin_theta
@@ -160,11 +200,24 @@ class Ylm(Module):
             if spherical_grads:
                 return Y, torch.stack([Y_r, Y_theta, Y_phi], dim=-1)
             else:
-                cart = sph_vec_to_cart(sin_theta, cos_theta, sin_phi, cos_phi, Y_r,
-                                       Y_theta/r, Y_phi/(r*sin_theta))
+                cart = sph_vec_to_cart(
+                    sin_theta,
+                    cos_theta,
+                    sin_phi,
+                    cos_phi,
+                    Y_r,
+                    Y_theta / r,
+                    Y_phi / (r * sin_theta),
+                )
                 if angle > 0:
                     dY = torch.stack(
-                        [cart[0], cart[1]+angle*cart[2], -angle*cart[1]+cart[2]], dim=-1)
+                        [
+                            cart[0],
+                            cart[1] + angle * cart[2],
+                            -angle * cart[1] + cart[2],
+                        ],
+                        dim=-1,
+                    )
                 else:
                     dY = torch.stack(cart, dim=-1)
                 return Y, dY
@@ -174,7 +227,9 @@ class Ylm(Module):
 
 def compare_with_numpy_version():
     import numpy as np
+
     from theforce.descriptor.sph_repr import sph_repr
+
     # torch.set_default_dtype(torch.double)
     # torch.set_default_tensor_type(torch.DoubleTensor)
 
@@ -188,30 +243,28 @@ def compare_with_numpy_version():
 
     # test without r^l
     r, sin_theta, cos_theta, sin_phi, cos_phi, Y_np = sph_np.ylm(x, y, z)
-    Y_theta_np, Y_phi_np = sph_np.ylm_partials(
-        sin_theta, cos_theta, Y_np, with_r=None)
+    Y_theta_np, Y_phi_np = sph_np.ylm_partials(sin_theta, cos_theta, Y_np, with_r=None)
     Y, grads = sph_torch(xyz, with_r=1, spherical_grads=True)
     Y_r, Y_theta, Y_phi = grads[..., 0], grads[..., 1], grads[..., 2]
     a = Y.allclose(torch.tensor(Y_np).type(xyz.type()))
     b = Y_theta.allclose(torch.tensor(Y_theta_np).type(xyz.type()))
     c = Y_phi.allclose(torch.tensor(Y_phi_np).type(xyz.type()))
-    ea = (Y-torch.tensor(Y_np).type(xyz.type())).abs().max().data
-    eb = (Y_theta-torch.tensor(Y_theta_np).type(xyz.type())).abs().max().data
-    ec = (Y_phi-torch.tensor(Y_phi_np).type(xyz.type())).abs().max().data
+    ea = (Y - torch.tensor(Y_np).type(xyz.type())).abs().max().data
+    eb = (Y_theta - torch.tensor(Y_theta_np).type(xyz.type())).abs().max().data
+    ec = (Y_phi - torch.tensor(Y_phi_np).type(xyz.type())).abs().max().data
     print(a, b, c, ea, eb, ec)
 
     # test with r^l
     r, sin_theta, cos_theta, sin_phi, cos_phi, Y_np = sph_np.ylm_rl(x, y, z)
-    Y_theta_np, Y_phi_np = sph_np.ylm_partials(
-        sin_theta, cos_theta, Y_np, with_r=r)
+    Y_theta_np, Y_phi_np = sph_np.ylm_partials(sin_theta, cos_theta, Y_np, with_r=r)
     Y, grads = sph_torch(xyz, with_r=None, spherical_grads=True)
     Y_r, Y_theta, Y_phi = grads[..., 0], grads[..., 1], grads[..., 2]
     a = Y.allclose(torch.tensor(Y_np).type(xyz.type()))
     b = Y_theta.allclose(torch.tensor(Y_theta_np).type(xyz.type()))
     c = Y_phi.allclose(torch.tensor(Y_phi_np).type(xyz.type()))
-    ea = (Y-torch.tensor(Y_np).type(xyz.type())).abs().max().data
-    eb = (Y_theta-torch.tensor(Y_theta_np).type(xyz.type())).abs().max().data
-    ec = (Y_phi-torch.tensor(Y_phi_np).type(xyz.type())).abs().max().data
+    ea = (Y - torch.tensor(Y_np).type(xyz.type())).abs().max().data
+    eb = (Y_theta - torch.tensor(Y_theta_np).type(xyz.type())).abs().max().data
+    ec = (Y_phi - torch.tensor(Y_phi_np).type(xyz.type())).abs().max().data
     print(a, b, c, ea, eb, ec)
 
     Y.sum().backward(retain_graph=True)
@@ -228,24 +281,24 @@ def compare_grads_with_autograd():
     Y, grad = sph(xyz, grad=True, with_r=1)
     Y.sum().backward()
     a = xyz.grad.allclose(grad.sum(dim=(0, 1)))
-    ea = (xyz.grad-grad.sum(dim=(0, 1))).abs().max().data
+    ea = (xyz.grad - grad.sum(dim=(0, 1))).abs().max().data
     print(a, ea)
 
     xyz = torch.rand(10, 3, requires_grad=True)
     Y, grad = sph(xyz, grad=True, with_r=None)
     Y.sum().backward()
     a = xyz.grad.allclose(grad.sum(dim=(0, 1)))
-    ea = (xyz.grad-grad.sum(dim=(0, 1))).abs().max().data
+    ea = (xyz.grad - grad.sum(dim=(0, 1))).abs().max().data
     print(a, ea)
 
     xyz = torch.tensor([[0, 0, 1.0]], requires_grad=True)
     Y, grad = sph(xyz, grad=True, with_r=None)
     Y.sum().backward()
     a = xyz.grad.allclose(grad.sum(dim=(0, 1)))
-    ea = (xyz.grad-grad.sum(dim=(0, 1))).abs().max().data
+    ea = (xyz.grad - grad.sum(dim=(0, 1))).abs().max().data
     print(a, ea)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     compare_with_numpy_version()
     compare_grads_with_autograd()

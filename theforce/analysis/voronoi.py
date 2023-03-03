@@ -1,12 +1,12 @@
 # +
-import numpy as np
-from scipy.spatial import Voronoi, ConvexHull
-from ase.neighborlist import NeighborList
 import warnings
+
+import numpy as np
+from ase.neighborlist import NeighborList
+from scipy.spatial import ConvexHull, Voronoi
 
 
 class VorNei:
-
     def __init__(self, i, j, zi, zj, rij, aij, vij):
         """
         i:   index of the central atom
@@ -93,11 +93,11 @@ def vor_local(rij, test=False):
             ph = np.r_[orig, face]
             vol = ConvexHull(ph).volume
             # h: length of the line segment from origin to the face
-            h = np.linalg.norm(vor.points[b])/2
+            h = np.linalg.norm(vor.points[b]) / 2
             # area of the face is obtained from vol and h
-            area = dim*vol/h
+            area = dim * vol / h
             # note below: b-1, because c_rij is used instead of rij
-            data.append((b-1, area, vol))
+            data.append((b - 1, area, vol))
     if test:
         assert all(check_total_area_volume(vor, data))
     return data
@@ -118,14 +118,13 @@ def get_voronoi_neighbors(atoms, cutoff):
        in that case, increase the cutoff.
     """
     N = atoms.get_global_number_of_atoms()
-    nl = NeighborList(N*[cutoff/2], skin=0., bothways=True,
-                      self_interaction=False)
+    nl = NeighborList(N * [cutoff / 2], skin=0.0, bothways=True, self_interaction=False)
     nl.update(atoms)
     vornei = []
     vol = 0
     for i in range(N):
         j, off = nl.get_neighbors(i)
-        off = (off[..., None]*atoms.cell).sum(axis=1)
+        off = (off[..., None] * atoms.cell).sum(axis=1)
         # off is the offsets due to periodic boundary condition
         rij = atoms.positions[j] - atoms.positions[i] + off
         data = vor_local(rij)
@@ -139,5 +138,6 @@ def get_voronoi_neighbors(atoms, cutoff):
         vol += sum(vols)
     if not np.isclose(vol, atoms.get_volume()):
         warnings.warn(
-            'Voronoi volumes did not add up to total volume: try larger cutoff!')
+            "Voronoi volumes did not add up to total volume: try larger cutoff!"
+        )
     return vornei

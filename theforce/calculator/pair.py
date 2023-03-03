@@ -5,7 +5,6 @@ from torch.nn import Module, Parameter
 
 
 class PairPotential(Module):
-
     def __init__(self, a, b):
         super().__init__()
         self.a = a
@@ -23,21 +22,19 @@ class PairPotential(Module):
             return self.energy(r[m]) / self.double_count
 
     def energy(self):
-        raise NotImplementedError(
-            'energy shoud be implemented in a child class')
+        raise NotImplementedError("energy shoud be implemented in a child class")
 
 
 class LJ(PairPotential):
-
     def __init__(self, a, b, eps=1.0, sigma=1.0, rc=3.0):
         super().__init__(a, b)
         self.rc = rc
         self.eps = eps
         self.sigma = sigma
-        self.e0 = (sigma/rc)**12 - (sigma/rc)**6
+        self.e0 = (sigma / rc) ** 12 - (sigma / rc) ** 6
 
     def energy(self, r):
         d2 = (r**2).sum(dim=-1)
-        x = self.sigma**2/d2[d2 < self.rc**2]
-        e = 4*(self.eps*(x**6 - x**3 - self.e0)).sum()
+        x = self.sigma**2 / d2[d2 < self.rc**2]
+        e = 4 * (self.eps * (x**6 - x**3 - self.e0)).sum()
         return e

@@ -1,17 +1,24 @@
+import warnings
 
-from theforce.descriptor.sesoap import SeSoap
-from theforce.descriptor.radial_funcs import quadratic_cutoff
-from theforce.descriptor.clustersoap import ClusterSoap
-from theforce.regression.kernels import RBF
-from theforce.regression.algebra import low_rank_factor, jitcholesky
-from theforce.regression.algebra import positive, free_form, sum_packed_dim
-from theforce.util.tensors import SparseTensor, stretch_tensor
 import ase
 import numpy as np
 import torch
-from torch.nn import Module, Parameter
 from torch.distributions import LowRankMultivariateNormal
-import warnings
+from torch.nn import Module, Parameter
+
+from theforce.descriptor.clustersoap import ClusterSoap
+from theforce.descriptor.radial_funcs import quadratic_cutoff
+from theforce.descriptor.sesoap import SeSoap
+from theforce.regression.algebra import (
+    free_form,
+    jitcholesky,
+    low_rank_factor,
+    positive,
+    sum_packed_dim,
+)
+from theforce.regression.kernels import RBF
+from theforce.util.tensors import SparseTensor, stretch_tensor
+
 torch.set_default_tensor_type(torch.DoubleTensor)
 
 
@@ -21,15 +28,18 @@ def unnamed_operation(s):
     size = max(s.i_max, s.j_max) + 1  # number of particles
     h = torch.zeros(s.shape[0], s.shape[0], size, size)
     for i, j, a in zip(*[s.i, s.j, s.a]):
-        b = (stretch_tensor(a, (0, 1)) *
-             stretch_tensor(a, (1, 2))).sum(dim=-1)
-        k, l = torch.broadcast_tensors(i[None, ], i[:, None])
+        b = (stretch_tensor(a, (0, 1)) * stretch_tensor(a, (1, 2))).sum(dim=-1)
+        k, l = torch.broadcast_tensors(
+            i[
+                None,
+            ],
+            i[:, None],
+        )
         h[:, :, k, l] += b
     return h.permute(2, 3, 0, 1)
 
 
 class GAP(Module):
-
     def __init__(self, lmax, nmax, cutoff):
         super(GAP, self).__init__()
         self.csoap = ClusterSoap(SeSoap(lmax, nmax, quadratic_cutoff(cutoff)))
@@ -50,13 +60,13 @@ class GAP(Module):
         if atomic_numbers is not None:
             if np.any(atomic_numbers != atomic_numbers[0]):
                 raise NotImplementedError(
-                    'heterogeneous atomic numbers are not implemented yet')
+                    "heterogeneous atomic numbers are not implemented yet"
+                )
             else:
                 atomic_numbers = None
 
         # descriptors
-        p, _s = self.csoap.describe(pbc, cell, positions,
-                                    iderive=True, jderive=True)
+        p, _s = self.csoap.describe(pbc, cell, positions, iderive=True, jderive=True)
         p = torch.as_tensor(p)
         s = SparseTensor(shape=(self.csoap.soap.dim, 0, 3))
         s.add(_s.i, _s.j, _s.a)
@@ -79,25 +89,23 @@ class GAP(Module):
         self.new_data = 0
 
     def select_Z(self, num_inducing):
-        if not hasattr(self, 'X') or self.new_data:
+        if not hasattr(self, "X") or self.new_data:
             self.build_X()
         rnd = torch.randint(len(self.data), (num_inducing,))
         Z = self.X[rnd]
         return Z
 
     def extend_Z(self, num):
-        self.Z = Parameter(
-            torch.cat([self.Z, self.select_Z(num)]), requires_grad=False)
+        self.Z = Parameter(torch.cat([self.Z, self.select_Z(num)]), requires_grad=False)
 
     def parameterize(self, num_inducing, use_energies=1, use_forces=1, kern=RBF):
-        if not hasattr(self, 'parameterized') or not self.parameterized:
+        if not hasattr(self, "parameterized") or not self.parameterized:
             # kernel param
-            self._noise = Parameter(torch.tensor(1.))
-            self.kern = kern(torch.ones(self.csoap.soap.dim), torch.tensor(1.))
+            self._noise = Parameter(torch.tensor(1.0))
+            self.kern = kern(torch.ones(self.csoap.soap.dim), torch.tensor(1.0))
 
             # inducing
-            self.Z = Parameter(self.select_Z(num_inducing),
-                               requires_grad=False)
+            self.Z = Parameter(self.select_Z(num_inducing), requires_grad=False)
 
             # flags
             self.parameterized = 1
@@ -111,22 +119,24 @@ class GAP(Module):
         for (p, s, h, energy, forces) in self.data:
 
             # TODO: d_dx, d_dxdxx are only needed if forces are present
-            zx, _, d_dx, _ = self.kern.matrices(self.Z, p, False,
-                                                True, False)
-            xx, _, _, d_dxdxx = self.kern.matrices(p, p, False,
-                                                   False, True)
+            zx, _, d_dx, _ = self.kern.matrices(self.Z, p, False, True, False)
+            xx, _, _, d_dxdxx = self.kern.matrices(p, p, False, False, True)
 
             if self.use_energies and p is not None and energy is not None:
                 ZX = zx.sum(dim=-1)
                 diag = xx.sum()
                 yield ZX.view(-1, 1), diag.view(1), energy.view(1)
 
-            if self.use_forces and s is not None and forces is not None and h is not None:
-                temp = -(d_dx[:, s.i, :, None]*s.a.permute(1, 0, 2)).sum(dim=2)
+            if (
+                self.use_forces
+                and s is not None
+                and forces is not None
+                and h is not None
+            ):
+                temp = -(d_dx[:, s.i, :, None] * s.a.permute(1, 0, 2)).sum(dim=2)
                 m = self.Z.size(0)
-                ZF = torch.zeros(m, *forces.size()).index_add(1, s.j, temp
-                                                              ).view(m, -1)
-                sum_diag = (d_dxdxx*h).sum()
+                ZF = torch.zeros(m, *forces.size()).index_add(1, s.j, temp).view(m, -1)
+                sum_diag = (d_dxdxx * h).sum()
                 yield ZF, sum_diag.view(1), forces.view(-1)
 
     def matrices(self):
@@ -143,11 +153,12 @@ class GAP(Module):
 
         # trace term
         Q, _, ridge = low_rank_factor(ZZ, ZX)
-        trace = 0.5*(tr - torch.einsum('ij,ij', Q, Q))/noise**2
+        trace = 0.5 * (tr - torch.einsum("ij,ij", Q, Q)) / noise**2
 
         # low rank MVN
-        p = LowRankMultivariateNormal(torch.zeros_like(Y), Q.t(),
-                                      torch.ones_like(Y)*noise**2)
+        p = LowRankMultivariateNormal(
+            torch.zeros_like(Y), Q.t(), torch.ones_like(Y) * noise**2
+        )
 
         # loss
         loss = -p.log_prob(Y) + trace
@@ -156,17 +167,16 @@ class GAP(Module):
     def train(self, steps=100, optimizer=None, lr=0.1, greedy=None):
 
         if not self.parameterized:
-            warnings.warn(
-                'model is not parameterized yet! returned without training!')
+            warnings.warn("model is not parameterized yet! returned without training!")
             return
 
-        if not hasattr(self, 'losses'):
+        if not hasattr(self, "losses"):
             self.losses = []
             self.starts = []
         self.starts += [len(self.losses)]
 
         if optimizer is None:
-            if not hasattr(self, 'optimizer'):
+            if not hasattr(self, "optimizer"):
                 self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
             optimizer = self.optimizer
 
@@ -180,12 +190,12 @@ class GAP(Module):
                 self.greedy(steps=greedy)
         optimizer.zero_grad()  # NOTE: maybe unnecessary
 
-        print('trained for {} steps'.format(steps))
+        print("trained for {} steps".format(steps))
 
         self.ready = 0
 
     def greedy(self, steps=10):
-        if not hasattr(self, 'X') or self.new_data:
+        if not hasattr(self, "X") or self.new_data:
             self.build_X()
         n = self.X.size(0)
         m = self.Z.size(0)
@@ -212,8 +222,7 @@ class GAP(Module):
         # numerically stable calculation of _mu
         L, ridge = jitcholesky(ZZ, jitbase=2)
         A = torch.cat((XZ, noise * L.t()))
-        Y = torch.cat((Y, torch.zeros(self.Z.size(0),
-                                      dtype=Y.dtype)))
+        Y = torch.cat((Y, torch.zeros(self.Z.size(0), dtype=Y.dtype)))
         Q, R = torch.qr(A)
         self._mu = torch.mv(R.inverse(), torch.mv(Q.t(), Y))
 
@@ -225,7 +234,7 @@ class GAP(Module):
         self.ready = 1
 
     def predict(self, cluster):
-        if not hasattr(self, 'ready') or not self.ready:
+        if not hasattr(self, "ready") or not self.ready:
             self.evaluate()
 
         # configure
@@ -244,15 +253,13 @@ class GAP(Module):
 
         # covariances
         ZX, _, d_dx, _ = self.kern.matrices(self.Z, p, False, True, False)
-        temp = -(d_dx[:, s.i, :, None]*s.a.permute(1, 0, 2)).sum(dim=2)
+        temp = -(d_dx[:, s.i, :, None] * s.a.permute(1, 0, 2)).sum(dim=2)
         m = self.Z.size(0)
-        ZF = torch.zeros(m, *positions.shape).index_add(1, s.j, temp
-                                                        ).view(m, -1)
+        ZF = torch.zeros(m, *positions.shape).index_add(1, s.j, temp).view(m, -1)
         XZ = torch.cat([ZX, ZF], dim=1).t()
 
         # predict
         mu = torch.mv(XZ, self._mu)
-        energy = mu[0:p.size(0)].sum()
-        forces = mu[p.size(0):].view(-1, 3)
+        energy = mu[0 : p.size(0)].sum()
+        forces = mu[p.size(0) :].view(-1, 3)
         return energy, forces
-

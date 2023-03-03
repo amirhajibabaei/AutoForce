@@ -1,20 +1,25 @@
 # +
-import numpy as np
-import torch
-from torch import ones_like, as_tensor, from_numpy, cat
-import theforce.distributed as dist
-from ase.atoms import Atoms
-from ase.neighborlist import NeighborList, PrimitiveNeighborList, NewPrimitiveNeighborList
-from ase.calculators.singlepoint import SinglePointCalculator
-import copy
-import warnings
-from theforce.util.util import iterable, mkdir_p
-from theforce.util.parallel import balance_work
-import theforce.distributed as distrib
-from collections import Counter
-import random
 import itertools
 import os
+import random
+import warnings
+from collections import Counter
+
+import numpy as np
+import torch
+from ase.atoms import Atoms
+from ase.calculators.singlepoint import SinglePointCalculator
+from ase.neighborlist import (
+    NeighborList,
+    NewPrimitiveNeighborList,
+    PrimitiveNeighborList,
+)
+from torch import as_tensor, from_numpy, ones_like
+
+import theforce.distributed as dist
+import theforce.distributed as distrib
+from theforce.util.parallel import balance_work
+from theforce.util.util import iterable, mkdir_p
 
 
 def lex3(x):
@@ -29,7 +34,6 @@ def lex3(x):
 
 
 class Local:
-
     def __init__(self, i, j, a, b, r, off=None, descriptors=[], dont_save_grads=False):
         """
         i, j: indices
@@ -98,7 +102,9 @@ class Local:
     @property
     def vor(self):
         r = self.r
-        return self.j[(r[:, None] - r[None]).mul(r[None]).sum(dim=-1).le(0.).all(dim=1)]
+        return self.j[
+            (r[:, None] - r[None]).mul(r[None]).sum(dim=-1).le(0.0).all(dim=1)
+        ]
 
     @property
     def _lex(self):
@@ -118,11 +124,10 @@ class Local:
             if bothways:
                 pass
             else:
-                m = m & ((self._j > self._i) | ((self._j == self._i) &
-                                                self._lex))
+                m = m & ((self._j > self._i) | ((self._j == self._i) & self._lex))
         elif a != b:
             if bothways:
-                m = (m | ((self._a == b) & (self._b == a)))
+                m = m | ((self._a == b) & (self._b == a))
             else:
                 pass
         if in_place:
@@ -134,11 +139,13 @@ class Local:
 
     def as_atoms(self):
         a = self._a.unique().detach().numpy()
-        atoms = (TorchAtoms(numbers=a, positions=len(a)*[(0, 0, 0)]) +
-                 TorchAtoms(numbers=self._b.detach().numpy(), positions=self._r.detach().numpy()))
-        if 'target_energy' in self.__dict__:
+        atoms = TorchAtoms(numbers=a, positions=len(a) * [(0, 0, 0)]) + TorchAtoms(
+            numbers=self._b.detach().numpy(), positions=self._r.detach().numpy()
+        )
+        if "target_energy" in self.__dict__:
             atoms.set_calculator(
-                SinglePointCalculator(atoms, energy=self.target_energy))
+                SinglePointCalculator(atoms, energy=self.target_energy)
+            )
         return atoms
 
     def detach(self, keepids=False):
@@ -150,7 +157,7 @@ class Local:
             j = self._j.detach().numpy()
         else:
             i = np.zeros(r.shape[0], dtype=np.int)
-            j = np.arange(1, r.shape[0]+1, dtype=np.int)
+            j = np.arange(1, r.shape[0] + 1, dtype=np.int)
         return Local(i, j, a, b, r)
 
     def __eq__(self, other):
@@ -173,7 +180,6 @@ class Local:
 
 
 class AtomsChanges:
-
     def __init__(self, atoms):
         self._ref = atoms
         self.update_references()
@@ -184,8 +190,7 @@ class AtomsChanges:
         self._positions = self._ref.positions.copy()
         self._cell = self._ref.cell.copy()
         self._pbc = self._ref.pbc.copy()
-        self._descriptors = [kern.state for kern in
-                             self._ref.descriptors]
+        self._descriptors = [kern.state for kern in self._ref.descriptors]
 
     @property
     def natoms(self):
@@ -197,7 +202,7 @@ class AtomsChanges:
 
     @property
     def numbers(self):
-        return (self.natoms or self.atomic_numbers)
+        return self.natoms or self.atomic_numbers
 
     @property
     def positions(self):
@@ -217,23 +222,24 @@ class AtomsChanges:
 
     @property
     def descriptors(self):
-        return [c != r.state for c, r in zip(*[self._descriptors, self._ref.descriptors])]
+        return [
+            c != r.state for c, r in zip(*[self._descriptors, self._ref.descriptors])
+        ]
 
 
 class Distributer:
-
     def __init__(self, world_size):
         self.world_size = world_size
         self.ranks = list(range(world_size))
         self.loads = {}
-        self.total = self.world_size*[0]
+        self.total = self.world_size * [0]
 
     def __call__(self, atoms):
         if atoms.ranks is None:
             ranks = []
             for z in atoms.numbers:
                 if z not in self.loads:
-                    self.loads[z] = self.world_size*[0]
+                    self.loads[z] = self.world_size * [0]
                 keys = list(zip(self.total, self.loads[z], self.ranks))
                 rank = sorted(keys)[0][2]
                 ranks.append(rank)
@@ -256,9 +262,17 @@ class Distributer:
 
 
 class TorchAtoms(Atoms):
-
-    def __init__(self, ase_atoms=None, energy=None, forces=None, cutoff=None,
-                 descriptors=[], group=None, ranks=None, **kwargs):
+    def __init__(
+        self,
+        ase_atoms=None,
+        energy=None,
+        forces=None,
+        cutoff=None,
+        descriptors=[],
+        group=None,
+        ranks=None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         if ase_atoms:
@@ -287,10 +301,9 @@ class TorchAtoms(Atoms):
             self.target_forces = as_tensor(forces)
         else:
             if ase_atoms is not None and ase_atoms.get_calculator() is not None:
-                if 'energy' in ase_atoms.calc.results:
-                    self.target_energy = as_tensor(
-                        ase_atoms.get_potential_energy())
-                if 'forces' in ase_atoms.calc.results:
+                if "energy" in ase_atoms.calc.results:
+                    self.target_energy = as_tensor(ase_atoms.get_potential_energy())
+                if "forces" in ase_atoms.calc.results:
                     self.target_forces = as_tensor(ase_atoms.get_forces())
 
     def set_targets(self):
@@ -311,8 +324,7 @@ class TorchAtoms(Atoms):
                     if j == rank:
                         self.indices.append(i)
             else:
-                workers = distrib.get_world_size(
-                    group=self.process_group)
+                workers = distrib.get_world_size(group=self.process_group)
                 indices = balance_work(self.natoms, workers)
                 if randomize:
                     # reproducibility issue: rnd sequence becomes workers dependent
@@ -331,9 +343,13 @@ class TorchAtoms(Atoms):
         self.index_distribute()
 
     def build_nl(self, rc):
-        self.nl = NeighborList(self.natoms * [rc / 2], skin=0.0,
-                               self_interaction=False, bothways=True,
-                               primitive=NewPrimitiveNeighborList)
+        self.nl = NeighborList(
+            self.natoms * [rc / 2],
+            skin=0.0,
+            self_interaction=False,
+            bothways=True,
+            primitive=NewPrimitiveNeighborList,
+        )
         self.cutoff = rc
         self.xyz = torch.from_numpy(self.positions)
         try:
@@ -345,19 +361,34 @@ class TorchAtoms(Atoms):
 
     def local(self, a, stage=True, dont_save_grads=True, detach=False):
         n, off = self.nl.get_neighbors(a)
-        cells = (from_numpy(off[..., None].astype(np.float)) *
-                 self.lll).sum(dim=1)
+        cells = (from_numpy(off[..., None].astype(np.float)) * self.lll).sum(dim=1)
         r = self.xyz[n] - self.xyz[a] + cells
         if detach:
             r = r.detach()
-        loc = Local(a, n, self.numbers[a], self.numbers[n],
-                    r, off, self.descriptors if stage else [],
-                    dont_save_grads=dont_save_grads)
+        loc = Local(
+            a,
+            n,
+            self.numbers[a],
+            self.numbers[n],
+            r,
+            off,
+            self.descriptors if stage else [],
+            dont_save_grads=dont_save_grads,
+        )
         loc.natoms = self.natoms
         return loc
 
-    def update(self, cutoff=None, descriptors=None, forced=False, build_locals=True, stage=True,
-               posgrad=False, cellgrad=False, dont_save_grads=False):
+    def update(
+        self,
+        cutoff=None,
+        descriptors=None,
+        forced=False,
+        build_locals=True,
+        stage=True,
+        posgrad=False,
+        cellgrad=False,
+        dont_save_grads=False,
+    ):
         if cutoff or self.changes.numbers:
             self.build_nl(cutoff if cutoff else self.cutoff)
             forced = True
@@ -368,8 +399,14 @@ class TorchAtoms(Atoms):
             self.nl.update(self)
             self.xyz.requires_grad = posgrad
             self.lll.requires_grad = cellgrad
-            self.loc = [self.local(a, stage=stage, dont_save_grads=dont_save_grads)
-                        for a in self.indices] if build_locals else None
+            self.loc = (
+                [
+                    self.local(a, stage=stage, dont_save_grads=dont_save_grads)
+                    for a in self.indices
+                ]
+                if build_locals
+                else None
+            )
             self.changes.update_references()
 
     def stage(self, descriptors=None, dont_save_grads=True):
@@ -383,12 +420,12 @@ class TorchAtoms(Atoms):
             self.stage(dont_save_grads=dont_save_grads)
 
     def add_descriptors(self, descriptors, stage=True, dont_save_grads=True):
-        self.descriptors = [d for d in self.descriptors] + \
-            [d for d in iterable(descriptors)]
+        self.descriptors = [d for d in self.descriptors] + [
+            d for d in iterable(descriptors)
+        ]
         names = [d.name for d in self.descriptors]
         if len(set(names)) != len(self.descriptors):
-            raise RuntimeError(
-                f'two or more descriptors have the same names: {names}')
+            raise RuntimeError(f"two or more descriptors have the same names: {names}")
         if stage:
             self.stage(iterable(descriptors), dont_save_grads=dont_save_grads)
 
@@ -453,11 +490,13 @@ class TorchAtoms(Atoms):
             return True
 
     def copy(self, update=True, group=True):
-        new = TorchAtoms(positions=self.positions.copy(),
-                         cell=self.cell.copy(),
-                         numbers=self.numbers.copy(),
-                         pbc=self.pbc.copy(),
-                         ranks=self.ranks)
+        new = TorchAtoms(
+            positions=self.positions.copy(),
+            cell=self.cell.copy(),
+            numbers=self.numbers.copy(),
+            pbc=self.pbc.copy(),
+            ranks=self.ranks,
+        )
         if group and self.is_distributed:
             new.attach_process_group(self.process_group)
             assert new.indices == self.indices  # TODO: ignore?
@@ -480,9 +519,10 @@ class TorchAtoms(Atoms):
         self.xyz = torch.from_numpy(self.positions)
 
     def as_ase(self):
-        atoms = Atoms(positions=self.positions, cell=self.cell,
-                      pbc=self.pbc, numbers=self.numbers)
-        atoms.calc = self.calc   # DONE: e, f
+        atoms = Atoms(
+            positions=self.positions, cell=self.cell, pbc=self.pbc, numbers=self.numbers
+        )
+        atoms.calc = self.calc  # DONE: e, f
         if atoms.calc is not None:
             atoms.calc.atoms = atoms
         vel = self.get_velocities()
@@ -491,27 +531,27 @@ class TorchAtoms(Atoms):
         return atoms
 
     def as_local(self):
-        """ As the inverse of Local.as_atoms """
+        """As the inverse of Local.as_atoms"""
         # positions[0] should to be [0, 0, 0]
         r = torch.as_tensor(self.positions[1:])
-        #a, b = np.broadcast_arrays(self.numbers[0], self.numbers[1:])
+        # a, b = np.broadcast_arrays(self.numbers[0], self.numbers[1:])
         a, b = self.numbers[0], self.numbers[1:]
         _i = np.arange(self.natoms)
         i, j = np.broadcast_arrays(_i[0], _i[1:])
         loc = Local(i, j, a, b, r)
-        if 'target_energy' in self.__dict__:
+        if "target_energy" in self.__dict__:
             loc.target_energy = self.target_energy
         return loc
 
     def shake(self, beta=0.05, update=True):
-        trans = np.random.laplace(0., beta, size=self.positions.shape)
+        trans = np.random.laplace(0.0, beta, size=self.positions.shape)
         self.translate(trans)
         if update:
             self.update()
 
     def single_point(self):
         results = {}
-        for q in ['energy', 'forces', 'stress', 'xx']:
+        for q in ["energy", "forces", "stress", "xx"]:
             try:
                 results[q] = self.calc.results[q]
             except KeyError:
@@ -520,7 +560,7 @@ class TorchAtoms(Atoms):
 
     def detached(self, set_targets=True):
         results = {}
-        for q in ['energy', 'forces', 'stress', 'xx']:
+        for q in ["energy", "forces", "stress", "xx"]:
             try:
                 results[q] = self.calc.results[q]
             except KeyError:
@@ -531,17 +571,19 @@ class TorchAtoms(Atoms):
             new.set_targets()
         return new
 
-    def pickle_locals(self, folder='atoms'):
+    def pickle_locals(self, folder="atoms"):
         mkdir_p(folder)
         for loc in self.loc:
-            f = os.path.join(folder, f'loc_{loc.index}.pckl')
+            f = os.path.join(folder, f"loc_{loc.index}.pckl")
             torch.save(loc, f)
 
-    def pickles(self, folder='atoms'):
-        return [torch.load(os.path.join(folder, f'loc_{i}.pckl'))
-                for i in range(self.natoms)]
+    def pickles(self, folder="atoms"):
+        return [
+            torch.load(os.path.join(folder, f"loc_{i}.pckl"))
+            for i in range(self.natoms)
+        ]
 
-    def gathered(self, folder='atoms'):
+    def gathered(self, folder="atoms"):
         if self.is_distributed and len(self.loc) < self.natoms:
             self.pickle_locals(folder=folder)
             dist.barrier()  # barrier(self.process_group) changed for _mpi4py
@@ -550,7 +592,7 @@ class TorchAtoms(Atoms):
             loc = self.loc
         return loc
 
-    def gather_(self, folder='atoms'):
+    def gather_(self, folder="atoms"):
         self.loc = self.gathered(folder=folder)
         self.detach_process_group()
 
@@ -570,8 +612,9 @@ class TorchAtoms(Atoms):
 
 
 class AtomsData:
-
-    def __init__(self, X=None, traj=None, posgrad=False, cellgrad=False, convert=False, **kwargs):
+    def __init__(
+        self, X=None, traj=None, posgrad=False, cellgrad=False, convert=False, **kwargs
+    ):
         if X is not None:
             if convert:
                 self.X = [TorchAtoms(ase_atoms=a, **kwargs) for a in X]
@@ -580,10 +623,12 @@ class AtomsData:
             assert self.check_content()
         elif traj is not None:
             from ase.io import read
-            self.X = [TorchAtoms(ase_atoms=atoms, **kwargs)
-                      for atoms in read(traj, ':')]
+
+            self.X = [
+                TorchAtoms(ase_atoms=atoms, **kwargs) for atoms in read(traj, ":")
+            ]
         else:
-            raise RuntimeError('AtomsData without any input!')
+            raise RuntimeError("AtomsData without any input!")
         self.posgrad = posgrad
         self.cellgrad = cellgrad
 
@@ -595,7 +640,7 @@ class AtomsData:
     def process_group(self):
         return self.X[0].process_group
 
-    def gather_(self, folder='atoms'):
+    def gather_(self, folder="atoms"):
         for atoms in self.X:
             atoms.gather_()
 
@@ -620,8 +665,9 @@ class AtomsData:
     def pairs_set(self, numbers=None):
         if numbers is None:
             numbers = self.numbers_set()
-        pairs = ([(a, b) for a, b in itertools.combinations(numbers, 2)] +
-                 [(a, a) for a in numbers])
+        pairs = [(a, b) for a, b in itertools.combinations(numbers, 2)] + [
+            (a, a) for a in numbers
+        ]
         return pairs
 
     def apply(self, operation, *args, **kwargs):
@@ -629,8 +675,7 @@ class AtomsData:
             getattr(atoms, operation)(*args, **kwargs)
 
     def set_gpp(self, gpp, cutoff=None):
-        self.apply('update', cutoff=cutoff,
-                   descriptors=gpp.kern.kernels, forced=True)
+        self.apply("update", cutoff=cutoff, descriptors=gpp.kern.kernels, forced=True)
 
     def update(self, *args, **kwargs):
         for atoms in self.X:
@@ -639,8 +684,12 @@ class AtomsData:
     def update_nl_if_requires_grad(self, descriptors=None, forced=False):
         if self.trainable:
             for atoms in self.X:
-                atoms.update(descriptors=descriptors, forced=forced,
-                             posgrad=self.posgrad, cellgrad=self.cellgrad)
+                atoms.update(
+                    descriptors=descriptors,
+                    forced=forced,
+                    posgrad=self.posgrad,
+                    cellgrad=self.cellgrad,
+                )
 
     def set_per_atoms(self, quant, values):
         vals = torch.split(values, split_size_or_sections=1)
@@ -692,8 +741,9 @@ class AtomsData:
     def __len__(self):
         return len(self.X)
 
-    def to_traj(self, trajname, mode='w', start=0):
+    def to_traj(self, trajname, mode="w", start=0):
         from ase.io import Trajectory
+
         t = Trajectory(trajname, mode)
         for atoms in self.X[start:]:
             t.write(atoms)
@@ -701,7 +751,7 @@ class AtomsData:
 
     def pick_random(self, n):
         if n > len(self):
-            warnings.warn('n > len(AtomsData) in pick_random')
+            warnings.warn("n > len(AtomsData) in pick_random")
         return AtomsData(X=[self[k] for k in torch.randperm(len(self))[:n]])
 
     def append(self, others):
@@ -715,21 +765,28 @@ class AtomsData:
 
     def __add__(self, other):
         if other.__class__ == AtomsData:
-            return AtomsData(X=self.X+other.X)
+            return AtomsData(X=self.X + other.X)
         else:
             raise NotImplementedError(
-                'AtomsData + {} is not implemented'.format(other.__class__))
+                "AtomsData + {} is not implemented".format(other.__class__)
+            )
 
     def __iadd__(self, others):
         self.append(others)
         return self
 
     def to_locals(self, keepids=False):
-        return LocalsData([loc.detach(keepids=keepids) for atoms in self for loc in atoms])
+        return LocalsData(
+            [loc.detach(keepids=keepids) for atoms in self for loc in atoms]
+        )
 
     def sample_locals(self, size, keepids=False):
-        return LocalsData([random.choice(random.choice(self)).detach(keepids=keepids)
-                           for _ in range(size)])
+        return LocalsData(
+            [
+                random.choice(random.choice(self)).detach(keepids=keepids)
+                for _ in range(size)
+            ]
+        )
 
     def counts(self, total=True):
         c = Counter()
@@ -740,7 +797,6 @@ class AtomsData:
 
 
 class LocalsData:
-
     def __init__(self, X=None, traj=None):
         if X is not None:
             self.X = []
@@ -749,7 +805,8 @@ class LocalsData:
                 self.X += [loc]
         elif traj is not None:
             from ase.io import Trajectory
-            t = Trajectory(traj, 'r')
+
+            t = Trajectory(traj, "r")
             self.X = []
             for atoms in t:
                 tatoms = TorchAtoms(ase_atoms=atoms)
@@ -758,15 +815,16 @@ class LocalsData:
                 self.X += [tatoms.as_local()]
             t.close()
         else:
-            raise RuntimeError('LocalsData invoked without any input')
+            raise RuntimeError("LocalsData invoked without any input")
         self.trainable = False
 
     def stage(self, descriptors, dont_save_grads=True):
         for loc in self:
             loc.stage(iterable(descriptors), dont_save_grads=dont_save_grads)
 
-    def to_traj(self, trajname, mode='w', start=0):
+    def to_traj(self, trajname, mode="w", start=0):
         from ase.io import Trajectory
+
         t = Trajectory(trajname, mode)
         for loc in self.X[start:]:
             t.write(loc.as_atoms())
@@ -796,10 +854,11 @@ class LocalsData:
 
     def __add__(self, other):
         if other.__class__ == LocalsData:
-            return LocalsData(X=self.X+other.X)
+            return LocalsData(X=self.X + other.X)
         else:
             raise NotImplementedError(
-                'AtomsData + {} is not implemented'.format(other.__class__))
+                "AtomsData + {} is not implemented".format(other.__class__)
+            )
 
     def __iadd__(self, others):
         self.append(others)
@@ -811,7 +870,7 @@ class LocalsData:
 
 def sample_atoms(file, size=-1, chp=None, indices=None):
     """
-    If 
+    If
         A = sample_atomsdata('atoms.traj', size=n, chp='data.chp')
         B = sample_atomsdata('data.chp')
     then,
@@ -820,65 +879,73 @@ def sample_atoms(file, size=-1, chp=None, indices=None):
     from ase.io import Trajectory
 
     # from traj
-    if file.endswith('.traj'):
+    if file.endswith(".traj"):
         traj = Trajectory(file)
         if size > len(traj):
-            warnings.warn('size > len({})'.format(file))
+            warnings.warn("size > len({})".format(file))
         if indices is None:
             indices = np.random.permutation(len(traj))[:size].tolist()
         if chp:
-            with open(chp, 'w') as ch:
-                ch.write(file+'\n')
+            with open(chp, "w") as ch:
+                ch.write(file + "\n")
                 for k in indices:
-                    ch.write('{} '.format(k))
+                    ch.write("{} ".format(k))
         return AtomsData(X=[TorchAtoms(ase_atoms=traj[k]) for k in indices])
 
     # from checkpoint
-    elif file.endswith('.chp'):
-        with open(file, 'r') as ch:
+    elif file.endswith(".chp"):
+        with open(file, "r") as ch:
             _file = ch.readline().strip()
             _indices = [int(i) for i in ch.readline().split()]
         return sample_atoms(_file, indices=_indices)
 
     # other
     else:
-        raise NotImplementedError('format {} is not recognized'.format(file))
+        raise NotImplementedError("format {} is not recognized".format(file))
 
 
 def diatomic(numbers, distances, pbc=False, cell=None):
-    from theforce.util.util import iterable
     from itertools import combinations
-    if not hasattr(numbers[0], '__iter__'):
-        nums = ([(a, b) for a, b in combinations(set(numbers), 2)] +
-                [(a, a) for a in set(numbers)])
+
+    from theforce.util.util import iterable
+
+    if not hasattr(numbers[0], "__iter__"):
+        nums = [(a, b) for a, b in combinations(set(numbers), 2)] + [
+            (a, a) for a in set(numbers)
+        ]
     else:
         nums = numbers
-    X = [TorchAtoms(positions=[[0., 0., 0.], [d, 0., 0.]], numbers=n, cell=cell, pbc=pbc)
-         for n in nums for d in iterable(distances)]
+    X = [
+        TorchAtoms(
+            positions=[[0.0, 0.0, 0.0], [d, 0.0, 0.0]], numbers=n, cell=cell, pbc=pbc
+        )
+        for n in nums
+        for d in iterable(distances)
+    ]
     if len(X) > 1:
         return AtomsData(X=X)
     else:
         return X[0]
 
 
-def namethem(descriptors, base='D'):
+def namethem(descriptors, base="D"):
     for i, desc in enumerate(descriptors):
-        desc.name = base+'_{}'.format(i)
+        desc.name = base + "_{}".format(i)
 
 
 def example():
-    from theforce.similarity.pair import DistanceKernel
     from theforce.regression.core import SquaredExp
+    from theforce.similarity.pair import DistanceKernel
 
-    kerns = [DistanceKernel(SquaredExp(), 10, 10),
-             DistanceKernel(SquaredExp(), 10, 18),
-             DistanceKernel(SquaredExp(), 18, 18)]
+    kerns = [
+        DistanceKernel(SquaredExp(), 10, 10),
+        DistanceKernel(SquaredExp(), 10, 18),
+        DistanceKernel(SquaredExp(), 18, 18),
+    ]
     namethem(kerns)
-    xyz = np.stack(np.meshgrid([0, 1.5], [0, 1.5], [0, 1.5])
-                   ).reshape(3, -1).transpose()
-    numbers = 4*[10] + 4*[18]
-    atoms = TorchAtoms(positions=xyz, numbers=numbers,
-                       cutoff=3.0, descriptors=kerns)
+    xyz = np.stack(np.meshgrid([0, 1.5], [0, 1.5], [0, 1.5])).reshape(3, -1).transpose()
+    numbers = 4 * [10] + 4 * [18]
+    atoms = TorchAtoms(positions=xyz, numbers=numbers, cutoff=3.0, descriptors=kerns)
 
     other = atoms.copy()
     print(other == atoms)
@@ -886,9 +953,9 @@ def example():
     for loc in atoms:
         print(loc.as_atoms().as_local() == loc.detach())
 
-    empty = TorchAtoms(positions=[(0, 0, 0)], cutoff=3.)
+    empty = TorchAtoms(positions=[(0, 0, 0)], cutoff=3.0)
     empty[0].detach()._r
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     example()

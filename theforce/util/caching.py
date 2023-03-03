@@ -1,5 +1,6 @@
 # +
 import functools
+
 from theforce.util.util import iterable
 
 
@@ -17,8 +18,8 @@ class UID:
     def ident(*args, forced=True):
         for o in args:
             # TODO: if hasattr(o, UID) but o.UID.__class__ != UID
-            if forced or not hasattr(o, 'UID'):
-                setattr(o, 'UID', UID())
+            if forced or not hasattr(o, "UID"):
+                setattr(o, "UID", UID())
 
     def __eq__(self, other):
         return self.id == other.id
@@ -32,15 +33,15 @@ class UID:
 
 def method_caching(method):
     """
-    After decorating desired methods, caching can be turned on (off) 
+    After decorating desired methods, caching can be turned on (off)
     by obj.method_caching = True (False).
-    Caveat: if the states of an argument changes between calls, 
+    Caveat: if the states of an argument changes between calls,
     the user should assign a new UID manually (like obj.UID = UID()).
     """
 
     @functools.wraps(method)
     def cacher(self, *args):
-        if hasattr(self, 'method_caching') and self.method_caching:
+        if hasattr(self, "method_caching") and self.method_caching:
             # ident
             UID.ident(*args, forced=False)
             uid = tuple(a.UID() for a in args)
@@ -64,7 +65,7 @@ def method_caching(method):
 
 def strip_uid(X):
     for x in iterable(X):
-        if hasattr(x, 'UID'):
+        if hasattr(x, "UID"):
             del x.UID
 
 
@@ -76,7 +77,6 @@ def example():
             self.n = n
 
     class Kern:
-
         def __init__(self, sleep=1.0):
             self.sleep = sleep
 
@@ -86,7 +86,7 @@ def example():
         @method_caching
         def method(self, a, b):
             time.sleep(self.sleep)
-            return a.n*b.n
+            return a.n * b.n
 
     X = [Feature(i) for i in range(2)]
     # UID.ident(X)
@@ -95,14 +95,14 @@ def example():
     t1 = time.time()
     k(X[0], X[1])
     t2 = time.time()
-    print('first evaluation: {} seconds'.format(t2-t1))
+    print("first evaluation: {} seconds".format(t2 - t1))
     k(X[0], X[1])
     t3 = time.time()
-    print('second evaluation: {} seconds'.format(t3-t2))
+    print("second evaluation: {} seconds".format(t3 - t2))
 
     # clear cached
     k.cached.clear()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     example()

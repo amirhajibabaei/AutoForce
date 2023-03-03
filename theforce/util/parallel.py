@@ -1,15 +1,17 @@
 # +
-from theforce.util.util import iterable
-import theforce.distributed as dist
-import torch
-import numpy as np
 import functools
 import warnings
+
+import numpy as np
+import torch
+
+import theforce.distributed as dist
+from theforce.util.util import iterable
 
 
 def mpi_init(unify_randomness=True, seed=None):
     """returns mpi WORLD"""
-    dist.init_process_group('mpi')
+    dist.init_process_group("mpi")
     if unify_randomness:
         if seed is None:
             seed = np.random.randint(2**32)
@@ -27,7 +29,6 @@ def rank():
 
 
 def if_master(func):
-
     @functools.wraps(func)
     def _func(*args, **kwargs):
         ierr = 0
@@ -42,7 +43,7 @@ def if_master(func):
         if dist.is_initialized():
             dist.broadcast(ierr, 0)
         if ierr:
-            raise RuntimeError(f'{func.__name__} failed at master')
+            raise RuntimeError(f"{func.__name__} failed at master")
         return out
 
     return _func
@@ -75,7 +76,7 @@ def use_max_threads(func):
         else:
             processes = 1
         nthreads = torch.get_num_threads()
-        torch.set_num_threads(nthreads*processes)
+        torch.set_num_threads(nthreads * processes)
         out = func(*args, **kwargs)
         torch.set_num_threads(nthreads)
         return out
@@ -85,15 +86,15 @@ def use_max_threads(func):
 
 def balance_work(size, workers):
     # sizes
-    a = size//workers
+    a = size // workers
     b = size % workers
-    work = [a+1 if j < b else a for j in range(workers)]
+    work = [a + 1 if j < b else a for j in range(workers)]
     # indices
     indices = []
     start = 0
     for chunk in work:
-        indices += [(start, start+chunk)]
-        start = start+chunk
+        indices += [(start, start + chunk)]
+        start = start + chunk
     return indices
 
 
@@ -106,7 +107,7 @@ def method_forker(method):
 
     @functools.wraps(method)
     def forker(self, *args, **kwargs):
-        if hasattr(self, 'process_group'):
+        if hasattr(self, "process_group"):
             # split work
             shape = [len(iterable(arg)) for arg in args]
             size = max(shape)
@@ -117,13 +118,17 @@ def method_forker(method):
             indices = balance_work(size, workers)
             rank = dist.get_rank(group=self.process_group)
             start, end = indices[rank]
-            t = method(self, *(arg[start:end] if d == dim else arg
-                               for d, arg in enumerate(args)), **kwargs)
+            t = method(
+                self,
+                *(arg[start:end] if d == dim else arg for d, arg in enumerate(args)),
+                **kwargs,
+            )
 
             # allocate and gather
             shapes = [torch.zeros(len(shape)).long() for _ in range(workers)]
-            dist.all_gather(shapes, torch.tensor([s for s in t.size()]),
-                            group=self.process_group)
+            dist.all_gather(
+                shapes, torch.tensor([s for s in t.size()]), group=self.process_group
+            )
             pieces = [torch.zeros(*sh).type(t.type()) for sh in shapes]
             pieces[rank] = t
             for k in range(workers):
@@ -139,9 +144,7 @@ def method_forker(method):
 
 
 def example():
-
     class Dummy:
-
         def __init__(self):
             pass
 
@@ -158,7 +161,7 @@ def example():
     fo1 = model.f(x)
     ffo1 = model.ff(x, x)
 
-    dist.init_process_group('mpi')
+    dist.init_process_group("mpi")
     model.process_group = dist.group.WORLD
     fo2 = model.f(x)
     ffo2 = model.ff(x, x)
@@ -167,5 +170,5 @@ def example():
     print((ffo1 == ffo2).all())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     example()

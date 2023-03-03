@@ -1,4 +1,4 @@
-if __name__ == '__main__':
+if __name__ == "__main__":
     import theforce.cl as cline
 
     calc = cline.gen_active_calc()

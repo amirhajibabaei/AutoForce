@@ -11,24 +11,24 @@ def _as_tensor(pred, target):
 
 def maxe(pred, target):
     p, t = _as_tensor(pred, target)
-    return (p-t).abs().max()
+    return (p - t).abs().max()
 
 
 def mae(pred, target):
     p, t = _as_tensor(pred, target)
-    return (p-t).abs().mean()
+    return (p - t).abs().mean()
 
 
 def rmse(pred, target):
     p, t = _as_tensor(pred, target)
-    return (p-t).pow(2).mean().sqrt()
+    return (p - t).pow(2).mean().sqrt()
 
 
 def cd(pred, target):
     p, t = _as_tensor(pred, target)
     var1 = t.var()
-    var2 = (t-p).var()
-    R2 = 1-var2/var1
+    var2 = (t - p).var()
+    R2 = 1 - var2 / var1
     return R2
 
 
@@ -50,13 +50,15 @@ def get_energy_and_forces(data):
     return d_e, d_f, d_n
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
+
     from ase.io import read
+
     try:
         r = sys.argv[3]
     except IndexError:
-        r = '::'
+        r = "::"
     data = read(sys.argv[1], r)
     targets = read(sys.argv[2], r)
     d_e, d_f, d_n = get_energy_and_forces(data)
@@ -68,24 +70,24 @@ if __name__ == '__main__':
     def _print(d, t):
         s_d = float(np.sqrt(d.var()))
         s_t = float(np.sqrt(t.var()))
-        print(f'\tstdev:  {s_d} (p), {s_t} (t)')
-        print(f'\tmaxe:   {maxe(d, t)}')
-        print(f'\tmae:    {mae(d, t)}')
-        print(f'\trmse:   {rmse(d, t)}')
-        print(f'\tcd:     {cd(d, t)}')
+        print(f"\tstdev:  {s_d} (p), {s_t} (t)")
+        print(f"\tmaxe:   {maxe(d, t)}")
+        print(f"\tmae:    {mae(d, t)}")
+        print(f"\trmse:   {rmse(d, t)}")
+        print(f"\tcd:     {cd(d, t)}")
 
-    print(f'predictions:       {sys.argv[1]}')
-    print(f'targets:           {sys.argv[2]}')
-    print(f'number of samples: {quant}')
+    print(f"predictions:       {sys.argv[1]}")
+    print(f"targets:           {sys.argv[2]}")
+    print(f"number of samples: {quant}")
 
-    for n, d, t in [('energy', d_e, t_e), ('forces', d_f, t_f)]:
-        print(f'\n{n}:')
+    for n, d, t in [("energy", d_e, t_e), ("forces", d_f, t_f)]:
+        print(f"\n{n}:")
         _print(d, t)
-        if n == 'forces':
+        if n == "forces":
             zset = np.unique(d_n)
             if len(zset) > 1:
                 for z in zset:
                     i = d_n == z
-                    s = i.sum()//3
-                    print(f'\nforces on (atomic number): {z}  (size= 3*{s})')
+                    s = i.sum() // 3
+                    print(f"\nforces on (atomic number): {z}  (size= 3*{s})")
                     _print(d[i], t[i])

@@ -1,10 +1,10 @@
 # +
 import socket
+
 from theforce.util.util import date
 
 
 class Server:
-
     def __init__(self, ip, port, callback=None, args=(), wlog=False):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -14,14 +14,14 @@ class Server:
         h = socket.gethostname()
         s = self.socket.getsockname()
         self.wlog = wlog
-        self.log(f'server initiated at: {h} {s}', 'w')
+        self.log(f"server initiated at: {h} {s}", "w")
 
-    def log(self, msg, mode='a'):
+    def log(self, msg, mode="a"):
         if self.wlog:
-            with open('server.log', mode) as log:
-                log.write(f'{date()}: {msg}\n')
+            with open("server.log", mode) as log:
+                log.write(f"{date()}: {msg}\n")
 
-    def listen(self, end='end', ping='?'):
+    def listen(self, end="end", ping="?"):
         self.socket.listen(5)
         resume = True
         while resume:
@@ -31,12 +31,12 @@ class Server:
             if request == end:
                 resume = False
             elif request == ping:
-                c.send(b'!')
+                c.send(b"!")
             else:
                 try:
                     self.callback(request, *self.args)
-                    c.send(b'0')
+                    c.send(b"0")
                 except:
-                    c.send(b'-1')
+                    c.send(b"-1")
             c.close()
         self.socket.close()

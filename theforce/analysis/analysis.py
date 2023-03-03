@@ -1,12 +1,13 @@
 # +
 import numpy as np
-from ase.io import read, Trajectory
+from ase.io import Trajectory, read
 from ase.neighborlist import NeighborList, natural_cutoffs
-from theforce.descriptor.atoms import AtomsData, TorchAtoms
-from theforce.util.util import iterable
-from theforce.analysis.rdf import rdf
-from theforce.descriptor.sphcart import cart_coord_to_sph, sph_coord_to_cart
 from scipy.stats import bayes_mvs as stats
+
+from theforce.analysis.rdf import rdf
+from theforce.descriptor.atoms import AtomsData, TorchAtoms
+from theforce.descriptor.sphcart import cart_coord_to_sph, sph_coord_to_cart
+from theforce.util.util import iterable
 
 
 def no_transform(atoms):
@@ -19,7 +20,6 @@ def standard_cell_transform(atoms):
 
 
 class TrajAnalyser:
-
     def __init__(self, traj, start=0, stop=-1, transform=no_transform):
         self.traj = Trajectory(traj)
         self.transform = transform
@@ -51,11 +51,12 @@ class TrajAnalyser:
     def select(self, *args):
         if len(args) == 0:
             return np.full(self.numbers.shape[0], False)
-        elif 'all' in args:
+        elif "all" in args:
             return np.full(self.numbers.shape[0], True)
         else:
-            return np.stack([self.numbers == a for b in iterable(args)
-                             for a in iterable(b)]).any(axis=0)
+            return np.stack(
+                [self.numbers == a for b in iterable(args) for a in iterable(b)]
+            ).any(axis=0)
 
     def select_indices(self, *args):
         return self.indices[self.select(*args)]
@@ -85,30 +86,27 @@ class TrajAnalyser:
         for i in range(*self.get_slice(**kwargs)):
             yield self[i]
 
-    def get_scalars(self, prop=('volume',), **kwargs):
+    def get_scalars(self, prop=("volume",), **kwargs):
         data = []
         for atoms in self.slice(**kwargs):
-            data += [[getattr(atoms, f'get_{q}')()
-                      for q in prop]]
+            data += [[getattr(atoms, f"get_{q}")() for q in prop]]
         return zip(*data)
 
-    def center_of_mass(self, select='all', prop=('positions',), **kwargs):
+    def center_of_mass(self, select="all", prop=("positions",), **kwargs):
         I = self.select(select)
         data = []
         for atoms in self.slice(**kwargs):
-            data += [[getattr(atoms, f'get_{q}')()[I].sum(axis=0)
-                      for q in prop]]
+            data += [[getattr(atoms, f"get_{q}")()[I].sum(axis=0) for q in prop]]
         return zip(*data)
 
     def ave_vol(self, srange=None, sample_size=100, stats=None):
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
         if stats is None:
             stats = mean_var
-        v = stats([self[s.sample()].get_volume()
-                   for _ in range(sample_size)])
+        v = stats([self[s.sample()].get_volume() for _ in range(sample_size)])
         return v
 
-    def msd(self, select='all', I=None, wrt=None, **kwargs):
+    def msd(self, select="all", I=None, wrt=None, **kwargs):
         """
         select: atoms types e.g. select=[3] for all Li atoms
         I:      indices, if I is given, select is ignored
@@ -124,11 +122,23 @@ class TrajAnalyser:
             x = self[wrt].get_positions()[I]
         else:
             x = wrt[I]
-        d = np.array([((atoms.get_positions()[I]-x)**2).sum(axis=-1).mean()
-                      for atoms in self.slice(**kwargs)])
+        d = np.array(
+            [
+                ((atoms.get_positions()[I] - x) ** 2).sum(axis=-1).mean()
+                for atoms in self.slice(**kwargs)
+            ]
+        )
         return np.arange(start, stop, step), d
 
-    def displacements(self, select='all', deltas=None, srange=None, sample_size=100, corr=None, stats=None):
+    def displacements(
+        self,
+        select="all",
+        deltas=None,
+        srange=None,
+        sample_size=100,
+        corr=None,
+        stats=None,
+    ):
         I = self.select(select)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
         if deltas is None:
@@ -137,36 +147,55 @@ class TrajAnalyser:
             corr = correlator
         if stats is None:
             stats = mean_var
-        data = [[stats(data) for data in zip(*[iterable(corr(*self.get_rand_pair(s, delta), I))
-                                               for _ in range(sample_size)])] for delta in deltas]
-        results = [list(zip(*[dat[j] for dat in data]))
-                   for j in range(len(data[0]))]
+        data = [
+            [
+                stats(data)
+                for data in zip(
+                    *[
+                        iterable(corr(*self.get_rand_pair(s, delta), I))
+                        for _ in range(sample_size)
+                    ]
+                )
+            ]
+            for delta in deltas
+        ]
+        results = [list(zip(*[dat[j] for dat in data])) for j in range(len(data[0]))]
         return deltas, results
 
-    def diffusion_constants(self, dt=1., select='all', sample_size=100):
+    def diffusion_constants(self, dt=1.0, select="all", sample_size=100):
         deltas, results = self.displacements(
-            select=select, sample_size=sample_size, stats=stats)
-        time = np.array(deltas)*dt
+            select=select, sample_size=sample_size, stats=stats
+        )
+        time = np.array(deltas) * dt
         msd = np.array([d.statistic for d in results[0][0]])
         msd_err = np.array([d.statistic for d in results[0][2]])
         smd = np.array([d.statistic for d in results[1][0]])
         smd_err = np.array([d.statistic for d in results[1][2]])
-        Dt = tuple(a/6 for a in get_slopes(time, msd, msd_err))
-        Dj = tuple(a/6 for a in get_slopes(time, smd, smd_err))
+        Dt = tuple(a / 6 for a in get_slopes(time, msd, msd_err))
+        Dj = tuple(a / 6 for a in get_slopes(time, smd, smd_err))
         return Dt, Dj
 
-    def hist_rtp_displacements(self, delta, rmax=10., bins=[100, 30, 60], select='all',
-                               srange=None, sample_size=100):
+    def hist_rtp_displacements(
+        self,
+        delta,
+        rmax=10.0,
+        bins=[100, 30, 60],
+        select="all",
+        srange=None,
+        sample_size=100,
+    ):
         """
         delta: steps
         returns: r, theta, phi, histogram, density (of selected atoms)
         """
         I = self.select(select)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
-        _bins = [np.linspace(0, rmax, bins[0]),
-                 np.linspace(0, np.pi, bins[1]),
-                 np.linspace(-np.pi, np.pi, bins[2])]
-        h = np.zeros(shape=np.array(bins)-1)
+        _bins = [
+            np.linspace(0, rmax, bins[0]),
+            np.linspace(0, np.pi, bins[1]),
+            np.linspace(-np.pi, np.pi, bins[2]),
+        ]
+        h = np.zeros(shape=np.array(bins) - 1)
         vol = []
         for _ in range(sample_size):
             a, b = self.get_rand_pair(s, delta)
@@ -174,31 +203,35 @@ class TrajAnalyser:
             d = (b.positions[I] - a.positions[I]).reshape(-1, 3)
             rtp = np.array(cart_coord_to_sph(*d.T)).T
             h += np.histogramdd(rtp, bins=_bins)[0]
-        r, t, p = (a[:-1] + (a[1]-a[0])/2 for a in _bins)
+        r, t, p = (a[:-1] + (a[1] - a[0]) / 2 for a in _bins)
         N = I.sum()
-        h /= (N*sample_size)
-        rho = N/np.array(vol).mean()
+        h /= N * sample_size
+        rho = N / np.array(vol).mean()
         return r, t, p, h, rho
 
-    def get_positions(self, select='all', **kwargs):
+    def get_positions(self, select="all", **kwargs):
         I = self.select(select)
         return np.stack([atoms.get_positions()[I] for atoms in self.slice(**kwargs)])
 
     def write_traj(self, out, **kwargs):
-        traj = Trajectory(out, 'w')
+        traj = Trajectory(out, "w")
         for atoms in self.slice(**kwargs):
             traj.write(atoms)
 
-    def rdf(self, rmax, nbins, select='all', srange=None, sample_size=100, file=None):
+    def rdf(self, rmax, nbins, select="all", srange=None, sample_size=100, file=None):
         I = self.select(select)
         s = Sampler(*srange) if srange else Sampler(self.start, self.stop)
-        data = AtomsData([TorchAtoms(self[s.sample()][I])
-                          for _ in range(sample_size)])
+        data = AtomsData([TorchAtoms(self[s.sample()][I]) for _ in range(sample_size)])
         r, gdict = rdf(data, rmax, nbins)
         if file is not None:
-            #header = 'r ' + ' '.join(f'{key}' for key in gdict.keys())
-            header = ' '.join(f'{k[0]}-{k[1]}' for k in gdict.keys())
-            out = np.stack([r, ]+[gdict[key] for key in gdict.keys()]).T
+            # header = 'r ' + ' '.join(f'{key}' for key in gdict.keys())
+            header = " ".join(f"{k[0]}-{k[1]}" for k in gdict.keys())
+            out = np.stack(
+                [
+                    r,
+                ]
+                + [gdict[key] for key in gdict.keys()]
+            ).T
             np.savetxt(file, out, header=header)
         return r, gdict
 
@@ -209,10 +242,10 @@ class TrajAnalyser:
         with open(file) as f:
             header = f.readline()
         for a, b in zip(*[header.split(), g.T]):
-            if a == '#':
+            if a == "#":
                 r = b
             else:
-                key = tuple(int(v) for v in a.split('-'))
+                key = tuple(int(v) for v in a.split("-"))
                 gdict[key] = b
         return r, gdict
 
@@ -225,8 +258,7 @@ class TrajAnalyser:
             coff = list(map(cutoff.get, self[0].numbers))
         elif type(cutoff) is list:
             coff = cutoff
-        self.nl = NeighborList(
-            coff, skin=0.0, self_interaction=si, bothways=bw)
+        self.nl = NeighborList(coff, skin=0.0, self_interaction=si, bothways=bw)
 
     def get_neighbors(self, j, atoms=None, only=None):
 
@@ -243,14 +275,12 @@ class TrajAnalyser:
         return k, off
 
     def get_mic(self, atoms, j, k, off):
-        cells = (off[..., None].astype(np.float) *
-                 atoms.cell).sum(axis=1)
+        cells = (off[..., None].astype(np.float) * atoms.cell).sum(axis=1)
         r = atoms.positions[k] - atoms.positions[j] + cells
         return r
 
 
 class Sampler:
-
     def __init__(self, start, stop):
         self.start = start
         self.stop = stop
@@ -259,25 +289,25 @@ class Sampler:
         return np.random.randint(self.start, self.stop)
 
     def sample_pair(self, delta):
-        i = np.random.randint(self.start, self.stop-delta)
-        return i, i+delta
+        i = np.random.randint(self.start, self.stop - delta)
+        return i, i + delta
 
 
 def get_exponential_deltas(start, stop, n=6):
-    i = stop-start
+    i = stop - start
     j = 1
     k = 0
     while j < i:
         j *= 2
         k += 1
-    deltas = [2**(k-j-2) for j in range(0, n)][::-1]
+    deltas = [2 ** (k - j - 2) for j in range(0, n)][::-1]
     return [t for t in deltas if t > 1]
 
 
 def correlator(a, b, I):
-    r = b.get_positions()[I]-a.get_positions()[I]
+    r = b.get_positions()[I] - a.get_positions()[I]
     msd = (r**2).sum(axis=-1).mean()
-    smd = (r.sum(axis=0)**2).sum()/r.shape[0]
+    smd = (r.sum(axis=0) ** 2).sum() / r.shape[0]
     return msd, smd
 
 
@@ -287,20 +317,22 @@ def mean_var(data):
 
 def get_slopes(x, y, yerr):
     a = np.polyfit(x, y, 1)
-    b = np.polyfit(x, y-yerr, 1)
-    c = np.polyfit(x, y+yerr, 1)
+    b = np.polyfit(x, y - yerr, 1)
+    c = np.polyfit(x, y + yerr, 1)
     return a[0], b[0], c[0]
 
 
-def mean_squared_displacement(traj, start=0, stop=-1, step=1, origin=None, numbers=None):
+def mean_squared_displacement(
+    traj, start=0, stop=-1, step=1, origin=None, numbers=None
+):
     if not origin:
         origin = start
     atoms = read(traj, origin)
     xyz0 = atoms.get_positions()
     if numbers is None:
         numbers = np.unique(atoms.numbers)
-    sl = '{}:{}:{}'.format(start, stop, step)
+    sl = "{}:{}:{}".format(start, stop, step)
     xyz = np.stack([atoms.get_positions() for atoms in read(traj, sl)])
-    D = ((xyz - xyz0)**2).sum(axis=-1)
+    D = ((xyz - xyz0) ** 2).sum(axis=-1)
     msd = [(D[:, atoms.numbers == number]).mean(axis=1) for number in numbers]
     return numbers, msd

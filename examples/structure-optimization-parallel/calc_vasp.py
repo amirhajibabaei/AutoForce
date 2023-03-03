@@ -1,11 +1,11 @@
 # +
 from ase.calculators.vasp import Vasp
 
-
-calc = Vasp(command="mpirun -n 16 vasp_std",
-            directory='vasp',
-            ispin=2,
-            )
+calc = Vasp(
+    command="mpirun -n 16 vasp_std",
+    directory="vasp",
+    ispin=2,
+)
 
 
 def preprocess_atoms(atoms):
