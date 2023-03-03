@@ -1,6 +1,12 @@
 __version__ = "v2021.09"
 
 # +
+import numpy as np
+
+if not hasattr(np, "float"):
+    np.float = np.float64
+
+# +
 import torch
 
 torch.set_default_tensor_type(torch.DoubleTensor)
