@@ -10,7 +10,22 @@ import theforce.distributed as distrib
 from theforce.calculator.active import ActiveCalculator
 from theforce.regression.multi_task import MultiTaskPotential
 from theforce.util.util import abspath, date, iterable, timestamp
+from theforce.io.sgprio import SgprIO
+from ase.calculators.singlepoint import SinglePointCalculator
 
+class Wraptape:
+    def __init__(self, tape, path=None):
+        self.tape = tape
+        self.path = tape.path
+        
+    def write(self, _save_multi):
+        #data
+        if isinstance(_save_multi, list):
+            for a in _save_multi:
+                self.tape.write(a)
+        #loc
+        else:
+            self.tape.write(_save_multi)
 
 class MultiTaskCalculator(ActiveCalculator):
     """
@@ -111,6 +126,13 @@ class MultiTaskCalculator(ActiveCalculator):
             calcs = [calcs]
         self._calcs = calcs
 
+    @property
+    def tape(self):
+        return self._tape
+    @tape.setter
+    def tape(self, tape):
+        self._tape = Wraptape(tape)        
+        
     def make_model(self, kern):
         return MultiTaskPotential(
             self.tasks, self.tasks_opt, self.niter_tasks_opt, self.algo, kern
@@ -163,7 +185,8 @@ class MultiTaskCalculator(ActiveCalculator):
         # thermodynamic integration
         if self.weights_fin is not None and (self.step % self.t_tieq) == 0:
             self.thermo_int()
-
+                
+            
     def active_sample_weights_space(self):
         """
         A function that enforces an even sampling over the weights space w=[w0,w1,...,wn]
@@ -192,15 +215,19 @@ class MultiTaskCalculator(ActiveCalculator):
             1.0 - ti_lambda
         ) * self.weights_init + ti_lambda * self.weights_fin
         self.log(f"Thermodynamics Integration in progress - Weights w={self.weights}")
-
+            
     def _exact(self, copy):
         results = []
+        save_multi = []
         for task, _calc in enumerate(self._calcs):
             e, f = super()._exact(copy, _calc=_calc, task=task)
             results.append((e, f))
+            save_multi.append(self._saved_for_tape)
         e, f = zip(*results)
         e = np.array(e)
         f = np.stack(f, axis=-1)
+        
+        self._saved_for_tape=save_multi
         return e, f
 
     def update_results(self, retain_graph=False):
@@ -225,3 +252,92 @@ class MultiTaskCalculator(ActiveCalculator):
                 f.write("{}{} {} {}\n".format(self._logpref, date(), self.step, mssge))
                 if self.stdout:
                     print("{}{} {} {}".format(self._logpref, date(), self.step, mssge))
+                    
+    def include_tape(self, tape, ndata=None):
+
+        _tasks=self.tasks
+        
+        if type(tape) == str:
+            if abspath(tape) == self.tape.path:
+                raise RuntimeError(
+                    "ActiveCalculator can not include it own .sgpr tape!"
+                )
+            tape = SgprIO(tape)
+            
+        _calc = self._calc
+        tune_for_md = self.tune_for_md
+        self.tune_for_md = False
+        self.get_ready()
+
+        def _save():
+            if added_lce[0] > 0:
+                if self.ioptim == 1:
+                    self.optimize()
+                self.save_model()
+                self.log(
+                    "added lone indus: {}/{} -> size: {} {}".format(
+                        *added_lce, *self.size
+                    )
+                )
+                self.log(
+                    "fit error (mean,mae): E: {:.2g} {:.2g}   F: {:.2g} {:.2g}   R2: {:.4g}".format(
+                        *(float(v) for v in self.model._stats)
+                    )
+                )
+
+        #
+        added_lce = [0, 0]
+        cdata = 0
+        icalc=1
+        #multi_atoms=[]
+        #self._calcs=[]
+        
+        for cls, obj in tape.read(exclude=None):
+            if cls == "atoms":
+                if abs(obj.get_forces()).max() > self.include_params["fmax"]:
+                    if len(self.model.data) > 0:
+                        continue
+                _save()
+                self._update_args = dict(inducing=False)
+                
+                
+                if icalc%(_tasks) != 0:
+                    if icalc%_tasks ==1:
+                        self._calcs=[]
+                        
+                    #atoms_tmp=obj.copy()
+                    calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
+                                                    forces=obj.get_forces())   
+                    obj.calc = calc_tmp
+                    #multi_atoms.append(obj)
+                    self._calcs.append(calc_tmp)
+                    icalc+=1
+                else:
+                    #atoms_tmp=obj.copy()
+                    calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
+                                                    forces=obj.get_forces())   
+                    obj.calc = calc_tmp
+                    #multi_atoms.append(obj)
+                    self._calcs.append(calc_tmp)
+                    icalc=1
+                
+                    #self._calc = obj.calc
+                    obj.set_calculator(self)
+                    obj.get_potential_energy()
+                    obj.set_calculator(self._calc)
+                    
+                    cdata += 1
+                    if ndata and cdata >= ndata:
+                        break
+                    added_lce = [0, 0]
+                
+            elif cls == "local":
+                obj.stage(self.model.descriptors, True)
+                added = self.update_lce(obj)
+                added_lce[0] += abs(added)
+                added_lce[1] += 1
+        _save()
+
+        #
+        self._calc = _calc
+        self.tune_for_md = tune_for_md
