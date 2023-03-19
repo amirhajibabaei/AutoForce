@@ -308,7 +308,7 @@ class MultiTaskCalculator(ActiveCalculator):
                     #atoms_tmp=obj.copy()
                     calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
                                                     forces=obj.get_forces())   
-                    obj.calc = calc_tmp
+                    #obj.calc = calc_tmp
                     #multi_atoms.append(obj)
                     self._calcs.append(calc_tmp)
                     icalc+=1
@@ -316,7 +316,7 @@ class MultiTaskCalculator(ActiveCalculator):
                     #atoms_tmp=obj.copy()
                     calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
                                                     forces=obj.get_forces())   
-                    obj.calc = calc_tmp
+                    #obj.calc = calc_tmp
                     #multi_atoms.append(obj)
                     self._calcs.append(calc_tmp)
                     icalc=1
