@@ -256,6 +256,7 @@ class MultiTaskCalculator(ActiveCalculator):
     def include_tape(self, tape, ndata=None):
 
         _tasks=self.tasks
+        update_calcs=self._calcs
         
         if type(tape) == str:
             if abspath(tape) == self.tape.path:
@@ -289,8 +290,6 @@ class MultiTaskCalculator(ActiveCalculator):
         added_lce = [0, 0]
         cdata = 0
         icalc=1
-        #multi_atoms=[]
-        #self._calcs=[]
         
         for cls, obj in tape.read(exclude=None):
             if cls == "atoms":
@@ -299,29 +298,34 @@ class MultiTaskCalculator(ActiveCalculator):
                         continue
                 _save()
                 self._update_args = dict(inducing=False)
-                
+
                 
                 if icalc%(_tasks) != 0:
                     if icalc%_tasks ==1:
                         self._calcs=[]
-                        
-                    #atoms_tmp=obj.copy()
-                    calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
-                                                    forces=obj.get_forces())   
-                    #obj.calc = calc_tmp
-                    #multi_atoms.append(obj)
-                    self._calcs.append(calc_tmp)
+                    
+                    if update_calcs[icalc-1] == obj.calc:
+                        calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
+                                                        forces=obj.get_forces())   
+                    # if a calculator is different (e.g. higher level theory), the model will be updated to other levels.
+                    else:
+                        obj.calc = update_calcs[icalc-1]
+                        calc_tmp = SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
+                                                                   forces=obj.get_forces())                          
+                    self._calcs.append(calc_tmp)                        
                     icalc+=1
                 else:
-                    #atoms_tmp=obj.copy()
-                    calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
-                                                    forces=obj.get_forces())   
-                    #obj.calc = calc_tmp
-                    #multi_atoms.append(obj)
+                    if update_calcs[icalc-1] == obj.calc:
+                        calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
+                                                        forces=obj.get_forces())   
+                    else:
+                        obj.calc = update_calcs[icalc-1]
+                        calc_tmp = SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
+                                                                   forces=obj.get_forces())    
+                    
                     self._calcs.append(calc_tmp)
                     icalc=1
                 
-                    #self._calc = obj.calc
                     obj.set_calculator(self)
                     obj.get_potential_energy()
                     obj.set_calculator(self._calc)
@@ -338,6 +342,6 @@ class MultiTaskCalculator(ActiveCalculator):
                 added_lce[1] += 1
         _save()
 
-        #
         self._calc = _calc
         self.tune_for_md = tune_for_md
+
