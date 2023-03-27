@@ -70,6 +70,7 @@ class MultiTaskCalculator(ActiveCalculator):
         k=1.0,
         d0=1.0,
         ij=None,
+        retrain_tape=False,
         **kwargs,
     ):
 
@@ -102,6 +103,8 @@ class MultiTaskCalculator(ActiveCalculator):
         self.k = k
         self.d0 = d0
         self.ij = ij
+
+        self.retrain_tape = retrain_tape
 
     @property
     def tasks(self):
@@ -304,24 +307,25 @@ class MultiTaskCalculator(ActiveCalculator):
                     if icalc%_tasks ==1:
                         self._calcs=[]
                     
-                    if update_calcs[icalc-1] == obj.calc:
-                        calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
-                                                        forces=obj.get_forces())   
                     # if a calculator is different (e.g. higher level theory), the model will be updated to other levels.
-                    else:
+                    if self.retrain_tape:
                         obj.calc = update_calcs[icalc-1]
                         calc_tmp = SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
                                                                    forces=obj.get_forces())                          
+                    else:
+                        calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
+                                                        forces=obj.get_forces())   
+
                     self._calcs.append(calc_tmp)                        
                     icalc+=1
                 else:
-                    if update_calcs[icalc-1] == obj.calc:
-                        calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
-                                                        forces=obj.get_forces())   
-                    else:
+                    if self.retrain_tape: 
                         obj.calc = update_calcs[icalc-1]
                         calc_tmp = SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
                                                                    forces=obj.get_forces())    
+                    else:
+                        calc_tmp =SinglePointCalculator(atoms=obj,energy=obj.get_potential_energy(),
+                                                        forces=obj.get_forces())   
                     
                     self._calcs.append(calc_tmp)
                     icalc=1
