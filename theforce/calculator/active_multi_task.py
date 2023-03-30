@@ -173,7 +173,8 @@ class MultiTaskCalculator(ActiveCalculator):
             delu = (
                 self.get_task_results(0)["energy"] - self.get_task_results(1)["energy"]
             )
-        self.multilog(f"{delu}  {self.weights}  {self.model.tasks_kern.view(-1)}")
+        self.multilog(f"{delu}  {self.weights}  {self.model.tasks_kern.view(-1)} {self.model._vscale} {self.model.mu} {self.model.scaled_noise}")
+
 
         super().post_calculate(*args, **kwargs)
 

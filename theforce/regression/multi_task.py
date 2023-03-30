@@ -37,6 +37,7 @@ class MultiTaskPotential(PosteriorPotential):
         self.tasks_kern_optimization = tasks_kern_optimization
         self.niter_tasks = niter_tasks
         self.algo = algo
+        self.multi_mu = None
 
     def make_munu(self, *args, **kwargs):
 
@@ -71,7 +72,21 @@ class MultiTaskPotential(PosteriorPotential):
         kern = torch.cat([kern_1, kern_2], dim=1)
 
         # *** legacy stuff ***
-        sigma = 0.01
+        if not hasattr(self, "_noise"):
+            self._noise = {}
+
+        scale = {}
+        max_noise=0.99
+        if "all" not in self._noise:
+            self._noise["all"] = to_inf_inf(self.gp.noise.signal.detach())
+        scale["all"] = self.M.diag().mean() * max_noise
+
+        #sigma = 0.01
+        if self.multi_mu is not None:
+            sigma = 0.01*torch.norm(self.multi_mu,p=2).item()
+        else:
+            sigma = to_0_1(self._noise["all"]) * scale["all"]
+
         self.scaled_noise = {"all": sigma}
         chol = torch.linalg.cholesky(self.M)
         self.ridge = torch.tensor(0.0)
@@ -235,3 +250,11 @@ def tasks_correlation(f, corr_coef="pearson"):
         b = a.diag().sqrt()[None]
         W = a / (b * b.t())
     return W
+
+
+def to_0_1(x):
+    return 1 / x.neg().exp().add(1.0)
+
+def to_inf_inf(y):
+    return (y / y.neg().add(1.0)).log()
+
