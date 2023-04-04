@@ -81,7 +81,7 @@ class MultiTaskPotential(PosteriorPotential):
             self._noise["all"] = to_inf_inf(self.gp.noise.signal.detach())
         scale["all"] = self.M.diag().mean() * max_noise
 
-        #sigma = 0.01
+        #sigma = 0.1
         if self.multi_mu is not None:
             sigma = 0.01*torch.norm(self.multi_mu,p=2).item()
         else:
@@ -96,15 +96,10 @@ class MultiTaskPotential(PosteriorPotential):
         self.mean._weight = {}
         self.mean.weights = {}
 
-        # *** sgpr extensions ***
-        sgpr = True
-        if sgpr:
-            _kern_1 = sigma * chol.t()
-            _kern_2 = torch.zeros(chol_size, ntypes)
-            _kern = torch.cat([_kern_1, _kern_2], dim=1)
-            kern = torch.cat([kern, _kern])
-            _targets = torch.zeros(self.tasks * chol_size)
-            targets = torch.cat([targets, _targets])
+        M_multi=torch.kron(self.M, self.tasks_kern)
+        chol_multi = torch.linalg.cholesky(M_multi)
+        choli_multi = chol_multi.inverse().contiguous()
+        chol_multi_size = chol_multi.size(0)
 
         # *** tasks kernel ***
         # covariance between tasks:
@@ -123,6 +118,17 @@ class MultiTaskPotential(PosteriorPotential):
             # decoupled optimizer for mu and W
             # 1. Initial weights \mu optimization ***
             design = torch.kron(kern, self.tasks_kern)
+
+            # *** sgpr extensions ***
+            sgpr = True
+            if sgpr:
+                _kern_1 = sigma * chol_multi.t()
+                _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
+                _kern = torch.cat([_kern_1, _kern_2], dim=1)
+                design = torch.cat([design, _kern])
+                _targets = torch.zeros(chol_multi_size)
+                targets = torch.cat([targets, _targets])
+
             solution, predictions = least_squares(design, targets, solver=self.algo)
             self.multi_mu = solution
             self.multi_types = {z: i for i, z in enumerate(atom_types)}
@@ -132,11 +138,13 @@ class MultiTaskPotential(PosteriorPotential):
                 x1 = self.tasks_kern_L[0][0].item()
                 x2 = self.tasks_kern_L[1][0].item()
                 x3 = self.tasks_kern_L[1][1].item()
+
                 res = minimize(
                     optimize_task_kern_twobytwo,
                     [x1, x2, x3],
-                    args=(kern, solution, targets),
+                    args=(kern, self.M, sigma, ntypes, solution, targets),
                 )
+
                 self.tasks_kern_L[0][0] = res.x[0]
                 self.tasks_kern_L[1][0] = res.x[1]
                 self.tasks_kern_L[1][1] = res.x[2]
@@ -144,14 +152,48 @@ class MultiTaskPotential(PosteriorPotential):
 
                 # 3. Re-optimization of weights \mu based on an updated W ***
                 design = torch.kron(kern, self.tasks_kern)
+
+                # *** sgpr extensions ***
+                sgpr = True
+                if sgpr:
+                    M_multi=torch.kron(self.M, self.tasks_kern)
+                    chol_multi = torch.linalg.cholesky(M_multi)
+                    choli_multi = chol_multi.inverse().contiguous()
+
+                    _kern_1 = sigma * chol_multi.t()
+                    _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
+                    _kern = torch.cat([_kern_1, _kern_2], dim=1)
+                    design = torch.cat([design, _kern])
+
                 solution, predictions = least_squares(design, targets, solver=self.algo)
                 self.multi_mu = solution
                 self.multi_types = {z: i for i, z in enumerate(atom_types)}
+
+                #design = torch.kron(kern, self.tasks_kern)
+                #solution, predictions = least_squares(design, targets, solver=self.algo)
+                #self.multi_mu = solution
+                #self.multi_types = {z: i for i, z in enumerate(atom_types)}
                 # print(f'{i} Optimized tasks corrs: {self.tasks_kern}, Lower: {self.tasks_kern_L}, error: {res.fun}')
         else:
             # for predetermined tasks corr
             # self.tasks_kern = tasks_correlation(forces.view(self.tasks,-1),corr_coef='pearson')
             self.tasks_kern = torch.eye(self.tasks)
+            # 1. Initial weights \mu optimization ***
+            design = torch.kron(kern, self.tasks_kern)
+
+            # *** sgpr extensions ***
+            sgpr = True
+            if sgpr:
+                _kern_1 = sigma * chol_multi.t()
+                _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
+                _kern = torch.cat([_kern_1, _kern_2], dim=1)
+                design = torch.cat([design, _kern])
+                _targets = torch.zeros(chol_multi_size)
+                targets = torch.cat([targets, _targets])
+
+            solution, predictions = least_squares(design, targets, solver=self.algo)
+            self.multi_mu = solution
+            self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
             # for independent tasks, set:
             # self.tasks_kern = torch.eye(self.tasks)
@@ -164,10 +206,10 @@ class MultiTaskPotential(PosteriorPotential):
             # self.tasks_kern = torch.from_numpy(self.tasks_kern)
 
             # *** solution ***
-            design = torch.kron(kern, self.tasks_kern)
-            solution, predictions = least_squares(design, targets, solver=self.algo)
-            self.multi_mu = solution
-            self.multi_types = {z: i for i, z in enumerate(atom_types)}
+            #design = torch.kron(kern, self.tasks_kern)
+            #solution, predictions = least_squares(design, targets, solver=self.algo)
+            #self.multi_mu = solution
+            #self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
         # *** stats ***
         # TODO: per-task vscales?
@@ -191,7 +233,7 @@ class MultiTaskPotential(PosteriorPotential):
         return [e for e in energies]
 
 
-def optimize_task_kern_twobytwo(x, kern, solution, targets):
+def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets):
     """
     A toy function that measures the error of multitask model
     for a given x in 2 tasks setting
@@ -199,7 +241,20 @@ def optimize_task_kern_twobytwo(x, kern, solution, targets):
     tasks_kern_L_np = np.array([[x[0], 0.0], [x[1], x[2]]], dtype="float64")
     tasks_kern_L = torch.from_numpy(tasks_kern_L_np)
     tasks_kern = tasks_kern_L @ tasks_kern_L.T
+
+    M_multi=torch.kron(M, tasks_kern)
+    chol_multi = torch.linalg.cholesky(M_multi)
+
     design = torch.kron(kern, tasks_kern)
+
+    # *** sgpr extensions ***
+    sgpr = True
+    if sgpr:
+        _kern_1 = sigma * chol_multi.t()
+        _kern_2 = torch.zeros(chol_multi.size(0), tasks_kern.size(0)*ntypes)
+        _kern = torch.cat([_kern_1, _kern_2], dim=1)
+        design = torch.cat([design, _kern])
+
     pred = design @ solution
     err = (pred - targets).abs().mean()
     return err.numpy()
