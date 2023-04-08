@@ -2,6 +2,7 @@
 import numpy as np
 import torch
 from scipy.optimize import minimize
+import math
 
 import theforce.distributed as distrib
 from theforce.regression.gppotential import PosteriorPotential
@@ -26,9 +27,17 @@ class MultiTaskPotential(PosteriorPotential):
         self, tasks, tasks_kern_optimization, niter_tasks, algo, *args, **kwargs
     ):
         """
-        tasks: number of potential energy types.
-
+        tasks: The number of potential energy surface to learn
+        tasks_kern_optimization: Flag for tasks_kern optimization 
+        niter_tasks: The number of tasks kernel optimization iteration
+        algo: torch linear algebra algorithm
+        tasks_kern_L: Lower triangle kernel matrix
+        sigma_reg: Sigma regularization scheme
+            - None:  Constant regularization 
+            - am: Adaptive regularization over multi_mu 
+            - default: Default single task sigma
         """
+
         super().__init__(*args, **kwargs)
         self.tasks = tasks
         self.tasks_kern_L = torch.eye(self.tasks)
@@ -38,6 +47,7 @@ class MultiTaskPotential(PosteriorPotential):
         self.niter_tasks = niter_tasks
         self.algo = algo
         self.multi_mu = None
+        self.sigma_reg = 'am'
 
     def make_munu(self, *args, **kwargs):
 
@@ -75,17 +85,20 @@ class MultiTaskPotential(PosteriorPotential):
         if not hasattr(self, "_noise"):
             self._noise = {}
 
-        scale = {}
-        max_noise=0.99
-        if "all" not in self._noise:
-            self._noise["all"] = to_inf_inf(self.gp.noise.signal.detach())
-        scale["all"] = self.M.diag().mean() * max_noise
-
-        #sigma = 0.1
-        if self.multi_mu is not None:
-            sigma = 0.01*torch.norm(self.multi_mu,p=2).item()
-        else:
+        if self.sigma_reg is "default":
+            scale = {}
+            max_noise=0.99
+            if "all" not in self._noise:
+                self._noise["all"] = to_inf_inf(self.gp.noise.signal.detach())
+            scale["all"] = self.M.diag().mean() * max_noise
             sigma = to_0_1(self._noise["all"]) * scale["all"]
+        elif self.sigma_reg is "am":
+            if self.multi_mu is None: 
+                sigma=0.01
+            else:
+                sigma = self.smooth_sigma()
+        else:
+            sigma = 0.01
 
         self.scaled_noise = {"all": sigma}
         chol = torch.linalg.cholesky(self.M)
@@ -232,15 +245,38 @@ class MultiTaskPotential(PosteriorPotential):
         energies = (kern @ self.multi_mu).reshape(-1, self.tasks).sum(dim=0)
         return [e for e in energies]
 
+    def smooth_sigma(self, large_model_size=10, min_sigma = 0.01):
+        """
+        Adaptive sigma function
+        Multitask is susceptible to the choice of sigma. 
+        Therefore, this is to prevent the underfitting at the initial phase of training by setting sigma to 0.01.
+        And as the training progresses, the sigma saturates to the L2 norm of multi_mu to prevent overfitting.
+        """
+        model_size = self.ndata
+        sigmoid_transition = custom_sigmoid((model_size - large_model_size))
+        max_sigma = 0.01 * torch.norm(self.multi_mu, p=2).item()
 
-def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets):
+        sigma = min_sigma + sigmoid_transition * (max_sigma - min_sigma)
+        return sigma
+
+
+def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, tasks_reg=False):
     """
     A toy function that measures the error of multitask model
     for a given x in 2 tasks setting
+
+    - tasks_reg: This tag activates the regularization over the tasks kernel matrix. 
     """
     tasks_kern_L_np = np.array([[x[0], 0.0], [x[1], x[2]]], dtype="float64")
     tasks_kern_L = torch.from_numpy(tasks_kern_L_np)
     tasks_kern = tasks_kern_L @ tasks_kern_L.T
+
+    # Add L2 regularization to diagonal elements of tasks_kern
+    if tasks_reg is True:
+        alpha=0.01
+        diag = torch.diagonal(tasks_kern)
+        diag_reg = alpha*(diag-1)**2
+        tasks_kern += torch.diag(diag_reg)
 
     M_multi=torch.kron(M, tasks_kern)
     chol_multi = torch.linalg.cholesky(M_multi)
@@ -257,10 +293,16 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets):
 
     pred = design @ solution
     err = (pred - targets).abs().mean()
+
+    # Add L2 regularization term to diagonal elements of tasks_kern
+    if tasks_reg is True:
+        tasks_kern_diag = torch.diagonal(tasks_kern)
+        tasks_kern_diag_reg = alpha * tasks_kern_diag ** 2
+        err += tasks_kern_diag_reg.sum()
+
     return err.numpy()
 
-
-def least_squares(design, targets, trials=10, solver="gelsd"):
+def least_squares(design, targets, trials=1, solver="gelsd"):
     """
     Minimizes
         || design @ solution - targets ||
@@ -313,3 +355,5 @@ def to_0_1(x):
 def to_inf_inf(y):
     return (y / y.neg().add(1.0)).log()
 
+def custom_sigmoid(x):
+    return 1 / (1 + math.exp(-x))
