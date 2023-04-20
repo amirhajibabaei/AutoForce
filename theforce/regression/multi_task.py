@@ -24,7 +24,7 @@ class MultiTaskPotential(PosteriorPotential):
     """
 
     def __init__(
-        self, tasks, tasks_kern_optimization, niter_tasks, algo, *args, **kwargs
+        self, tasks, tasks_kern_optimization, niter_tasks, algo, sigma_reg=None, alpha_reg=0.001, *args, **kwargs
     ):
         """
         tasks: The number of potential energy surface to learn
@@ -47,7 +47,8 @@ class MultiTaskPotential(PosteriorPotential):
         self.niter_tasks = niter_tasks
         self.algo = algo
         self.multi_mu = None
-        self.sigma_reg = 'am'
+        self.sigma_reg = sigma_reg
+        self.alpha_reg = alpha_reg
 
     def make_munu(self, *args, **kwargs):
 
@@ -97,6 +98,8 @@ class MultiTaskPotential(PosteriorPotential):
                 sigma=0.01
             else:
                 sigma = self.smooth_sigma()
+        elif isinstance(self.sigma_reg, (int, float)):
+            sigma=self.sigma_reg
         else:
             sigma = 0.01
 
@@ -254,7 +257,7 @@ class MultiTaskPotential(PosteriorPotential):
         """
         model_size = self.ndata
         sigmoid_transition = custom_sigmoid((model_size - large_model_size))
-        max_sigma = 0.01 * torch.norm(self.multi_mu, p=2).item()
+        max_sigma = self.alpha_reg * torch.norm(self.multi_mu, p=2).item()
 
         sigma = min_sigma + sigmoid_transition * (max_sigma - min_sigma)
         return sigma
@@ -302,7 +305,7 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, ta
 
     return err.numpy()
 
-def least_squares(design, targets, trials=1, solver="gelsd"):
+def least_squares(design, targets, trials=10, solver="gelsd"):
     """
     Minimizes
         || design @ solution - targets ||
@@ -320,6 +323,21 @@ def least_squares(design, targets, trials=1, solver="gelsd"):
     - https://pytorch.org/docs/stable/generated/torch.linalg.lstsq.html#torch.linalg.lstsq
     - https://www.smcm.iqfr.csic.es/docs/intel/mkl/mkl_manual/lse/lse_drllsp.htm
     """
+
+    # Compute the rank of the matrix
+    rank = torch.matrix_rank(design)
+    
+    # Check if the matrix is full-rank
+    num_rows, num_cols = design.shape
+    is_full_rank = rank == min(num_rows, num_cols)
+    
+    if is_full_rank: 
+        matrix_ranklog('Matrix is full-rank.\n')
+        matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
+    else: 
+        matrix_ranklog('Matrix is not full-rank.\n')
+        matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
+
     best = None
     predictions = None
     for _ in range(trials):
@@ -332,6 +350,9 @@ def least_squares(design, targets, trials=1, solver="gelsd"):
             best = err
     return solution, predictions
 
+def matrix_ranklog(mssge, mode="a"):
+    with open("matrix_rank.log", mode) as f:
+        f.write(f"{mssge}\n")
 
 def tasks_correlation(f, corr_coef="pearson"):
     """

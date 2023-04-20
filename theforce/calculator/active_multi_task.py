@@ -71,12 +71,16 @@ class MultiTaskCalculator(ActiveCalculator):
         d0=1.0,
         ij=None,
         retrain_tape=False,
+        sigma_reg=None,
+        alpha_reg=0.001,
         **kwargs,
     ):
 
         self.tasks_opt = tasks_opt
         self.niter_tasks_opt = niter_tasks_opt
         self.algo = algo
+        self.alpha_reg = alpha_reg
+        self.sigma_reg = sigma_reg
 
         super().__init__(*args, **kwargs)
 
@@ -138,7 +142,7 @@ class MultiTaskCalculator(ActiveCalculator):
         
     def make_model(self, kern):
         return MultiTaskPotential(
-            self.tasks, self.tasks_opt, self.niter_tasks_opt, self.algo, kern
+            self.tasks, self.tasks_opt, self.niter_tasks_opt, self.algo, self.sigma_reg, self.alpha_reg, kern
         )
 
     def post_calculate(self, *args, **kwargs):
