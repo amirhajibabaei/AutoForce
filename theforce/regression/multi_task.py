@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from scipy.optimize import minimize
 import math
+import sympy
 
 import theforce.distributed as distrib
 from theforce.regression.gppotential import PosteriorPotential
@@ -57,8 +58,8 @@ class MultiTaskPotential(PosteriorPotential):
         self.multi_mu = None
         self.sigma_reg = sigma_reg
         self.alpha_reg = alpha_reg
-        self.shift = 'pre'
-        self.pre_energy_shift={1: -13.6766048214, 8: -429.072746017}
+        self.shift = 'opt'
+        self.pre_energy_shift={0: 0.0, 1: -13.6766048214, 8: -429.072746017}
 
     def make_munu(self, *args, **kwargs):
 
@@ -94,7 +95,7 @@ class MultiTaskPotential(PosteriorPotential):
         kern_2 = torch.cat([ke_shift, kf_shift])
 
         # patch all blocks:
-        if self.shift is 'opt':
+        if self.shift is 'opt' or 'preopt':
             kern = torch.cat([kern, kern_2], dim=1)
 
         # *** legacy stuff ***
@@ -151,7 +152,7 @@ class MultiTaskPotential(PosteriorPotential):
             sgpr = True
             if sgpr:
                 _kern = sigma * chol_multi.t()
-                if self.shift is 'opt':
+                if self.shift is 'opt' or 'preopt':
                     _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
                     _kern = torch.cat([_kern, _kern_2], dim=1)
                 design = torch.cat([design, _kern])
@@ -286,7 +287,7 @@ class MultiTaskPotential(PosteriorPotential):
         return sigma
 
 
-def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, tasks_reg=False, shift=None):
+def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, tasks_reg=False, shift='opt'):
     """
     A toy function that measures the error of multitask model
     for a given x in 2 tasks setting
@@ -334,16 +335,12 @@ def least_squares(design, targets, trials=1, solver="gels"):
     Minimizes
         || design @ solution - targets ||
     using torch.linalg.lstsq.
-
     Returns
         solution, predictions (= design @ solution)
-
     Since torch.linalg.lstsq is non-deteministic,
     the best solution of "trials" is return.
-
     As the design (kern \\otimes tasks_kern) matrix could fall into
     ill-conditioned form, xGELSY and xGELS fail often (for some reason - update the origin).
-
     - https://pytorch.org/docs/stable/generated/torch.linalg.lstsq.html#torch.linalg.lstsq
     - https://www.smcm.iqfr.csic.es/docs/intel/mkl/mkl_manual/lse/lse_drllsp.htm
     """
@@ -366,6 +363,67 @@ def least_squares(design, targets, trials=1, solver="gels"):
     predictions = None
     for _ in range(trials):
         sol = torch.linalg.lstsq(design, targets, driver=solver)
+        pred = design @ sol.solution
+        err = (pred - targets).abs().mean()
+        if not best or err < best:
+            solution = sol.solution
+            predictions = pred
+            best = err
+    return solution, predictions
+
+
+def least_squares_gram(design, targets, trials=1, solver="gels"):
+    """
+    Minimizes
+        || design @ solution - targets ||
+    using torch.linalg.lstsq.
+
+    Returns
+        solution, predictions (= design @ solution)
+
+    Since torch.linalg.lstsq is non-deteministic,
+    the best solution of "trials" is return.
+
+    As the design (kern \\otimes tasks_kern) matrix could fall into
+    ill-conditioned form, xGELSY and xGELS fail often (for some reason - update the origin).
+
+    - https://pytorch.org/docs/stable/generated/torch.linalg.lstsq.html#torch.linalg.lstsq
+    - https://www.smcm.iqfr.csic.es/docs/intel/mkl/mkl_manual/lse/lse_drllsp.htm
+    """
+
+#    if rref is True: 
+#        rref_matrix, pivot_columns = sympy.Matrix(design.numpy()).rref()
+#        matrix_ranklog(f'pivot columns: {pivot_columns}\n')
+#        design = design[:, pivot_columns]
+
+    # Compute the Gram matrix (A^T * A)
+    design2 = design.t() @ design
+    
+    # Regularize the Gram matrix by adding a multiple of the identity matrix
+    alpha = 1e-6
+    design2 = design2 + alpha * torch.eye(design2.shape[0])
+    
+    # Solve the regularized linear system
+    targets2 = design.t() @ targets
+
+    # Compute the rank of the matrix
+    rank = torch.matrix_rank(design2)
+    
+    # Check if the matrix is full-rank
+    num_rows, num_cols = design2.shape
+    is_full_rank = rank == min(num_rows, num_cols)
+    
+    if is_full_rank: 
+        matrix_ranklog('Matrix is full-rank.\n')
+        matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
+    else: 
+        matrix_ranklog('Matrix is not full-rank.\n')
+        matrix_ranklog(f'Matrix rank: {rank} min_rows: {num_rows} min_cols: {num_cols}\n')
+
+    best = None
+    predictions = None
+    for _ in range(trials):
+        sol = torch.linalg.lstsq(design2, targets2, driver=solver)
         pred = design @ sol.solution
         err = (pred - targets).abs().mean()
         if not best or err < best:
