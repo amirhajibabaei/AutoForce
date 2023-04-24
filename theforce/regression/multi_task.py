@@ -36,6 +36,14 @@ class MultiTaskPotential(PosteriorPotential):
             - None:  Constant regularization 
             - am: Adaptive regularization over multi_mu 
             - default: Default single task sigma
+
+        - Energy shift: We shift the average energy average for better training and 
+                        for transferrability of the model to extended systems 
+
+            - None: no energy shift
+            - opt: constant energy shift term per element is determined from a SGPR equation.          
+            - pre: Use a pre-calculated isolated atom energy of each element type
+            - preopt: Based on an atom energy, optimize the shift level 
         """
 
         super().__init__(*args, **kwargs)
@@ -49,6 +57,8 @@ class MultiTaskPotential(PosteriorPotential):
         self.multi_mu = None
         self.sigma_reg = sigma_reg
         self.alpha_reg = alpha_reg
+        self.shift = 'pre'
+        self.pre_energy_shift={1: -13.6766048214, 8: -429.072746017}
 
     def make_munu(self, *args, **kwargs):
 
@@ -58,10 +68,14 @@ class MultiTaskPotential(PosteriorPotential):
         # for dummy atom type Z
         atom_counts = torch.zeros(len(self.data), 120)
         for i, atoms in enumerate(self.data):
+            shift_energy=0.0
             for z, c in atoms.counts().items():
                 atom_types.add(z)
                 atom_counts[i, z] = c
-            energies.append(atoms.target_energy.view(-1))
+                if self.shift is 'pre':
+                    shift_energy+=self.pre_energy_shift[z]*c
+            _energies=atoms.target_energy.view(-1)-shift_energy
+            energies.append(_energies)
             forces.append(atoms.target_forces.view(-1))
         energies = torch.cat(energies)
         forces = torch.cat(forces)
@@ -71,7 +85,7 @@ class MultiTaskPotential(PosteriorPotential):
 
         # *** kernel matrices ***
         # main block:
-        kern_1 = torch.cat([self.Ke, self.Kf])
+        kern = torch.cat([self.Ke, self.Kf])
 
         # Constant-energy-shift block:
         ntypes = len(atom_types)
@@ -80,7 +94,8 @@ class MultiTaskPotential(PosteriorPotential):
         kern_2 = torch.cat([ke_shift, kf_shift])
 
         # patch all blocks:
-        kern = torch.cat([kern_1, kern_2], dim=1)
+        if self.shift is 'opt':
+            kern = torch.cat([kern, kern_2], dim=1)
 
         # *** legacy stuff ***
         if not hasattr(self, "_noise"):
@@ -128,9 +143,6 @@ class MultiTaskPotential(PosteriorPotential):
         an alternative is to (acvtively) optimize the intertask correlations over the course of the simulation.
         """
         if self.tasks_kern_optimization is True:
-            # self.tasks_kern_L = torch.eye(self.tasks)
-            # self.tasks_kern_L += 1e-2
-
             # decoupled optimizer for mu and W
             # 1. Initial weights \mu optimization ***
             design = torch.kron(kern, self.tasks_kern)
@@ -138,9 +150,10 @@ class MultiTaskPotential(PosteriorPotential):
             # *** sgpr extensions ***
             sgpr = True
             if sgpr:
-                _kern_1 = sigma * chol_multi.t()
-                _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
-                _kern = torch.cat([_kern_1, _kern_2], dim=1)
+                _kern = sigma * chol_multi.t()
+                if self.shift is 'opt':
+                    _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
+                    _kern = torch.cat([_kern, _kern_2], dim=1)
                 design = torch.cat([design, _kern])
                 _targets = torch.zeros(chol_multi_size)
                 targets = torch.cat([targets, _targets])
@@ -176,9 +189,10 @@ class MultiTaskPotential(PosteriorPotential):
                     chol_multi = torch.linalg.cholesky(M_multi)
                     choli_multi = chol_multi.inverse().contiguous()
 
-                    _kern_1 = sigma * chol_multi.t()
-                    _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
-                    _kern = torch.cat([_kern_1, _kern_2], dim=1)
+                    _kern = sigma * chol_multi.t()
+                    if self.shift is 'opt':
+                        _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
+                        _kern = torch.cat([_kern, _kern_2], dim=1)
                     design = torch.cat([design, _kern])
 
                 solution, predictions = least_squares(design, targets, solver=self.algo)
@@ -200,9 +214,10 @@ class MultiTaskPotential(PosteriorPotential):
             # *** sgpr extensions ***
             sgpr = True
             if sgpr:
-                _kern_1 = sigma * chol_multi.t()
-                _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
-                _kern = torch.cat([_kern_1, _kern_2], dim=1)
+                _kern = sigma * chol_multi.t()
+                if self.shift is 'opt':
+                    _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
+                    _kern = torch.cat([_kern, _kern_2], dim=1)
                 design = torch.cat([design, _kern])
                 _targets = torch.zeros(chol_multi_size)
                 targets = torch.cat([targets, _targets])
@@ -237,15 +252,23 @@ class MultiTaskPotential(PosteriorPotential):
         assert kern.size(0) == len(local_numbers)
         ntypes = len(self.multi_types)
         kern_shift = torch.zeros(kern.size(0), ntypes)
+
+        shift_energy=0.0
         for i, z in enumerate(local_numbers):
             if z in self.multi_types:
                 kern_shift[i, self.multi_types[z]] = 1.0
+                if self.shift is 'pre':
+                    shift_energy+=self.pre_energy_shift[z]
             else:
                 pass
                 # raise RuntimeError(f'unseen atomic number {z}')
-        kern = torch.cat([kern, kern_shift], dim=1)
+
+        if self.shift is 'opt':
+            kern = torch.cat([kern, kern_shift], dim=1)
         kern = torch.kron(kern, self.tasks_kern)
         energies = (kern @ self.multi_mu).reshape(-1, self.tasks).sum(dim=0)
+        if self.shift is 'pre':
+            energies += shift_energy 
         return [e for e in energies]
 
     def smooth_sigma(self, large_model_size=10, min_sigma = 0.01):
@@ -263,7 +286,7 @@ class MultiTaskPotential(PosteriorPotential):
         return sigma
 
 
-def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, tasks_reg=False):
+def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, tasks_reg=False, shift=None):
     """
     A toy function that measures the error of multitask model
     for a given x in 2 tasks setting
@@ -289,9 +312,10 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, ta
     # *** sgpr extensions ***
     sgpr = True
     if sgpr:
-        _kern_1 = sigma * chol_multi.t()
-        _kern_2 = torch.zeros(chol_multi.size(0), tasks_kern.size(0)*ntypes)
-        _kern = torch.cat([_kern_1, _kern_2], dim=1)
+        _kern = sigma * chol_multi.t()
+        if shift is 'opt':
+            _kern_2 = torch.zeros(chol_multi.size(0), tasks_kern.size(0)*ntypes)
+            _kern = torch.cat([_kern, _kern_2], dim=1)
         design = torch.cat([design, _kern])
 
     pred = design @ solution
@@ -305,7 +329,7 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, ta
 
     return err.numpy()
 
-def least_squares(design, targets, trials=10, solver="gelsd"):
+def least_squares(design, targets, trials=1, solver="gels"):
     """
     Minimizes
         || design @ solution - targets ||
