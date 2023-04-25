@@ -73,7 +73,7 @@ class MultiTaskPotential(PosteriorPotential):
             for z, c in atoms.counts().items():
                 atom_types.add(z)
                 atom_counts[i, z] = c
-                if self.shift is 'pre':
+                if self.shift == 'pre':
                     shift_energy+=self.pre_energy_shift[z]*c
             _energies=atoms.target_energy.view(-1)-shift_energy
             energies.append(_energies)
