@@ -95,21 +95,21 @@ class MultiTaskPotential(PosteriorPotential):
         kern_2 = torch.cat([ke_shift, kf_shift])
 
         # patch all blocks:
-        if self.shift is 'opt' or 'preopt':
+        if self.shift == 'opt':
             kern = torch.cat([kern, kern_2], dim=1)
 
         # *** legacy stuff ***
         if not hasattr(self, "_noise"):
             self._noise = {}
 
-        if self.sigma_reg is "default":
+        if self.sigma_reg == "default":
             scale = {}
             max_noise=0.99
             if "all" not in self._noise:
                 self._noise["all"] = to_inf_inf(self.gp.noise.signal.detach())
             scale["all"] = self.M.diag().mean() * max_noise
             sigma = to_0_1(self._noise["all"]) * scale["all"]
-        elif self.sigma_reg is "am":
+        elif self.sigma_reg == "am":
             if self.multi_mu is None: 
                 sigma=0.01
             else:
@@ -152,7 +152,7 @@ class MultiTaskPotential(PosteriorPotential):
             sgpr = True
             if sgpr:
                 _kern = sigma * chol_multi.t()
-                if self.shift is 'opt' or 'preopt':
+                if self.shift == 'opt':
                     _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
                     _kern = torch.cat([_kern, _kern_2], dim=1)
                 design = torch.cat([design, _kern])
@@ -191,7 +191,7 @@ class MultiTaskPotential(PosteriorPotential):
                     choli_multi = chol_multi.inverse().contiguous()
 
                     _kern = sigma * chol_multi.t()
-                    if self.shift is 'opt':
+                    if self.shift == 'opt':
                         _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
                         _kern = torch.cat([_kern, _kern_2], dim=1)
                     design = torch.cat([design, _kern])
@@ -216,7 +216,7 @@ class MultiTaskPotential(PosteriorPotential):
             sgpr = True
             if sgpr:
                 _kern = sigma * chol_multi.t()
-                if self.shift is 'opt':
+                if self.shift == 'opt':
                     _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
                     _kern = torch.cat([_kern, _kern_2], dim=1)
                 design = torch.cat([design, _kern])
@@ -258,17 +258,17 @@ class MultiTaskPotential(PosteriorPotential):
         for i, z in enumerate(local_numbers):
             if z in self.multi_types:
                 kern_shift[i, self.multi_types[z]] = 1.0
-                if self.shift is 'pre':
+                if self.shift == 'pre':
                     shift_energy+=self.pre_energy_shift[z]
             else:
                 pass
                 # raise RuntimeError(f'unseen atomic number {z}')
 
-        if self.shift is 'opt':
+        if self.shift == 'opt':
             kern = torch.cat([kern, kern_shift], dim=1)
         kern = torch.kron(kern, self.tasks_kern)
         energies = (kern @ self.multi_mu).reshape(-1, self.tasks).sum(dim=0)
-        if self.shift is 'pre':
+        if self.shift == 'pre':
             energies += shift_energy 
         return [e for e in energies]
 
@@ -314,7 +314,7 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, ta
     sgpr = True
     if sgpr:
         _kern = sigma * chol_multi.t()
-        if shift is 'opt':
+        if shift == 'opt':
             _kern_2 = torch.zeros(chol_multi.size(0), tasks_kern.size(0)*ntypes)
             _kern = torch.cat([_kern, _kern_2], dim=1)
         design = torch.cat([design, _kern])
@@ -352,6 +352,8 @@ def least_squares(design, targets, trials=1, solver="gels"):
     num_rows, num_cols = design.shape
     is_full_rank = rank == min(num_rows, num_cols)
     
+    #how to print for only process 0
+
     if is_full_rank: 
         matrix_ranklog('Matrix is full-rank.\n')
         matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
@@ -374,21 +376,8 @@ def least_squares(design, targets, trials=1, solver="gels"):
 
 def least_squares_gram(design, targets, trials=1, solver="gels"):
     """
-    Minimizes
-        || design @ solution - targets ||
-    using torch.linalg.lstsq.
-
-    Returns
-        solution, predictions (= design @ solution)
-
-    Since torch.linalg.lstsq is non-deteministic,
-    the best solution of "trials" is return.
-
-    As the design (kern \\otimes tasks_kern) matrix could fall into
-    ill-conditioned form, xGELSY and xGELS fail often (for some reason - update the origin).
-
-    - https://pytorch.org/docs/stable/generated/torch.linalg.lstsq.html#torch.linalg.lstsq
-    - https://www.smcm.iqfr.csic.es/docs/intel/mkl/mkl_manual/lse/lse_drllsp.htm
+    An attempt to create a gram matrix to be free from full rank problem.
+    It does not look working...
     """
 
 #    if rref is True: 
