@@ -133,12 +133,6 @@ class MultiTaskPotential(PosteriorPotential):
         choli_multi = chol_multi.inverse().contiguous()
         chol_multi_size = chol_multi.size(0)
 
-        # *** tasks kernel ***
-        # covariance between tasks:
-        # in principle this should be optimized as a hyper parameter.
-        # for now we set it equal to correlation of forces in different
-        # tasks.
-
         """
         As the optimization of the intertask correlations is time-consuming,
         an alternative is to (acvtively) optimize the intertask correlations over the course of the simulation.
@@ -200,15 +194,12 @@ class MultiTaskPotential(PosteriorPotential):
                 self.multi_mu = solution
                 self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
-                #design = torch.kron(kern, self.tasks_kern)
-                #solution, predictions = least_squares(design, targets, solver=self.algo)
-                #self.multi_mu = solution
-                #self.multi_types = {z: i for i, z in enumerate(atom_types)}
-                # print(f'{i} Optimized tasks corrs: {self.tasks_kern}, Lower: {self.tasks_kern_L}, error: {res.fun}')
         else:
             # for predetermined tasks corr
             # self.tasks_kern = tasks_correlation(forces.view(self.tasks,-1),corr_coef='pearson')
+            
             self.tasks_kern = torch.eye(self.tasks)
+            
             # 1. Initial weights \mu optimization ***
             design = torch.kron(kern, self.tasks_kern)
 
@@ -227,21 +218,10 @@ class MultiTaskPotential(PosteriorPotential):
             self.multi_mu = solution
             self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
-            # for independent tasks, set:
-            # self.tasks_kern = torch.eye(self.tasks)
-            # a small ridge maybe needed in case tasks are identical:
-            # self.tasks_kern += torch.eye(self.tasks) * 1e-1
-
             # np corr
             # import numpy as np
             # self.tasks_kern = np.corrcoef(forces.view(-1, self.tasks)[:,0], forces.view(-1, self.tasks)[:,1])
             # self.tasks_kern = torch.from_numpy(self.tasks_kern)
-
-            # *** solution ***
-            #design = torch.kron(kern, self.tasks_kern)
-            #solution, predictions = least_squares(design, targets, solver=self.algo)
-            #self.multi_mu = solution
-            #self.multi_types = {z: i for i, z in enumerate(atom_types)}
 
         # *** stats ***
         # TODO: per-task vscales?
@@ -330,7 +310,7 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, ta
 
     return err.numpy()
 
-def least_squares(design, targets, trials=1, solver="gels"):
+def least_squares(design, targets, trials=1, solver="gels", mode="debug"):
     """
     Minimizes
         || design @ solution - targets ||
@@ -343,6 +323,10 @@ def least_squares(design, targets, trials=1, solver="gels"):
     ill-conditioned form, xGELSY and xGELS fail often (for some reason - update the origin).
     - https://pytorch.org/docs/stable/generated/torch.linalg.lstsq.html#torch.linalg.lstsq
     - https://www.smcm.iqfr.csic.es/docs/intel/mkl/mkl_manual/lse/lse_drllsp.htm
+
+    For debugging, select debug mode.
+        - debug: print the rank of the matrix
+        - default: do nothing
     """
 
     # Compute the rank of the matrix
@@ -352,14 +336,14 @@ def least_squares(design, targets, trials=1, solver="gels"):
     num_rows, num_cols = design.shape
     is_full_rank = rank == min(num_rows, num_cols)
     
-    #how to print for only process 0
-
-    if is_full_rank: 
-        matrix_ranklog('Matrix is full-rank.\n')
-        matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
-    else: 
-        matrix_ranklog('Matrix is not full-rank.\n')
-        matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
+    # print if debug mode
+    if mode == "debug":
+        if is_full_rank: 
+            matrix_ranklog('Matrix is full-rank.\n')
+            matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
+        else: 
+            matrix_ranklog('Matrix is not full-rank.\n')
+            matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
 
     best = None
     predictions = None
@@ -422,8 +406,9 @@ def least_squares_gram(design, targets, trials=1, solver="gels"):
     return solution, predictions
 
 def matrix_ranklog(mssge, mode="a"):
-    with open("matrix_rank.log", mode) as f:
-        f.write(f"{mssge}\n")
+    if not distrib.is_initialized() or distrib.get_rank() == 0:
+        with open("matrix_rank.log", mode) as f:
+            f.write(f"{mssge}\n")
 
 def tasks_correlation(f, corr_coef="pearson"):
     """
