@@ -343,7 +343,7 @@ def least_squares(design, targets, trials=1, solver="gels", mode="debug"):
     """
 
     # Compute the rank of the matrix
-    rank = torch.matrix_rank(design)
+    rank = torch.linalg.matrix_rank(design)
     
     # Check if the matrix is full-rank
     num_rows, num_cols = design.shape
