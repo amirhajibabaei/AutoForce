@@ -76,14 +76,14 @@ class MultiTaskCalculator(ActiveCalculator):
         shift='opt-single',
         **kwargs,
     ):
-
+        super().__init__(*args, **kwargs)
+        
         self.tasks_opt = tasks_opt
         self.niter_tasks_opt = niter_tasks_opt
         self.algo = algo
         self.alpha_reg = alpha_reg
         self.sigma_reg = sigma_reg
-
-        super().__init__(*args, **kwargs)
+        self.shift = shift
 
         # weights:
         assert not hasattr(self, "weights")
@@ -110,7 +110,7 @@ class MultiTaskCalculator(ActiveCalculator):
         self.ij = ij
 
         self.retrain_tape = retrain_tape
-        self.shift = shift
+
 
     @property
     def tasks(self):

@@ -19,35 +19,36 @@ class MultiTaskPotential(PosteriorPotential):
         scaled_noise (sigma) is fixed at 0.01.
         A ridge of 0.01 is added to the tasks_kern.
 
-    TODO:
-        tasks_kern should be obtained by optimization.
+    tasks: The number of potential energy surface to learn
+    tasks_kern_optimization: Flag for tasks_kern optimization 
+    niter_tasks: The number of tasks kernel optimization iteration
+    algo: torch linear algebra algorithm
+    tasks_kern_L: Lower triangle kernel matrix
+    sigma_reg: Sigma regularization scheme
+        - None:  Constant regularization 
+        - am: Adaptive regularization over multi_mu 
+        - default: Default single task sigma
 
+    Energy shift: We shift the average energy average for better training and 
+                  for transferrability of the model to extended systems 
+        - None: no energy shift
+        - opt: constant energy shift term per element is determined from a SGPR equation. 
+        - opt-single: the same constant energy shift for all elements    
+        - pre: Use a pre-calculated isolated atom energy of each element type
+        - preopt: Based on an atom energy, optimize the shift level 
     """
 
     def __init__(
-        self, tasks, tasks_kern_optimization, niter_tasks, algo, 
-        sigma_reg=None, alpha_reg=0.001, shift='opt-single', *args, **kwargs
+        self, 
+        tasks, 
+        tasks_kern_optimization, 
+        niter_tasks, 
+        algo, 
+        sigma_reg=None, 
+        alpha_reg=0.001, 
+        shift='opt-single', 
+        *args, **kwargs
     ):
-        """
-        tasks: The number of potential energy surface to learn
-        tasks_kern_optimization: Flag for tasks_kern optimization 
-        niter_tasks: The number of tasks kernel optimization iteration
-        algo: torch linear algebra algorithm
-        tasks_kern_L: Lower triangle kernel matrix
-        sigma_reg: Sigma regularization scheme
-            - None:  Constant regularization 
-            - am: Adaptive regularization over multi_mu 
-            - default: Default single task sigma
-
-        - Energy shift: We shift the average energy average for better training and 
-                        for transferrability of the model to extended systems 
-
-            - None: no energy shift
-            - opt: constant energy shift term per element is determined from a SGPR equation. 
-            - opt-single: the same constant energy shift for all elements    
-            - pre: Use a pre-calculated isolated atom energy of each element type
-            - preopt: Based on an atom energy, optimize the shift level 
-        """
 
         super().__init__(*args, **kwargs)
         self.tasks = tasks
