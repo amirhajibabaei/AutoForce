@@ -247,13 +247,16 @@ class MultiTaskPotential(PosteriorPotential):
 
         shift_energy=0.0
         for i, z in enumerate(local_numbers):
-            if z in self.multi_types:
-                kern_shift[i, self.multi_types[z]] = 1.0
-                if self.shift == 'pre':
-                    shift_energy+=self.pre_energy_shift[z]
-            else:
-                pass
-                # raise RuntimeError(f'unseen atomic number {z}')
+            if self.shift == 'opt-single':
+                kern_shift[i, 0] = 1.0
+            else:    
+                if z in self.multi_types:
+                    kern_shift[i, self.multi_types[z]] = 1.0
+                    if self.shift == 'pre':
+                        shift_energy+=self.pre_energy_shift[z]
+                else:
+                    pass
+                    # raise RuntimeError(f'unseen atomic number {z}')
 
         if self.shift == 'opt' or self.shift == 'opt-single':
             kern = torch.cat([kern, kern_shift], dim=1)
