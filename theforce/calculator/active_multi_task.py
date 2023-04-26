@@ -84,6 +84,8 @@ class MultiTaskCalculator(ActiveCalculator):
         self.sigma_reg = sigma_reg
         self.shift = shift
 
+        super().__init__(*args, **kwargs)
+
         # weights:
         assert not hasattr(self, "weights")
         if weights is None:
@@ -109,8 +111,6 @@ class MultiTaskCalculator(ActiveCalculator):
         self.ij = ij
 
         self.retrain_tape = retrain_tape
-
-        super().__init__(*args, **kwargs)
 
 
     @property
