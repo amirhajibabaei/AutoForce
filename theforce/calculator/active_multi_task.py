@@ -76,7 +76,6 @@ class MultiTaskCalculator(ActiveCalculator):
         shift='opt-single',
         **kwargs,
     ):
-        super().__init__(*args, **kwargs)
         
         self.tasks_opt = tasks_opt
         self.niter_tasks_opt = niter_tasks_opt
@@ -110,6 +109,8 @@ class MultiTaskCalculator(ActiveCalculator):
         self.ij = ij
 
         self.retrain_tape = retrain_tape
+
+        super().__init__(*args, **kwargs)
 
 
     @property
