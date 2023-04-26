@@ -143,8 +143,9 @@ class MultiTaskCalculator(ActiveCalculator):
         self._tape = Wraptape(tape)        
         
     def make_model(self, kern):
+        _tasks_opt = self.tasks_opt
         return MultiTaskPotential(
-            self.tasks, self.tasks_opt, self.niter_tasks_opt, self.algo, 
+            self.tasks, _tasks_opt, self.niter_tasks_opt, self.algo, 
             self.sigma_reg, self.alpha_reg, self.shift, kern
         )
 
