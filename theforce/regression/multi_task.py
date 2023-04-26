@@ -3,7 +3,6 @@ import numpy as np
 import torch
 from scipy.optimize import minimize
 import math
-import sympy
 
 import theforce.distributed as distrib
 from theforce.regression.gppotential import PosteriorPotential
@@ -363,54 +362,6 @@ def least_squares(design, targets, trials=1, solver="gels", mode="debug"):
     predictions = None
     for _ in range(trials):
         sol = torch.linalg.lstsq(design, targets, driver=solver)
-        pred = design @ sol.solution
-        err = (pred - targets).abs().mean()
-        if not best or err < best:
-            solution = sol.solution
-            predictions = pred
-            best = err
-    return solution, predictions
-
-
-def least_squares_gram(design, targets, trials=1, solver="gels"):
-    """
-    An attempt to create a gram matrix to be free from full rank problem.
-    It does not look working...
-    """
-
-#    if rref is True: 
-#        rref_matrix, pivot_columns = sympy.Matrix(design.numpy()).rref()
-#        matrix_ranklog(f'pivot columns: {pivot_columns}\n')
-#        design = design[:, pivot_columns]
-
-    # Compute the Gram matrix (A^T * A)
-    design2 = design.t() @ design
-    
-    # Regularize the Gram matrix by adding a multiple of the identity matrix
-    alpha = 1e-6
-    design2 = design2 + alpha * torch.eye(design2.shape[0])
-    
-    # Solve the regularized linear system
-    targets2 = design.t() @ targets
-
-    # Compute the rank of the matrix
-    rank = torch.matrix_rank(design2)
-    
-    # Check if the matrix is full-rank
-    num_rows, num_cols = design2.shape
-    is_full_rank = rank == min(num_rows, num_cols)
-    
-    if is_full_rank: 
-        matrix_ranklog('Matrix is full-rank.\n')
-        matrix_ranklog(f'Matrix rank: {rank} min_rows_cols: {min(num_rows, num_cols)}\n')
-    else: 
-        matrix_ranklog('Matrix is not full-rank.\n')
-        matrix_ranklog(f'Matrix rank: {rank} min_rows: {num_rows} min_cols: {num_cols}\n')
-
-    best = None
-    predictions = None
-    for _ in range(trials):
-        sol = torch.linalg.lstsq(design2, targets2, driver=solver)
         pred = design @ sol.solution
         err = (pred - targets).abs().mean()
         if not best or err < best:
