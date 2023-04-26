@@ -25,7 +25,8 @@ class MultiTaskPotential(PosteriorPotential):
     """
 
     def __init__(
-        self, tasks, tasks_kern_optimization, niter_tasks, algo, sigma_reg=None, alpha_reg=0.001, *args, **kwargs
+        self, tasks, tasks_kern_optimization, niter_tasks, algo, 
+        sigma_reg=None, alpha_reg=0.001, shift='opt-single', *args, **kwargs
     ):
         """
         tasks: The number of potential energy surface to learn
@@ -42,7 +43,8 @@ class MultiTaskPotential(PosteriorPotential):
                         for transferrability of the model to extended systems 
 
             - None: no energy shift
-            - opt: constant energy shift term per element is determined from a SGPR equation.          
+            - opt: constant energy shift term per element is determined from a SGPR equation. 
+            - opt-single: the same constant energy shift for all elements    
             - pre: Use a pre-calculated isolated atom energy of each element type
             - preopt: Based on an atom energy, optimize the shift level 
         """
@@ -58,7 +60,7 @@ class MultiTaskPotential(PosteriorPotential):
         self.multi_mu = None
         self.sigma_reg = sigma_reg
         self.alpha_reg = alpha_reg
-        self.shift = 'opt'
+        self.shift = shift
         self.pre_energy_shift={0: 0.0, 1: -13.6766048214, 8: -429.072746017}
 
     def make_munu(self, *args, **kwargs):
@@ -66,13 +68,21 @@ class MultiTaskPotential(PosteriorPotential):
         # *** targets ***
         energies, forces = [], []
         atom_types = set()
-        # for dummy atom type Z
+
+        # *** atom counts ***
+        # atom type 120 for dummy element Z - might change to default 119 in future
         atom_counts = torch.zeros(len(self.data), 120)
         for i, atoms in enumerate(self.data):
             shift_energy=0.0
             for z, c in atoms.counts().items():
-                atom_types.add(z)
-                atom_counts[i, z] = c
+                # treats all elements as dummy atom type 0
+                if self.shift == 'opt-single':
+                    atom_types.add(0)
+                    atom_counts[i, 0] += c
+                else:
+                    atom_types.add(z)
+                    atom_counts[i, z] = c
+
                 if self.shift == 'pre':
                     shift_energy+=self.pre_energy_shift[z]*c
             _energies=atoms.target_energy.view(-1)-shift_energy
@@ -90,12 +100,12 @@ class MultiTaskPotential(PosteriorPotential):
 
         # Constant-energy-shift block:
         ntypes = len(atom_types)
-        ke_shift = atom_counts[:, atom_types]
+        ke_shift = atom_counts[:, atom_types].view(-1,1) if self.shift == 'opt-single' else atom_counts[:, atom_types]
         kf_shift = torch.zeros(self.Kf.size(0), ntypes)
         kern_2 = torch.cat([ke_shift, kf_shift])
 
         # patch all blocks:
-        if self.shift == 'opt':
+        if self.shift == 'opt' or self.shift == 'opt-single':
             kern = torch.cat([kern, kern_2], dim=1)
 
         # *** legacy stuff ***
@@ -146,7 +156,7 @@ class MultiTaskPotential(PosteriorPotential):
             sgpr = True
             if sgpr:
                 _kern = sigma * chol_multi.t()
-                if self.shift == 'opt':
+                if self.shift == 'opt' or self.shift == 'opt-single':
                     _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
                     _kern = torch.cat([_kern, _kern_2], dim=1)
                 design = torch.cat([design, _kern])
@@ -166,7 +176,7 @@ class MultiTaskPotential(PosteriorPotential):
                 res = minimize(
                     optimize_task_kern_twobytwo,
                     [x1, x2, x3],
-                    args=(kern, self.M, sigma, ntypes, solution, targets),
+                    args=(kern, self.M, sigma, ntypes, solution, targets, False, self.shift),
                 )
 
                 self.tasks_kern_L[0][0] = res.x[0]
@@ -185,7 +195,7 @@ class MultiTaskPotential(PosteriorPotential):
                     choli_multi = chol_multi.inverse().contiguous()
 
                     _kern = sigma * chol_multi.t()
-                    if self.shift == 'opt':
+                    if self.shift == 'opt' or self.shift == 'opt-single':
                         _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
                         _kern = torch.cat([_kern, _kern_2], dim=1)
                     design = torch.cat([design, _kern])
@@ -207,7 +217,7 @@ class MultiTaskPotential(PosteriorPotential):
             sgpr = True
             if sgpr:
                 _kern = sigma * chol_multi.t()
-                if self.shift == 'opt':
+                if self.shift == 'opt' or self.shift == 'opt-single':
                     _kern_2 = torch.zeros(chol_multi_size, self.tasks*ntypes)
                     _kern = torch.cat([_kern, _kern_2], dim=1)
                 design = torch.cat([design, _kern])
@@ -244,7 +254,7 @@ class MultiTaskPotential(PosteriorPotential):
                 pass
                 # raise RuntimeError(f'unseen atomic number {z}')
 
-        if self.shift == 'opt':
+        if self.shift == 'opt' or self.shift == 'opt-single':
             kern = torch.cat([kern, kern_shift], dim=1)
         kern = torch.kron(kern, self.tasks_kern)
         energies = (kern @ self.multi_mu).reshape(-1, self.tasks).sum(dim=0)
@@ -294,7 +304,7 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, ta
     sgpr = True
     if sgpr:
         _kern = sigma * chol_multi.t()
-        if shift == 'opt':
+        if shift == 'opt' or shift == 'opt-single':
             _kern_2 = torch.zeros(chol_multi.size(0), tasks_kern.size(0)*ntypes)
             _kern = torch.cat([_kern, _kern_2], dim=1)
         design = torch.cat([design, _kern])

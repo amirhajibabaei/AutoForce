@@ -73,6 +73,7 @@ class MultiTaskCalculator(ActiveCalculator):
         retrain_tape=False,
         sigma_reg=None,
         alpha_reg=0.001,
+        shift='opt-single',
         **kwargs,
     ):
 
@@ -109,6 +110,7 @@ class MultiTaskCalculator(ActiveCalculator):
         self.ij = ij
 
         self.retrain_tape = retrain_tape
+        self.shift = shift
 
     @property
     def tasks(self):
@@ -142,7 +144,8 @@ class MultiTaskCalculator(ActiveCalculator):
         
     def make_model(self, kern):
         return MultiTaskPotential(
-            self.tasks, self.tasks_opt, self.niter_tasks_opt, self.algo, self.sigma_reg, self.alpha_reg, kern
+            self.tasks, self.tasks_opt, self.niter_tasks_opt, self.algo, 
+            self.sigma_reg, self.alpha_reg, self.shift, kern
         )
 
     def post_calculate(self, *args, **kwargs):
