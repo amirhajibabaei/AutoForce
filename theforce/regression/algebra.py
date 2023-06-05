@@ -26,7 +26,7 @@ def sum_packed_dim(packed, sizes, dim=-1):
 # decompositions ---------------------------------------------
 
 
-def jitcholesky(A, jit=1e-6, jitbase=2):
+def jitcholesky(A, jit=1e-10, jitbase=2):
     ridge = 0
     try:
         L = torch.cholesky(A)

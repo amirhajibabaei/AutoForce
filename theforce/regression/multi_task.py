@@ -7,6 +7,8 @@ import math
 import theforce.distributed as distrib
 from theforce.regression.gppotential import PosteriorPotential
 
+from theforce.regression.algebra import jitcholesky
+
 
 class MultiTaskPotential(PosteriorPotential):
     """
@@ -130,7 +132,9 @@ class MultiTaskPotential(PosteriorPotential):
             sigma = 0.01
 
         self.scaled_noise = {"all": sigma}
-        chol = torch.linalg.cholesky(self.M)
+        #chol = torch.linalg.cholesky(self.M)
+        chol,_ = jitcholesky(self.M)
+
         self.ridge = torch.tensor(0.0)
         self.choli = chol.inverse().contiguous()
         self.Mi = self.choli.t() @ self.choli
@@ -139,7 +143,9 @@ class MultiTaskPotential(PosteriorPotential):
         self.mean.weights = {}
 
         M_multi=torch.kron(self.M, self.tasks_kern)
-        chol_multi = torch.linalg.cholesky(M_multi)
+        #chol_multi = torch.linalg.cholesky(M_multi)
+        chol_multi,_ = jitcholesky(M_multi)
+
         choli_multi = chol_multi.inverse().contiguous()
         chol_multi_size = chol_multi.size(0)
 
@@ -176,7 +182,7 @@ class MultiTaskPotential(PosteriorPotential):
                 res = minimize(
                     optimize_task_kern_twobytwo,
                     [x1, x2, x3],
-                    args=(kern, self.M, sigma, ntypes, solution, targets, False, self.shift),
+                    args=(kern, self.M, sigma, ntypes, solution, targets, True, self.shift, 1.0),
                 )
 
                 self.tasks_kern_L[0][0] = res.x[0]
@@ -191,7 +197,9 @@ class MultiTaskPotential(PosteriorPotential):
                 sgpr = True
                 if sgpr:
                     M_multi=torch.kron(self.M, self.tasks_kern)
-                    chol_multi = torch.linalg.cholesky(M_multi)
+                    #chol_multi = torch.linalg.cholesky(M_multi)
+                    chol_multi,_ = jitcholesky(M_multi)
+
                     choli_multi = chol_multi.inverse().contiguous()
 
                     _kern = sigma * chol_multi.t()
@@ -280,26 +288,23 @@ class MultiTaskPotential(PosteriorPotential):
         return sigma
 
 
-def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, tasks_reg=False, shift='opt'):
+def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, tasks_reg=False, shift='opt', lmbda=0.1):
     """
     A toy function that measures the error of multitask model
     for a given x in 2 tasks setting
 
     - tasks_reg: This tag activates the regularization over the tasks kernel matrix. 
     """
+    # Prior matrix
+    I = torch.eye(2)
+
     tasks_kern_L_np = np.array([[x[0], 0.0], [x[1], x[2]]], dtype="float64")
     tasks_kern_L = torch.from_numpy(tasks_kern_L_np)
     tasks_kern = tasks_kern_L @ tasks_kern_L.T
 
-    # Add L2 regularization to diagonal elements of tasks_kern
-    if tasks_reg is True:
-        alpha=0.01
-        diag = torch.diagonal(tasks_kern)
-        diag_reg = alpha*(diag-1)**2
-        tasks_kern += torch.diag(diag_reg)
-
     M_multi=torch.kron(M, tasks_kern)
-    chol_multi = torch.linalg.cholesky(M_multi)
+    #chol_multi = torch.linalg.cholesky(M_multi)
+    chol_multi, _ = jitcholesky(M_multi)
 
     design = torch.kron(kern, tasks_kern)
 
@@ -315,11 +320,10 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, ta
     pred = design @ solution
     err = (pred - targets).abs().mean()
 
-    # Add L2 regularization term to diagonal elements of tasks_kern
+    # Add L2 regularization to encourage tasks_kern_L close to I
     if tasks_reg is True:
-        tasks_kern_diag = torch.diagonal(tasks_kern)
-        tasks_kern_diag_reg = alpha * tasks_kern_diag ** 2
-        err += tasks_kern_diag_reg.sum()
+        reg_term = lmbda * torch.norm(tasks_kern_L - I)**2
+        err += reg_term
 
     return err.numpy()
 
