@@ -74,15 +74,28 @@ def calculate(file, calc):
     try:
         reserve_ofile(o)
         atoms = read(i)
+        print('reading atoms:', atoms)
         atoms.set_calculator(calc)
+        print('setting a calculator:', atoms.calc)
         if "preprocess_atoms" in scope:
             scope["preprocess_atoms"](atoms)
+
+        print('calculating...')
         atoms.get_potential_energy()
+        print('Energy: ',atoms.get_potential_energy())
         atoms.get_forces()
+        print('Forces:', atoms.get_forces())
         atoms.get_stress()
+        print('Stress: ', atoms.get_stress())
         if "postprocess_atoms" in scope:
             scope["postprocess_atoms"](atoms)
+        print('writing start')
+        print(atoms)
+        print(atoms.symbols)
+        #atoms.write('tmp.xyz', format="xyz")
+        #atoms.write('POSCAR', format="vasp")
         atoms.write(o, format="extxyz")
+        print('writing done')
     except FileNotFoundError:
         warnings.warn(f"unable to read {i} -> calculation skipped")
 

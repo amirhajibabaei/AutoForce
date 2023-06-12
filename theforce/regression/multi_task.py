@@ -48,6 +48,7 @@ class MultiTaskPotential(PosteriorPotential):
         sigma_reg=None, 
         alpha_reg=0.001, 
         shift='opt-single', 
+        tasks_reg=10,
         *args, **kwargs
     ):
 
@@ -63,6 +64,7 @@ class MultiTaskPotential(PosteriorPotential):
         self.sigma_reg = sigma_reg
         self.alpha_reg = alpha_reg
         self.shift = shift
+        self.tasks_reg = tasks_reg
         self.pre_energy_shift={0: 0.0, 1: -13.6766048214, 8: -429.072746017}
 
     def make_munu(self, *args, **kwargs):
@@ -182,7 +184,7 @@ class MultiTaskPotential(PosteriorPotential):
                 res = minimize(
                     optimize_task_kern_twobytwo,
                     [x1, x2, x3],
-                    args=(kern, self.M, sigma, ntypes, solution, targets, True, self.shift, 1.0),
+                    args=(kern, self.M, sigma, ntypes, solution, targets, True, self.shift, self.tasks_reg),
                 )
 
                 self.tasks_kern_L[0][0] = res.x[0]
@@ -288,12 +290,12 @@ class MultiTaskPotential(PosteriorPotential):
         return sigma
 
 
-def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, tasks_reg=False, shift='opt', lmbda=0.1):
+def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, reg=False, shift='opt', lmbda=0.1):
     """
     A toy function that measures the error of multitask model
     for a given x in 2 tasks setting
 
-    - tasks_reg: This tag activates the regularization over the tasks kernel matrix. 
+    - reg: This tag activates the regularization over the tasks kernel matrix. 
     """
     # Prior matrix
     I = torch.eye(2)
@@ -321,7 +323,7 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, ta
     err = (pred - targets).abs().mean()
 
     # Add L2 regularization to encourage tasks_kern_L close to I
-    if tasks_reg is True:
+    if reg is True:
         reg_term = lmbda * torch.norm(tasks_kern_L - I)**2
         err += reg_term
 

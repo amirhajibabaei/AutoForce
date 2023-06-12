@@ -4,7 +4,7 @@ import socket
 import sys
 
 import torch
-from ase.calculators.calculator import Calculator, all_changes
+from ase.calculators.calculator import FileIOCalculator, Calculator, all_changes
 from ase.io import read
 
 import theforce.distributed as distrib
@@ -55,6 +55,7 @@ class SocketCalculator(Calculator):
 
     def calculate(self, atoms=None, properties=["energy"], system_changes=all_changes):
         Calculator.calculate(self, atoms, properties, system_changes)
+
         # write and send request
         self.log("s")
         ierr = 0
@@ -62,6 +63,7 @@ class SocketCalculator(Calculator):
             s = socket.socket()
             s.connect((self.ip, self.port))
             self.atoms.write("socket_send.xyz", format="extxyz")
+            #print('socket atoms:', self.atoms)  
             s.send(self.message.encode())
             ierr = int(s.recv(1024).decode("utf-8"))
             s.close()
@@ -87,8 +89,8 @@ class SocketCalculator(Calculator):
         # delete files
         if self.is_distributed:
             distrib.barrier()
-        if self.rank == 0:
-            os.system("rm -f socket_send.xyz socket_recv.xyz")
+        #if self.rank == 0:
+        #    os.system("rm -f socket_send.xyz socket_recv.xyz")
 
     def close(self):
         s = socket.socket()

@@ -66,7 +66,7 @@ class MultiTaskCalculator(ActiveCalculator):
         multilogfile="multi_active.log",
         tasks_opt=True,
         niter_tasks_opt=1,
-        algo="gelsd",
+        algo="gels",
         k=1.0,
         d0=1.0,
         ij=None,
@@ -74,6 +74,7 @@ class MultiTaskCalculator(ActiveCalculator):
         sigma_reg=None,
         alpha_reg=0.001,
         shift='opt-single',
+        tasks_reg=10.0,
         **kwargs,
     ):
         
@@ -83,6 +84,7 @@ class MultiTaskCalculator(ActiveCalculator):
         self.alpha_reg = alpha_reg
         self.sigma_reg = sigma_reg
         self.shift = shift
+        self.tasks_reg = tasks_reg
 
         super().__init__(*args, **kwargs)
 
@@ -147,7 +149,7 @@ class MultiTaskCalculator(ActiveCalculator):
         _tasks_opt = self.tasks_opt
         return MultiTaskPotential(
             self.tasks, _tasks_opt, self.niter_tasks_opt, self.algo, 
-            self.sigma_reg, self.alpha_reg, self.shift, kern
+            self.sigma_reg, self.alpha_reg, self.shift, self.tasks_reg, kern
         )
 
     def post_calculate(self, *args, **kwargs):
@@ -183,7 +185,7 @@ class MultiTaskCalculator(ActiveCalculator):
                 self.get_task_results(0)["energy"] - self.get_task_results(1)["energy"]
             )
         #self.multilog(f"{delu}  {self.weights}  {self.model.tasks_kern.view(-1)} {self.model._vscale} {self.model.mu} {self.model.scaled_noise}")
-        self.multilog(f"{delu}  {self.weights}  {self.model.tasks_kern.view(-1)}")
+        self.multilog(f"{delu}  {self.weights} {self.tasks_reg}  {self.model.tasks_kern.view(-1)}")
 
 
         super().post_calculate(*args, **kwargs)
