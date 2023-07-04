@@ -1315,6 +1315,14 @@ def PosteriorPotentialFromFolder(
     from theforce.util.caching import strip_uid
 
     self = torch.load(os.path.join(folder, "model"))
+
+    # add the attribute if it doesn't exist
+    # cwm: this is just temporary 
+    # need to implement a versioning system
+
+    if not hasattr(self, 'tasks_reg'):
+        self.tasks_reg = 10.0  # or some default value
+
     strip_uid(self.X)
     if load_data:
         if os.path.isfile(os.path.join(folder, "data.pckl")):

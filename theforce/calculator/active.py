@@ -502,6 +502,7 @@ class ActiveCalculator(Calculator):
 
     def post_calculate(self, timings):
         energy = self.results["energy"]
+
         # test
         if self.active and self.test and self.step - self._last_test > self.test:
             self._test()
@@ -680,22 +681,36 @@ class ActiveCalculator(Calculator):
                     self.cov = torch.cat([self.cov, cov], dim=1)
         self.log(f"added {added} randomly displaced LCEs")
 
-    def _test(self):
+    def _test(self, _calc=None, task=None):
         tmp = self.atoms.as_ase() if self.to_ase else self.atoms
-        tmp.set_calculator(self._calc)
+        tmp.set_calculator(_calc or self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
+
         # write
         self._ktest += 1
         mode = "a" if self._ktest > 1 else "w"
         if self.rank == 0:
-            ase.io.Trajectory("active_FP.traj", mode).write(tmp)
-            tmp.set_calculator(SinglePointCalculator(tmp, **self.results))
-            ase.io.Trajectory("active_ML.traj", mode).write(tmp)
+            if task is None:
+                ase.io.Trajectory("active_FP.traj", mode).write(tmp)
+                tmp.set_calculator(SinglePointCalculator(tmp, **self.results))
+                ase.io.Trajectory("active_ML.traj", mode).write(tmp)
+            else:
+                ase.io.Trajectory("active_FP.traj", mode).write(tmp)
+                new_results = {key: value[task] for key, value in self.results.items()}
+                tmp.set_calculator(SinglePointCalculator(tmp, **new_results))
+                ase.io.Trajectory("active_ML.traj", mode).write(tmp)
+
         # log
         self.log("testing energy: {}".format(energy))
-        dE = self.results["energy"] - energy
-        df = abs(self.results["forces"] - forces)
+
+        if task is None:
+            dE = self.results["energy"] - energy
+            df = abs(self.results["forces"] - forces)
+        else:
+            dE = self.results["energy"][task] - energy
+            df = abs(self.results["forces"][..., task] - forces)
+
         self.log(
             "errors (test):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}".format(
                 dE, df.max(), df.mean()
@@ -728,6 +743,33 @@ class ActiveCalculator(Calculator):
             )
         self._last_test = self.step
         return energy, forces
+
+
+    def _wakeup(self):
+        """
+        _wakeup invokes a forced attempt to learn a data/inducing addition event. 
+        This is to check whether the model is built successfully or not to mitigate over confidence learning. 
+        It needs to be called after _exact function.
+        """
+
+        # active learning
+        self.deltas = None
+        # in case of PIMD, we only sample the first bead
+        if (self.step + 1) % self.nbeads == 1 or self.nbeads == 1:
+            pre = self.results.copy()
+            m, n = self.update(**self._update_args)
+            if n > 0 or m > 0:
+                self.update_results(self.meta is not None)
+                if self.step > 0:
+                    self.deltas = {}
+                    for quant in ["energy", "forces", "stress"]:
+                        self.deltas[quant] = self.results[quant] - pre[quant]
+            if self.size[0] == dat1:
+                self.distrib.unload(atoms)
+        else:
+            if self.size[0] == dat1:
+                self.distrib.unload(atoms)
+
 
     def snapshot(self, fake=False, copy=None):
         if copy is None:

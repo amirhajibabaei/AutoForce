@@ -64,6 +64,7 @@ class MultiTaskCalculator(ActiveCalculator):
         weights_sample=None,
         t_tieq=200000,
         multilogfile="multi_active.log",
+        dA_logfile="dA_active.log",
         tasks_opt=True,
         niter_tasks_opt=1,
         algo="gels",
@@ -75,6 +76,8 @@ class MultiTaskCalculator(ActiveCalculator):
         alpha_reg=0.001,
         shift='opt-single',
         tasks_reg=10.0,
+        tasks_init='default',
+        fec=None,
         **kwargs,
     ):
         
@@ -85,6 +88,8 @@ class MultiTaskCalculator(ActiveCalculator):
         self.sigma_reg = sigma_reg
         self.shift = shift
         self.tasks_reg = tasks_reg
+        self.tasks_init = tasks_init
+        self.fec = fec
 
         super().__init__(*args, **kwargs)
 
@@ -106,6 +111,7 @@ class MultiTaskCalculator(ActiveCalculator):
         self.weights_init = self.weights
         self.t_tieq = t_tieq
         self.multilogfile = multilogfile
+        self.dA_logfile = dA_logfile
 
         # QMMM
         self.k = k
@@ -113,7 +119,8 @@ class MultiTaskCalculator(ActiveCalculator):
         self.ij = ij
 
         self.retrain_tape = retrain_tape
-
+        self.dA = []
+        self.dU = []
 
     @property
     def tasks(self):
@@ -149,7 +156,7 @@ class MultiTaskCalculator(ActiveCalculator):
         _tasks_opt = self.tasks_opt
         return MultiTaskPotential(
             self.tasks, _tasks_opt, self.niter_tasks_opt, self.algo, 
-            self.sigma_reg, self.alpha_reg, self.shift, self.tasks_reg, kern
+            self.sigma_reg, self.alpha_reg, self.shift, self.tasks_reg, self.tasks_init, kern
         )
 
     def post_calculate(self, *args, **kwargs):
@@ -172,23 +179,33 @@ class MultiTaskCalculator(ActiveCalculator):
         else:
             pass
 
-        for q in ["energy", "forces", "stress"]:
-            self.results[f"{q}_tasks"] = self.results[q]
-            self.results[q] = (self.weights * self.results[q]).sum(axis=-1)
-            if self.deltas:
-                self.deltas[q] = (self.weights * self.deltas[q]).sum(axis=-1)
+        # fe correction
+        if self.fec and self.step%self.fec ==0 and self.step!=0:
+            self._fe_correction()
+
+        # test
+        if self.active and self.test and self.step%self.test ==0 and self.step!=0:
+            self._test()
 
         # thermodynamic integration
+        #for q in ["energy", "forces", "stress"]:
+        #    self.results[f"{q}_tasks"] = self.results[q]
+
         delu = ""
         if self.weights_fin is not None:
             delu = (
-                self.get_task_results(0)["energy"] - self.get_task_results(1)["energy"]
+                self.results["energy"][0] - self.results["energy"][1]
             )
         #self.multilog(f"{delu}  {self.weights}  {self.model.tasks_kern.view(-1)} {self.model._vscale} {self.model.mu} {self.model.scaled_noise}")
         self.multilog(f"{delu}  {self.weights} {self.tasks_reg}  {self.model.tasks_kern.view(-1)}")
 
+        for q in ["energy", "forces", "stress"]:
+            #self.results[f"{q}_tasks"] = self.results[q]
+            self.results[q] = (self.weights * self.results[q]).sum(axis=-1)
+            if self.deltas:
+                self.deltas[q] = (self.weights * self.deltas[q]).sum(axis=-1)
 
-        super().post_calculate(*args, **kwargs)
+        #super().post_calculate(*args, **kwargs)
 
         # weights sampling
         if (
@@ -201,8 +218,19 @@ class MultiTaskCalculator(ActiveCalculator):
         # thermodynamic integration
         if self.weights_fin is not None and (self.step % self.t_tieq) == 0:
             self.thermo_int()
-                
+
+        # step
+        self.log(
+            "{} {} {}".format(
+                self.results["energy"], self.atoms.get_temperature(), self.covlog
+            )
+        )
+        self.step += 1
+
+        # needed for self.calculate_numerical_stress
+        self.results["free_energy"] = self.results["energy"]
             
+
     def active_sample_weights_space(self):
         """
         A function that enforces an even sampling over the weights space w=[w0,w1,...,wn]
@@ -246,6 +274,42 @@ class MultiTaskCalculator(ActiveCalculator):
         self._saved_for_tape=save_multi
         return e, f
 
+    def _test(self):
+        results = []
+        for task, _calc in enumerate(self._calcs):
+            e, f = super()._test(_calc=_calc, task=task)
+            results.append((e, f))
+        e, f = zip(*results)
+        e = np.array(e)
+        f = np.stack(f, axis=-1)
+        
+        return e, f
+
+    def _fe_correction(self, copy=None):
+        """
+        A_{DFT} - A_{ML} = 1/\beta log(<exp(\beta(U_{DFT}-U_{ML}))>_{ML})
+        """
+        kB=8.617333262E-5
+        T=330
+        beta=1/(kB*T)
+
+        if copy is None:
+            copy = self.atoms.copy()
+
+        dE=[]
+        dA=[]
+        for task, _calc in enumerate(self._calcs):
+            e, f = super()._exact(copy, _calc=_calc, task=task)
+            dE.append(e-self.results["energy"][task])
+        dE=np.array(dE)
+        dA=np.exp(beta*dE)
+
+        self.dU.append(dE)
+        self.dA.append(dA)
+        dA_avg=kB*T*np.log( np.mean(np.array(self.dA), axis=0) )
+
+        self.dAlog(f"{dE} {dA_avg}")
+
     def update_results(self, retain_graph=False):
         quant = ["energy", "forces", "stress"]
         local_numbers = [int(loc.number) for loc in self.atoms.loc]
@@ -265,6 +329,13 @@ class MultiTaskCalculator(ActiveCalculator):
     def multilog(self, mssge, mode="a"):
         if self.multilogfile and self.rank == 0:
             with open(self.multilogfile, mode) as f:
+                f.write("{}{} {} {}\n".format(self._logpref, date(), self.step, mssge))
+                if self.stdout:
+                    print("{}{} {} {}".format(self._logpref, date(), self.step, mssge))
+
+    def dAlog(self, mssge, mode="a"):
+        if self.dA_logfile and self.rank == 0:
+            with open(self.dA_logfile, mode) as f:
                 f.write("{}{} {} {}\n".format(self._logpref, date(), self.step, mssge))
                 if self.stdout:
                     print("{}{} {} {}".format(self._logpref, date(), self.step, mssge))

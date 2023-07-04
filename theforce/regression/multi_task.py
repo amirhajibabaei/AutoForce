@@ -49,6 +49,7 @@ class MultiTaskPotential(PosteriorPotential):
         alpha_reg=0.001, 
         shift='opt-single', 
         tasks_reg=10,
+        tasks_init='default',
         *args, **kwargs
     ):
 
@@ -56,7 +57,7 @@ class MultiTaskPotential(PosteriorPotential):
         self.tasks = tasks
         self.tasks_kern_L = torch.eye(self.tasks)
         self.tasks_kern_L += 1e-2
-        self.tasks_kern = torch.eye(self.tasks)
+        self.tasks_kern = self.tasks_kern_L @ self.tasks_kern_L.T
         self.tasks_kern_optimization = tasks_kern_optimization
         self.niter_tasks = niter_tasks
         self.algo = algo
@@ -65,6 +66,7 @@ class MultiTaskPotential(PosteriorPotential):
         self.alpha_reg = alpha_reg
         self.shift = shift
         self.tasks_reg = tasks_reg
+        self.tasks_init = tasks_init
         self.pre_energy_shift={0: 0.0, 1: -13.6766048214, 8: -429.072746017}
 
     def make_munu(self, *args, **kwargs):
@@ -144,8 +146,12 @@ class MultiTaskPotential(PosteriorPotential):
         self.mean._weight = {}
         self.mean.weights = {}
 
-        M_multi=torch.kron(self.M, self.tasks_kern)
+        #M_multi=torch.kron(self.M, self.tasks_kern)
+        # Amm = I \kron Kmm
+        M_multi=torch.kron(self.M, torch.eye(self.tasks))
+
         #chol_multi = torch.linalg.cholesky(M_multi)
+        # Amm = C^T C
         chol_multi,_ = jitcholesky(M_multi)
 
         choli_multi = chol_multi.inverse().contiguous()
@@ -156,9 +162,33 @@ class MultiTaskPotential(PosteriorPotential):
         an alternative is to (acvtively) optimize the intertask correlations over the course of the simulation.
         """
         if self.tasks_kern_optimization is True:
+
+            # initialize tasks kernel
+            if self.tasks_init == 'y-cov':
+                #kerni = self.Ke.inverse().contiguous()
+                #kernti = self.Ke.t().inverse().contiguous()
+                _energies=energies.reshape(-1, 2)
+                print('Ke: ', self.Ke )
+                print('Mi: ', self.Mi )
+                print('Dimensions: Ke, Mi ', self.Ke.size(), self.Mi.size() )
+                self.tasks_kern =  self.Ke @ self.Mi @ self.Ke.t()
+                print('Dimensions: energies ', _energies.size() )
+                self.tasks_kern =  _energies.t() @ self.tasks_kern.inverse().contiguous() @ _energies
+                #self.tasks_kern = self.tasks_kern/self.tasks_kern[0,0]
+                self.tasks_kern /= len(self.data)
+                print('tasks ken: ', self.tasks_kern)
+                #print('energies: ',_energies.t())
+
+                #print('dims: ', self.Ke @ self.Mi @ self.Ke.t().size())
+
+                self.tasks_kern_L,_ = jitcholesky(self.tasks_kern)
+
             # decoupled optimizer for mu and W
             # 1. Initial weights \mu optimization ***
-            design = torch.kron(kern, self.tasks_kern)
+            #design = torch.kron(kern, self.tasks_kern)
+
+            # Bnm = L \kron Knm
+            design = torch.kron(kern, self.tasks_kern_L.contiguous())
 
             # *** sgpr extensions ***
             sgpr = True
@@ -193,16 +223,17 @@ class MultiTaskPotential(PosteriorPotential):
                 self.tasks_kern = self.tasks_kern_L @ self.tasks_kern_L.T
 
                 # 3. Re-optimization of weights \mu based on an updated W ***
-                design = torch.kron(kern, self.tasks_kern)
+                #design = torch.kron(kern, self.tasks_kern)
+                # Bnm = L \kron Knm
+                design = torch.kron(kern, self.tasks_kern_L.contiguous())
 
                 # *** sgpr extensions ***
                 sgpr = True
                 if sgpr:
-                    M_multi=torch.kron(self.M, self.tasks_kern)
+                    #M_multi=torch.kron(self.M, self.tasks_kern)
                     #chol_multi = torch.linalg.cholesky(M_multi)
-                    chol_multi,_ = jitcholesky(M_multi)
-
-                    choli_multi = chol_multi.inverse().contiguous()
+                    #chol_multi,_ = jitcholesky(M_multi)
+                    #choli_multi = chol_multi.inverse().contiguous()
 
                     _kern = sigma * chol_multi.t()
                     if self.shift == 'opt' or self.shift == 'opt-single':
@@ -218,10 +249,13 @@ class MultiTaskPotential(PosteriorPotential):
             # for predetermined tasks corr
             # self.tasks_kern = tasks_correlation(forces.view(self.tasks,-1),corr_coef='pearson')
             
-            self.tasks_kern = torch.eye(self.tasks)
+            #self.tasks_kern = torch.eye(self.tasks)
             
             # 1. Initial weights \mu optimization ***
-            design = torch.kron(kern, self.tasks_kern)
+            #design = torch.kron(kern, self.tasks_kern)
+
+            # Bnm = L \kron Knm
+            design = torch.kron(kern, self.tasks_kern_L.contiguous())
 
             # *** sgpr extensions ***
             sgpr = True
@@ -269,7 +303,7 @@ class MultiTaskPotential(PosteriorPotential):
 
         if self.shift == 'opt' or self.shift == 'opt-single':
             kern = torch.cat([kern, kern_shift], dim=1)
-        kern = torch.kron(kern, self.tasks_kern)
+        kern = torch.kron(kern, self.tasks_kern_L.contiguous())
         energies = (kern @ self.multi_mu).reshape(-1, self.tasks).sum(dim=0)
         if self.shift == 'pre':
             energies += shift_energy 
@@ -304,11 +338,12 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, re
     tasks_kern_L = torch.from_numpy(tasks_kern_L_np)
     tasks_kern = tasks_kern_L @ tasks_kern_L.T
 
-    M_multi=torch.kron(M, tasks_kern)
-    #chol_multi = torch.linalg.cholesky(M_multi)
-    chol_multi, _ = jitcholesky(M_multi)
-
-    design = torch.kron(kern, tasks_kern)
+    # Amm = I \kron Kmm
+    M_multi=torch.kron(M, torch.eye(2))
+    # Amm = C^T C
+    chol_multi,_ = jitcholesky(M_multi)
+    # Bnm = L \kron Knm
+    design = torch.kron(kern, tasks_kern_L.contiguous())
 
     # *** sgpr extensions ***
     sgpr = True
@@ -322,9 +357,9 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, re
     pred = design @ solution
     err = (pred - targets).abs().mean()
 
-    # Add L2 regularization to encourage tasks_kern_L close to I
+    # Add L2 regularization to encourage tasks_kern close to I
     if reg is True:
-        reg_term = lmbda * torch.norm(tasks_kern_L - I)**2
+        reg_term = lmbda * torch.norm(tasks_kern - I)**2
         err += reg_term
 
     return err.numpy()
