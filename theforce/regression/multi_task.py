@@ -92,7 +92,9 @@ class MultiTaskPotential(PosteriorPotential):
                 if self.shift == 'pre':
                     shift_energy+=self.pre_energy_shift[z]*c
             _energies=atoms.target_energy.view(-1)-shift_energy
+            print('from data energies: ', atoms.target_energy.view(-1))
             energies.append(_energies)
+            print('from data forces: ', atoms.target_forces.view(-1))
             forces.append(atoms.target_forces.view(-1))
         energies = torch.cat(energies)
         forces = torch.cat(forces)
@@ -162,26 +164,27 @@ class MultiTaskPotential(PosteriorPotential):
         an alternative is to (acvtively) optimize the intertask correlations over the course of the simulation.
         """
         if self.tasks_kern_optimization is True:
+            if self.tasks_init != 'default':
+                self.corr_init(corr=self.tasks_init,ntasks=self.tasks,energies=energies,forces=forces)
+           # # initialize tasks kernel
+           # if self.tasks_init == 'y-cov':
+           #     #kerni = self.Ke.inverse().contiguous()
+           #     #kernti = self.Ke.t().inverse().contiguous()
+           #     _energies=energies.reshape(-1, 2)
+           #     print('Ke: ', self.Ke )
+           #     print('Mi: ', self.Mi )
+           #     print('Dimensions: Ke, Mi ', self.Ke.size(), self.Mi.size() )
+           #     self.tasks_kern =  self.Ke @ self.Mi @ self.Ke.t()
+           #     print('Dimensions: energies ', _energies.size() )
+           #     self.tasks_kern =  _energies.t() @ self.tasks_kern.inverse().contiguous() @ _energies
+           #     #self.tasks_kern = self.tasks_kern/self.tasks_kern[0,0]
+           #     self.tasks_kern /= len(self.data)
+           #     print('tasks ken: ', self.tasks_kern)
+           #     #print('energies: ',_energies.t())
 
-            # initialize tasks kernel
-            if self.tasks_init == 'y-cov':
-                #kerni = self.Ke.inverse().contiguous()
-                #kernti = self.Ke.t().inverse().contiguous()
-                _energies=energies.reshape(-1, 2)
-                print('Ke: ', self.Ke )
-                print('Mi: ', self.Mi )
-                print('Dimensions: Ke, Mi ', self.Ke.size(), self.Mi.size() )
-                self.tasks_kern =  self.Ke @ self.Mi @ self.Ke.t()
-                print('Dimensions: energies ', _energies.size() )
-                self.tasks_kern =  _energies.t() @ self.tasks_kern.inverse().contiguous() @ _energies
-                #self.tasks_kern = self.tasks_kern/self.tasks_kern[0,0]
-                self.tasks_kern /= len(self.data)
-                print('tasks ken: ', self.tasks_kern)
-                #print('energies: ',_energies.t())
+           #     #print('dims: ', self.Ke @ self.Mi @ self.Ke.t().size())
 
-                #print('dims: ', self.Ke @ self.Mi @ self.Ke.t().size())
-
-                self.tasks_kern_L,_ = jitcholesky(self.tasks_kern)
+           #     self.tasks_kern_L,_ = jitcholesky(self.tasks_kern)
 
             # decoupled optimizer for mu and W
             # 1. Initial weights \mu optimization ***
@@ -323,6 +326,86 @@ class MultiTaskPotential(PosteriorPotential):
         sigma = min_sigma + sigmoid_transition * (max_sigma - min_sigma)
         return sigma
 
+    def corr_init(self, corr='ef-corr',ntasks=2,energies=None,forces=None):
+        """
+        e-corr:    only considers the correlations between energies
+        f-corr:    only considers the correlations between forces
+        ef-corr:   considers both energies and forces
+        rand-corr: starts from correlation matrix
+        id-corr:   starts from an identity matrix
+        """
+        
+        natoms=self.data[0].natoms
+        
+        if energies is not None: 
+            e=energies.reshape(-1,ntasks).t()
+        
+        if forces is not None:
+            print('target forces: ', forces)
+            f=forces.reshape(-1, ntasks).t()
+            #f_1=torch.reshape(f[::2], (-1,))
+            #f_2=torch.reshape(f[1::2], (-1,))
+            #f=torch.vstack((f_1,f_2))
+        
+        if corr=='e-corr':
+            self.tasks_kern = self.Ke @ self.Mi @ self.Ke.t()
+            self.tasks_kern = e @ self.tasks_kern.inverse().contiguous() @ e.t() / len(self.data)
+            print('Dimensions Ke, Mi: ', self.Ke.size(), self.Mi.size() )
+            print('Dimensions e: ', e.size() )
+            print('tasks ken: ', self.tasks_kern)
+            print('energies: ', e)
+
+        elif corr=='f-corr':
+            self.tasks_kern = self.Kf @ self.Mi @ self.Kf.t()
+            # Assuming K is your kernel matrix
+            #D = torch.diag(self.tasks_kern)  # Get the diagonal elements
+            #D = D.reshape((1, -1))  # reshape it for broadcasting
+            #D_sqrt_inv = torch.rsqrt(D)  # elementwise reciprocal of the square root
+            #self.tasks_kern = self.tasks_kern * torch.mm(D_sqrt_inv.t(), D_sqrt_inv)
+            tmp = self.tasks_kern 
+            print("kernel is symmetric: " , is_symmetric(self.tasks_kern))
+            print(" Kf Mi Kf.T kernel: " , self.tasks_kern)
+
+            #self.tasks_kern = self.tasks_kern.inverse().contiguous()
+            self.tasks_kern = jitter_inverse(self.tasks_kern)
+            #self.tasks_kern = cholesky_inverse(self.tasks_kern)
+
+            print("kernel is symmetric: " , is_symmetric(self.tasks_kern))
+            print(" (Kf Mi Kf.T)^-1 kernel: " , self.tasks_kern)
+            print(" Is the product identity?: " , tmp @ self.tasks_kern)
+            print(" Is the product identity?: " , self.tasks_kern @ tmp)
+
+            self.tasks_kern = f @ self.tasks_kern @ f.t() / f.size(-1)
+            print('Dimensions Kf, Mi: ', self.Kf.size(), self.Mi.size() )
+            print('Dimensions f: ', f.size() )
+            print('tasks ken: ', self.tasks_kern)
+            print('forces: ', f)
+
+        elif corr=='ef-corr':
+            ef=torch.hstack((e,f))
+            Kef = torch.cat([self.Ke, self.Kf])
+            self.tasks_kern = Kef @ self.Mi @ Kef.t()
+            tmp = self.tasks_kern 
+            print("kernel is symmetric: " , is_symmetric(self.tasks_kern))
+            print(" Kef Mi Kef.T kernel: " , self.tasks_kern)
+
+            self.tasks_kern = jitter_inverse(self.tasks_kern)
+            print("kernel is symmetric: " , is_symmetric(self.tasks_kern))
+            print(" (Kf Mi Kf.T)^-1 kernel: " , self.tasks_kern)
+            print(" Is the product identity?: " , tmp @ self.tasks_kern)
+            print(" Is the product identity?: " , self.tasks_kern @ tmp)
+
+            self.tasks_kern = ef @ self.tasks_kern @ ef.t() / ef.size(-1)
+            print('Dimensions Kef, Mi: ', Kef.size(), self.Mi.size() )
+            print('Dimensions ef: ', ef.size() )
+            print('tasks ken: ', self.tasks_kern)
+            print('ef: ', ef)
+
+        elif corr=='rand-corr':
+            self.tasks_kern = torch.rand(2,2)
+        
+        self.tasks_kern_L,_ = jitcholesky(self.tasks_kern)    
+    
 
 def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, reg=False, shift='opt', lmbda=0.1):
     """
@@ -440,3 +523,25 @@ def to_inf_inf(y):
 
 def custom_sigmoid(x):
     return 1 / (1 + math.exp(-x))
+
+def is_symmetric(matrix):
+    return torch.allclose(matrix, matrix.t(), atol=1e-8)
+
+def jitter_inverse(matrix, jitter=1e-6):
+    # Add a small number to the diagonal of the matrix
+    jittered_matrix = matrix + torch.eye(matrix.size(0)) * jitter
+
+    # Compute the inverse of the jittered matrix
+    inverse = torch.linalg.pinv(jittered_matrix).contiguous()
+
+    return inverse
+
+def cholesky_inverse(A):
+    """
+    Inverse a Pytorch tensor using cholesky decomposition
+    """
+    chol, _ = jitcholesky(A)
+    choli = chol.inverse().contiguous()
+    Ainv = choli.t() @ choli
+    return Ainv
+

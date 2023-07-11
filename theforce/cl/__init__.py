@@ -15,6 +15,7 @@ from theforce.calculator.active import (
     inf,
     kcal_mol,
 )
+from theforce.calculator.active_multi_task import MultiTaskCalculator
 from theforce.calculator.meta import Catvar, Meta, Posvar, Qlvar
 from theforce.calculator.socketcalc import SocketCalculator
 from theforce.util.parallel import mpi_init
@@ -68,6 +69,13 @@ def gen_active_calc(**over):
     update_args(kwargs)
     update_args(kwargs, source=over)
     return ActiveCalculator(**kwargs)
+
+
+def gen_active_multi_calc(**over):
+    kwargs = get_default_args(MultiTaskCalculator.__init__)
+    update_args(kwargs)
+    update_args(kwargs, source=over)
+    return MultiTaskCalculator(**kwargs)
 
 
 def print_stop_time():
