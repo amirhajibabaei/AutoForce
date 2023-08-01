@@ -197,7 +197,7 @@ class MultiTaskCalculator(ActiveCalculator):
                 self.results["energy"][0] - self.results["energy"][1]
             )
         #self.multilog(f"{delu}  {self.weights}  {self.model.tasks_kern.view(-1)} {self.model._vscale} {self.model.mu} {self.model.scaled_noise}")
-        self.multilog(f"{delu}  {self.weights} {self.tasks_reg}  {self.model.tasks_kern.view(-1)}")
+        self.multilog(f"{delu}  {self.weights} {self.tasks_reg}  {self.model.tasks_kern_L.view(-1)} {self.model.tasks_kern.view(-1)}")
 
         for q in ["energy", "forces", "stress"]:
             #self.results[f"{q}_tasks"] = self.results[q]
@@ -306,9 +306,10 @@ class MultiTaskCalculator(ActiveCalculator):
 
         self.dU.append(dE)
         self.dA.append(dA)
-        dA_avg=kB*T*np.log( np.mean(np.array(self.dA), axis=0) )
+        #error occurs depending on Python version
+        #dA_avg=kB*T*np.log( np.mean(np.array(self.dA), axis=0) )
 
-        self.dAlog(f"{dE} {dA_avg}")
+        self.dAlog(f"{dE} {dA}")
 
     def update_results(self, retain_graph=False):
         quant = ["energy", "forces", "stress"]

@@ -58,6 +58,11 @@ class MultiTaskPotential(PosteriorPotential):
         self.tasks_kern_L = torch.eye(self.tasks)
         self.tasks_kern_L += 1e-2
         self.tasks_kern = self.tasks_kern_L @ self.tasks_kern_L.T
+
+        #self.tasks_kern = torch.rand(self.tasks, self.tasks)
+        #self.tasks_kern = (self.tasks_kern+self.tasks_kern.t())/2.
+        #self.tasks_kern_L,_ = jitcholesky(self.tasks_kern)    
+
         self.tasks_kern_optimization = tasks_kern_optimization
         self.niter_tasks = niter_tasks
         self.algo = algo
@@ -92,9 +97,9 @@ class MultiTaskPotential(PosteriorPotential):
                 if self.shift == 'pre':
                     shift_energy+=self.pre_energy_shift[z]*c
             _energies=atoms.target_energy.view(-1)-shift_energy
-            print('from data energies: ', atoms.target_energy.view(-1))
+            #print('from data energies: ', atoms.target_energy.view(-1))
             energies.append(_energies)
-            print('from data forces: ', atoms.target_forces.view(-1))
+            #print('from data forces: ', atoms.target_forces.view(-1))
             forces.append(atoms.target_forces.view(-1))
         energies = torch.cat(energies)
         forces = torch.cat(forces)
@@ -210,19 +215,23 @@ class MultiTaskPotential(PosteriorPotential):
 
             for i, _ in enumerate(range(self.niter_tasks)):
                 # 2. Inter-task kernel W=L@L.T optimization ***
-                x1 = self.tasks_kern_L[0][0].item()
-                x2 = self.tasks_kern_L[1][0].item()
-                x3 = self.tasks_kern_L[1][1].item()
+                #x1 = self.tasks_kern_L[0][0].item()
+                #x2 = self.tasks_kern_L[1][0].item()
+                #x3 = self.tasks_kern_L[1][1].item()
+                #initial_params=[x1,x2,x3]
+                initial_params = reshape_from_lower_triangular(self.tasks_kern_L)
 
                 res = minimize(
                     optimize_task_kern_twobytwo,
-                    [x1, x2, x3],
+                    initial_params,
                     args=(kern, self.M, sigma, ntypes, solution, targets, True, self.shift, self.tasks_reg),
                 )
 
-                self.tasks_kern_L[0][0] = res.x[0]
-                self.tasks_kern_L[1][0] = res.x[1]
-                self.tasks_kern_L[1][1] = res.x[2]
+                #self.tasks_kern_L[0][0] = res.x[0]
+                #self.tasks_kern_L[1][0] = res.x[1]
+                #self.tasks_kern_L[1][1] = res.x[2]
+                self.tasks_kern_L = torch.from_numpy(reshape_to_lower_triangular(res.x, self.tasks))
+                self.tasks_kern_L += 1e-2
                 self.tasks_kern = self.tasks_kern_L @ self.tasks_kern_L.T
 
                 # 3. Re-optimization of weights \mu based on an updated W ***
@@ -348,8 +357,13 @@ class MultiTaskPotential(PosteriorPotential):
             #f=torch.vstack((f_1,f_2))
         
         if corr=='e-corr':
-            self.tasks_kern = self.Ke @ self.Mi @ self.Ke.t()
-            self.tasks_kern = e @ self.tasks_kern.inverse().contiguous() @ e.t() / len(self.data)
+            if self.multi_mu is None:
+                self.tasks_kern = self.Ke @ self.Mi @ self.Ke.t()
+                self.tasks_kern = jitter_inverse(self.tasks_kern)
+                self.tasks_kern = e @ self.tasks_kern @ e.t() / e.size(-1) / (natoms**2)
+            else:
+                #We use a trick to approximate (Knn+\sigma I)^{-1}Y = \mu in SGPR
+                self.tasks_kern = e @ self.multi_mu / len(self.data) / (natoms**2)
             print('Dimensions Ke, Mi: ', self.Ke.size(), self.Mi.size() )
             print('Dimensions e: ', e.size() )
             print('tasks ken: ', self.tasks_kern)
@@ -402,7 +416,7 @@ class MultiTaskPotential(PosteriorPotential):
             print('ef: ', ef)
 
         elif corr=='rand-corr':
-            self.tasks_kern = torch.rand(2,2)
+            self.tasks_kern = torch.rand(ntasks,ntasks)
         
         self.tasks_kern_L,_ = jitcholesky(self.tasks_kern)    
     
@@ -414,15 +428,17 @@ def optimize_task_kern_twobytwo(x, kern, M, sigma, ntypes, solution, targets, re
 
     - reg: This tag activates the regularization over the tasks kernel matrix. 
     """
+    ntasks=int(math.sqrt(len(x) * 2))
     # Prior matrix
-    I = torch.eye(2)
+    I = torch.eye(ntasks)
 
-    tasks_kern_L_np = np.array([[x[0], 0.0], [x[1], x[2]]], dtype="float64")
+    #tasks_kern_L_np = np.array([[x[0], 0.0], [x[1], x[2]]], dtype="float64")
+    tasks_kern_L_np = reshape_to_lower_triangular(x, ntasks)
     tasks_kern_L = torch.from_numpy(tasks_kern_L_np)
     tasks_kern = tasks_kern_L @ tasks_kern_L.T
 
     # Amm = I \kron Kmm
-    M_multi=torch.kron(M, torch.eye(2))
+    M_multi=torch.kron(M, I)
     # Amm = C^T C
     chol_multi,_ = jitcholesky(M_multi)
     # Bnm = L \kron Knm
@@ -545,3 +561,12 @@ def cholesky_inverse(A):
     Ainv = choli.t() @ choli
     return Ainv
 
+
+def reshape_to_lower_triangular(params, N):
+    L = np.zeros((N, N))
+    L[np.tril_indices(N)] = params
+    return L
+
+def reshape_from_lower_triangular(L):
+    N = L.shape[0]
+    return L[np.tril_indices(N)].tolist()
