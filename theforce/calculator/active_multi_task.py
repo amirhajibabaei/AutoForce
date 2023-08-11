@@ -434,3 +434,28 @@ class MultiTaskCalculator(ActiveCalculator):
         self._calc = _calc
         self.tune_for_md = tune_for_md
 
+    def include_data(self, data):
+        if type(data) == str:
+            data = ase.io.read(data, '::')
+        tune_for_md = self.tune_for_md
+        #self.tune_for_md = False
+        self.get_ready()
+
+        #_calc = self._calc
+        for i,atoms in enumerate(data):
+            #if abs(atoms.get_forces()).max() > self.include_params['fmax']:
+            #    continue
+            #print(atoms.calc)
+            if i%len(self._calcs) == 0:
+                #self._calcs = [data[i+j].calc for j in range(len(self._calcs))]
+                self._calcs = [data[i].calc, data[i+1].calc]
+                data[i].set_calculator(self)
+                data[i+1].set_calculator(self)
+                #data[i+2].set_calculator(self)
+                #data[i+1].set_calculator(self)
+                #print(atoms.calc)
+                data[i].get_potential_energy()
+                #data[i+1].get_potential_energy()
+            #atoms.set_calculator(self._calc)
+        #self._calc = _calc
+        #self.tune_for_md = tune_for_md  

@@ -607,7 +607,8 @@ class ActiveCalculator(Calculator):
             volume = self.atoms.get_volume()
         except ValueError:
             volume = -2  # here stress2=0, thus trace(stress) = virial (?)
-        stress = (stress1 + stress2).detach().numpy() / volume
+        #stress = (stress1 + stress2).detach().numpy() / volume
+        stress = stress1.detach().numpy() / volume
         return forces, stress
 
     def initiate_model(self):
