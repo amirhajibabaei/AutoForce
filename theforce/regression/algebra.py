@@ -29,7 +29,7 @@ def sum_packed_dim(packed, sizes, dim=-1):
 def jitcholesky(A, jit=1e-6, jitbase=2):
     ridge = 0
     try:
-        L = torch.cholesky(A)
+        L = torch.linalg.cholesky(A)
     except RuntimeError:
         scale = A.diag().mean()
         if scale == torch.zeros(1):
@@ -38,7 +38,7 @@ def jitcholesky(A, jit=1e-6, jitbase=2):
         done = False
         while not done:
             try:
-                L = torch.cholesky(A + ridge * torch.eye(*A.size(), dtype=A.dtype))
+                L = torch.linalg.cholesky(A + ridge * torch.eye(*A.size(), dtype=A.dtype))
                 done = True
             except RuntimeError:
                 ridge *= jitbase
@@ -110,7 +110,7 @@ def projected_process_auxiliary_matrices_I(K, M, Y, sigma):
     i = L.inverse()
     B = K @ i.t()
     I = torch.eye(i.size(0))
-    T = torch.cholesky(B.t() @ B / sigma**2 + I)
+    T = torch.linalg.cholesky(B.t() @ B / sigma**2 + I)
     nu = i.t() @ (I - torch.cholesky_inverse(T)) @ i
     return mu, nu
 

@@ -151,7 +151,37 @@ class UniversalSoapKernel(SimilarityKernel):
     def get_rightgrad(self, p, q):
         return self.get_leftgrad(q, p).t()
 
+    def get_virial(self, _p, _q):
+        vir = torch.zeros (3,3)
 
+        for p in iterable(_p):
+            d = self.saved(p, "value")
+            if d is None:
+                continue
+            grad = self.saved(p, "grad")
+            #i = p.index
+            #j = p._j
+            rij = p._r 
+
+            for q in iterable(_q):
+                alch = self.kern(p.number, q.number)
+                if alch > 0.0:
+                    dd = self.saved(q, "value")
+                    if dd is None:
+                        continue
+                    dg = torch.stack(
+                        [
+                            (dd[i, j][:, None, None] * grad[i, j]).sum(dim=0)
+                            for i, j in zip(*indices(dd, grad))
+                        ]
+                    ).sum(dim=0)
+                    c = torch.sparse.sum(d * dd)
+                    f = alch * self.exponent * c ** (self.exponent - 1) * dg
+                    # stress = - (frc[:,None]*xyz[...,None]).sum(dim=0)
+                    vir += (f[:,None]*rij[...,None]).sum(dim=0)
+                    
+        return vir.view(-1, 1)[[0,4,8,5,2,1]]
+    
 def test_grad():
     import numpy as np
 

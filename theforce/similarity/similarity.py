@@ -51,6 +51,10 @@ class SimilarityKernel(Module):
         return self.get_rightgrad(p, q)
 
     @method_caching
+    def virial(self, p, q):
+        return self.get_virial(p, q)
+    
+    @method_caching
     def gradgrad(self, p, q):
         return self.get_gradgrad(p, q)
 
