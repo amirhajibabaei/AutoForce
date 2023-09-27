@@ -308,7 +308,7 @@ class TorchAtoms(Atoms):
                 if "forces" in ase_atoms.calc.results:
                     self.target_forces = as_tensor(ase_atoms.get_forces())
                 if "stress" in ase_atoms.calc.results:
-                    self.target_forces = as_tensor(ase_atoms.get_stress())
+                    self.target_stress = as_tensor(ase_atoms.get_stress())
 
     def set_targets(self):
         self.target_energy = as_tensor(self.get_potential_energy())
