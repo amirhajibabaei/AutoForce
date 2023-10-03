@@ -267,6 +267,7 @@ class TorchAtoms(Atoms):
         ase_atoms=None,
         energy=None,
         forces=None,
+        stress=None,
         cutoff=None,
         descriptors=[],
         group=None,
@@ -299,16 +300,20 @@ class TorchAtoms(Atoms):
         if energy is not None and forces is not None:
             self.target_energy = as_tensor(energy)
             self.target_forces = as_tensor(forces)
+            self.target_stress = as_tensor(stress)
         else:
             if ase_atoms is not None and ase_atoms.get_calculator() is not None:
                 if "energy" in ase_atoms.calc.results:
                     self.target_energy = as_tensor(ase_atoms.get_potential_energy())
                 if "forces" in ase_atoms.calc.results:
                     self.target_forces = as_tensor(ase_atoms.get_forces())
+                if "stress" in ase_atoms.calc.results:
+                    self.target_stress = as_tensor(ase_atoms.get_stress())
 
     def set_targets(self):
         self.target_energy = as_tensor(self.get_potential_energy())
         self.target_forces = as_tensor(self.get_forces())
+        self.target_stress = as_tensor(self.get_stress())
 
     def attach_process_group(self, group):
         self.process_group = group

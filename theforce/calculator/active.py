@@ -9,6 +9,7 @@ import torch
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.constraints import Filter
+import ase.units as units
 from torch.autograd import grad
 
 import theforce.distributed as distrib
@@ -685,6 +686,7 @@ class ActiveCalculator(Calculator):
         tmp.set_calculator(self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
+        stress = tmp.get_stress()
         # write
         self._ktest += 1
         mode = "a" if self._ktest > 1 else "w"
@@ -696,9 +698,10 @@ class ActiveCalculator(Calculator):
         self.log("testing energy: {}".format(energy))
         dE = self.results["energy"] - energy
         df = abs(self.results["forces"] - forces)
+        d_str = abs(self.results["stress"] - stress)
         self.log(
-            "errors (test):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}".format(
-                dE, df.max(), df.mean()
+            "errors (test):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g} mean|del-P|: {:.2g}".format(
+                dE, df.max(), df.mean(), np.mean(d_str[:3])
             )
         )
         self._last_test = self.step
@@ -709,15 +712,20 @@ class ActiveCalculator(Calculator):
         tmp.set_calculator(_calc or self._calc)
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
+        stress = tmp.get_stress()
         if self.tape:
             # self.tape.write(tmp)
             self._saved_for_tape = tmp
         self.log("exact energy: {}".format(energy))
+        self.log("exact stress[GPa]: {}  {}  {}".format(stress[0]/units.GPa, stress[1]/units.GPa, stress[1]/units.GPa))
         #
         if self.model.ndata > 0:
             if task is None:
                 dE = self.results["energy"] - energy
                 df = abs(self.results["forces"] - forces)
+                p_str = self.results["stress"]
+                dstr = p_str - stress 
+                self.log ("predicted stress[GPa]: {}  {}  {}".format(p_str[0]/units.GPa, p_str[1]/units.GPa, p_str[1]/units.GPa))
             else:
                 dE = self.results["energy"][task] - energy
                 df = abs(self.results["forces"][..., task] - forces)
@@ -727,7 +735,7 @@ class ActiveCalculator(Calculator):
                 )
             )
         self._last_test = self.step
-        return energy, forces
+        return energy, forces, stress
 
     def snapshot(self, fake=False, copy=None):
         if copy is None:
@@ -735,18 +743,20 @@ class ActiveCalculator(Calculator):
         if fake:
             energy = self.results["energy"]
             forces = self.results["forces"]
+            stress = self.results["stress"]
         else:
-            energy, forces = self._exact(copy)
-        copy.set_calculator(SinglePointCalculator(copy, energy=energy, forces=forces))
+            energy, forces, stress = self._exact(copy)
+        copy.set_calculator(SinglePointCalculator(copy, energy=energy, forces=forces, stress=stress))
         copy.set_targets()
         return copy
 
     def head(self, energy_and_forces=None):
         added = self.model.data[-1]
         if energy_and_forces is None:
-            energy, forces = self._exact(added)
+            energy, forces, stress = self._exact(added)
         added.calc.results["energy"] = energy
         added.calc.results["forces"] = forces
+        added.calc.results["stress"] = stress
         added.set_targets()
         self.model.make_munu()
 

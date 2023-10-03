@@ -72,6 +72,12 @@ class EnergyForceKernel(Module):
     def forces_forces(self, first, second):
         return self.base_kerns(first, second, "gradgrad")
 
+    def virial_energy (self, first, second):
+        return self.base_kerns(first, second, "virial")
+    
+    def energy_virial (self, first, second):
+        return self.base_kerns (first, second, "virial")
+    
     def base_kerns(self, first, second, operation):
         return torch.stack(
             [kern(first, second, operation=operation) for kern in self.kernels]
@@ -182,7 +188,7 @@ class DefaultMean:
             if number in self.weights:
                 e += count * self.weights[number]
         if forces:
-            return e, torch.zeros(len(atoms), 3)
+            return e, torch.zeros(len(atoms), 3), torch.zeros(6)
         else:
             return e
 
@@ -216,7 +222,7 @@ class AutoMean:
             if z in self.weights:
                 e += count * (self.weights[z] + self._weights[z])
         if forces:
-            return e, torch.zeros(len(atoms), 3)
+            return e, torch.zeros(len(atoms), 3), torch.zeros(6)
         else:
             return e
 
@@ -310,6 +316,7 @@ class GaussianProcessPotential(Module):
             return torch.cat([e_diag, f_diag])
 
     def mean(self, data, forces=True, cat=True):
+        
         if self.parametric is None:
             if forces:
                 if cat:
@@ -321,13 +328,16 @@ class GaussianProcessPotential(Module):
         else:
             e = [self.parametric(sys, forces=forces) for sys in iterable(data)]
             if forces:
-                e, f = zip(*e)
+                e, f, v = zip(*e)
+
                 e = torch.cat([_e.view(-1) for _e in e])
                 f = torch.cat(f).view(-1)
+                v = torch.cat(v).view(-1)
+                
                 if cat:
-                    return torch.cat([e, f])
+                    return torch.cat([e, f, v])
                 else:
-                    return e, f
+                    return e, f, v
             else:
                 return torch.cat([_e.view(-1) for _e in e])
 
@@ -335,6 +345,7 @@ class GaussianProcessPotential(Module):
         y = torch.cat(
             [torch.tensor([sys.target_energy for sys in data])]
             + [sys.target_forces.view(-1) for sys in data]
+            + [sys.target_stress.view(-1)*sys.get_volume() for sys in data]
         )
         return y - self.mean(data)
 
@@ -464,6 +475,7 @@ class PosteriorPotential(Module):
             self.M = torch.empty(0, 0)
             self.Ke = torch.empty(0, 0)
             self.Kf = torch.empty(0, 0)
+            self.Kv = torch.empty(0, 0)
 
     @property
     def ndata(self):
@@ -486,9 +498,11 @@ class PosteriorPotential(Module):
             X = inducing.subset(self.gp.species)
             self.Ke = self.gp.kern(data, X, cov="energy_energy")
             self.Kf = self.gp.kern(data, X, cov="forces_energy")
+            self.Kv = self.gp.kern(data, X, cov="virial_energy")
             if data.is_distributed:
                 distrib.all_reduce(self.Ke)
                 distrib.all_reduce(self.Kf)
+                distrib.all_reduce(self.Kv)
             self.M = self.gp.kern(X, X, cov="energy_energy")
             self.X = X
             self.make_munu()
@@ -521,7 +535,7 @@ class PosteriorPotential(Module):
 
     @property
     def K(self):
-        return torch.cat([self.Ke, self.Kf], dim=0)
+        return torch.cat([self.Ke, self.Kf, self.Kv], dim=0)
 
     @property
     def mean(self):
@@ -568,7 +582,7 @@ class PosteriorPotential(Module):
                 A = torch.cat((self.K, sigma.view(1) * L.t()))
                 # Y = torch.cat((self.gp.Y(self.data)/sigma, torch.zeros(L.size(0))))
                 Y = torch.cat((self.gp.Y(self.data), torch.zeros(L.size(0))))
-                Q, R = torch.qr(A)
+                Q, R = torch.linalg.qr(A)
                 self.mu = (R.inverse() @ Q.t() @ Y).contiguous()
                 # self.nu = None # is not needed anymore
                 self.choli = L.inverse().contiguous()
@@ -595,11 +609,13 @@ class PosteriorPotential(Module):
 
     def make_stats(self, data_and_pred=None):
         n = len(self.data)
+        
         if data_and_pred is None:
             y = self.gp.Y(self.data)
             yy = self.K @ self.mu
         else:
             y, yy = data_and_pred
+        
         diff = yy - y
         self._ediff = diff[:n] / torch.tensor(self.data.natoms)
         self._fdiff = diff[n:]
@@ -714,11 +730,14 @@ class PosteriorPotential(Module):
         assert data[0].includes_species(self.gp.species)
         Ke = self.gp.kern(data, self.X, cov="energy_energy")
         Kf = self.gp.kern(data, self.X, cov="forces_energy")
+        Kv = self.gp.kern(data, self.X, cov="virial_energy")
         if data[0].is_distributed if type(data) == list else data.is_distributed:
             distrib.all_reduce(Ke)
             distrib.all_reduce(Kf)
+            distrib.all_reduce(Kv)
         self.Ke = torch.cat([self.Ke, Ke], dim=0)
         self.Kf = torch.cat([self.Kf, Kf], dim=0)
+        self.Kv = torch.cat([self.Kv, Kv], dim=0)
         self.data += data
         if remake:
             self.make_munu()
@@ -728,15 +747,19 @@ class PosteriorPotential(Module):
         assert X.number in self.gp.species
         Ke = self.gp.kern(self.data, X, cov="energy_energy")
         Kf = self.gp.kern(self.data, X, cov="forces_energy")
+        Kv = self.gp.kern(self.data, X, cov="virial_energy")
         if self.data.is_distributed:
             distrib.all_reduce(Ke)
             distrib.all_reduce(Kf)
+            distrib.all_reduce(Kv)
         if self.Ke.numel() > 0:
             self.Ke = torch.cat([self.Ke, Ke], dim=1)
             self.Kf = torch.cat([self.Kf, Kf], dim=1)
+            self.Kv = torch.cat([self.Kv, Kv], dim=1)
         else:
             self.Ke = Ke
             self.Kf = Kf
+            self.Kv = Kv
         if col is None:
             a = self.gp.kern(self.X, X, cov="energy_energy")
         else:
@@ -750,6 +773,7 @@ class PosteriorPotential(Module):
     def pop_1data(self, remake=True, clear_cached=True):
         self.Ke = self.Ke[:-1]
         self.Kf = self.Kf[: -3 * self.data[-1].natoms]
+        self.Kv = self.Kv[:-6]
         if clear_cached:
             self.gp.clear_cached([self.data.X[-1]])
         del self.data.X[-1]
@@ -759,6 +783,7 @@ class PosteriorPotential(Module):
     def pop_1inducing(self, remake=True, clear_cached=True):
         self.Ke = self.Ke[:, :-1]
         self.Kf = self.Kf[:, :-1]
+        self.Kv = self.Kv[:, :-1]
         self.M = self.M[:-1, :-1]
         if clear_cached:
             self.gp.clear_cached([self.X.X[-1]])
@@ -769,6 +794,7 @@ class PosteriorPotential(Module):
     def popfirst_1data(self, remake=True, clear_cached=True):
         self.Ke = self.Ke[1:]
         self.Kf = self.Kf[3 * self.data[0].natoms :]
+        self.Kv = self.Kv[6:]
         if clear_cached:
             self.gp.clear_cached([self.data.X[0]])
         del self.data.X[0]
@@ -778,6 +804,7 @@ class PosteriorPotential(Module):
     def popfirst_1inducing(self, remake=True, clear_cached=True):
         self.Ke = self.Ke[:, 1:]
         self.Kf = self.Kf[:, 1:]
+        self.Kv = self.Kv[:, 1:]
         self.M = self.M[1:, 1:]
         if clear_cached:
             self.gp.clear_cached([self.X.X[0]])
@@ -1207,9 +1234,12 @@ def _regression(
     self.choli = L.inverse().contiguous()
     data = self.data
     ndat = len(data)
+    
     energies = data.target_energy
     forces = torch.cat([atoms.target_forces.view(-1) for atoms in data])
-    Y = torch.cat((forces, torch.zeros(L.size(0))))
+    virial = torch.cat([atoms.target_stress.view(-1)*atoms.get_volume() for atoms in data])
+    Y = torch.cat((forces, virial, torch.zeros(L.size(0))))
+    
 
     def make_mu(with_energies=None):
         if same_sigma:
@@ -1222,13 +1252,14 @@ def _regression(
                 sigma = sigma + (numbers == z).type(L.type()) * sigma_z
             sigma = sigma.diag()
         if with_energies is None:
-            _K = self.Kf
+            _K = torch.cat([self.Kf, self.Kv], dim=0)
             _Y = Y
         else:
             _K = self.K
             _Y = torch.cat([with_energies, Y])
+        
         A = torch.cat((_K, sigma @ L.t()))
-        Q, R = torch.qr(A)
+        Q, R = torch.linalg.qr(A)
         self.mu = (R.inverse() @ Q.t() @ _Y).contiguous()
         diff = self.Kf @ self.mu - forces
         return diff
