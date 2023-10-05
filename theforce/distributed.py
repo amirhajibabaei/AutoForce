@@ -4,6 +4,8 @@ import torch
 if torch.distributed.is_available():
     if torch.distributed.is_mpi_available():
         import torch.distributed as _dist
+    else:
+        import theforce._mpi4py as _dist
 else:
     import theforce._mpi4py as _dist
 
