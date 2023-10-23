@@ -3,7 +3,7 @@
 import weakref
 
 import ase.units as units
-from ase.parallel import world
+from ase.parallel import world, MPI4PY()
 from ase.utils import IOContext
 
 
@@ -32,7 +32,7 @@ class MDLogger3(IOContext):
             self.dyn = None
         self.atoms = atoms
         global_natoms = len(atoms) #atoms.get_global_number_of_atoms()
-        
+        world = MPI4PY()
         self.logfile = self.openfile(logfile, comm=world, mode='a')
         self.stress = stress
         self.peratom = peratom
