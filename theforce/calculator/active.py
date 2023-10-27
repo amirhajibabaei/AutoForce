@@ -725,7 +725,7 @@ class ActiveCalculator(Calculator):
                 df = abs(self.results["forces"] - forces)
                 p_str = self.results["stress"]
                 dstr = p_str - stress 
-                self.log ("predicted stress[GPa]: {}  {}  {}".format(p_str[0]/units.GPa, p_str[1]/units.GPa, p_str[1]/units.GPa))
+                self.log ("predicted stress[GPa]: {}  {}  {}".format(p_str[0]/units.GPa, p_str[1]/units.GPa, p_str[2]/units.GPa))
             else:
                 dE = self.results["energy"][task] - energy
                 df = abs(self.results["forces"][..., task] - forces)
