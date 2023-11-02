@@ -907,6 +907,9 @@ class PosteriorPotential(Module):
             f1 = -torch.autograd.grad(e1, xyz, retain_graph=True)[0]
         self.add_data([atoms], **kwargs)
         e2 = (cov @ self.mu).sum().view(1)
+        if torch.isnan(e2):
+            return 1, float("inf"), float("inf")
+            
         if e2.grad_fn and use_forces:
             f2 = -torch.autograd.grad(e2, xyz, retain_graph=True)[0]
         if is_distributed:
