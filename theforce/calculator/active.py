@@ -717,7 +717,7 @@ class ActiveCalculator(Calculator):
             # self.tape.write(tmp)
             self._saved_for_tape = tmp
         self.log("exact energy: {}".format(energy))
-        self.log("exact stress[GPa]: {}  {}  {}".format(stress[0]/units.GPa, stress[1]/units.GPa, stress[1]/units.GPa))
+        self.log("exact stress[GPa]: {}  {}  {}".format(stress[0]/units.GPa, stress[1]/units.GPa, stress[2]/units.GPa))
         #
         if self.model.ndata > 0:
             if task is None:
