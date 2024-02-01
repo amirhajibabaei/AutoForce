@@ -3,7 +3,7 @@
 import weakref
 
 import ase.units as units
-from ase.parallel import world, MPI4PY()
+from ase.parallel import world, MPI4PY
 from ase.utils import IOContext
 
 
