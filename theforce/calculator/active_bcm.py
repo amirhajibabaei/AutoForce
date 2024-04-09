@@ -1,5 +1,6 @@
 # +
 import os
+import re
 import time
 import warnings
 
@@ -8,8 +9,8 @@ import numpy as np
 import torch
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
-from ase.constraints import Filter
 import ase.units as units
+#from ase.constraints import Filter
 from torch.autograd import grad
 
 import theforce.distributed as distrib
@@ -20,60 +21,9 @@ from theforce.regression.gppotential import (
     PosteriorPotential,
     PosteriorPotentialFromFolder,
 )
-from theforce.similarity.sesoap import SeSoapKernel, SubSeSoapKernel
-from theforce.util.tensors import nan_to_num, padded
 from theforce.util.util import abspath, date, iterable, timestamp
+from theforce.calculator.active import default_kernel
 
-
-def default_kernel(lmax=3, nmax=3, exponent=4, cutoff=6.0, species=None):
-    if species is None:
-        kern = SeSoapKernel(lmax, nmax, exponent, cutoff, radii=DefaultRadii())
-    else:
-        kern = [
-            SubSeSoapKernel(
-                lmax, nmax, exponent, cutoff, z, species, radii=DefaultRadii()
-            )
-            for z in species
-        ]
-    return kern
-
-
-def clamp_forces(f, m):
-    g = np.where(f > m, m, f)
-    h = np.where(g < -m, -m, g)
-    return h
-
-
-class FilterDeltas(Filter):
-    def __init__(self, atoms, shrink=0.95):
-        """
-        wraps atoms and causes a smooth variation of
-        forces/stressed upon updating the ML potential
-        """
-        super().__init__(atoms, indices=[a.index for a in atoms])
-        self.shrink = shrink
-        self.f = 0
-        self.s = 0
-
-    def get_forces(self, *args, **kwargs):
-        f = self.atoms.get_forces(*args, **kwargs)
-        deltas = self.atoms.calc.deltas
-        if deltas:
-            self.f += deltas["forces"]
-        self.f *= self.shrink
-        g = clamp_forces(self.f, 1.0)
-        return f - g
-
-    def get_stress(self, *args, **kwargs):
-        s = self.atoms.get_stress(*args, **kwargs)
-        deltas = self.atoms.calc.deltas
-        if deltas:
-            self.s += deltas["stress"]
-        self.s *= self.shrink
-        return s - self.s
-
-    def __getattr__(self, attr):
-        return getattr(self.atoms, attr)
 
 
 kcal_mol = 0.043
@@ -101,7 +51,7 @@ class Switch:
         return self.values[k]
 
 
-class ActiveCalculator(Calculator):
+class BCMActiveCalculator(Calculator):
     implemented_properties = ["energy", "forces", "stress", "free_energy"]
 
     def __init__(
@@ -109,10 +59,9 @@ class ActiveCalculator(Calculator):
         covariance="pckl",
         calculator=None,
         process_group=None,
-        meta=None,
-        logfile="active.log",
-        pckl="model.pckl",
-        tape="model.sgpr",
+        logfile="bcm_active.log",
+        pckl="bcm_model.pckl",
+        tape="bcm_model.sgpr",
         test=None,
         stdout=False,
         ediff=2 * kcal_mol,
@@ -122,8 +71,8 @@ class ActiveCalculator(Calculator):
         fdiff=3 * kcal_mol,
         noise_f=kcal_mol,
         ioptim=1,
-        max_data=inf,
-        max_inducing=inf,
+        max_data=20,
+        max_inducing=1000,
         kernel_kw=None,
         veto=None,
         include_params=None,
@@ -132,13 +81,13 @@ class ActiveCalculator(Calculator):
         report_timings=False,
         step0_forced_fp=False,
         nbeads=1,
+        kernel_model_dict=None,
     ):
         """
         inputs:
             covariance:      None | similarity kernel(s) | path to a pickled model | model
             calculator:      None | any ASE calculator
             process_group:   None | group
-            meta:            meta energy calculator
 
         outputs:
             logfile:         string | None
@@ -289,9 +238,68 @@ class ActiveCalculator(Calculator):
         Calculator.__init__(self)
         self._calc = calculator
         self.process_group = process_group
-        self.distrib = Distributer(self.world_size)
-        self.pckl = pckl
-        self.get_model(covariance, kernel_kw or {})
+        
+        world_size = 1
+        if distrib.is_initialized():
+            world_size = distrib.get_world_size()
+        
+        self.kernel_kw = kernel_kw
+        self.K_sm = {}
+        self.model_dict = {}
+        
+        if kernel_model_dict is not None:
+            my_distrib = Distributer(world_size)
+            for key in kernel_model_dict:
+                self.model_dict[key] = \
+                    PosteriorPotentialFromFolder(
+                    kernel_model_dict[key],
+                    load_data=True,
+                    update_data=False,
+                    group=self.process_group,
+                    distrib=my_distrib
+                    )
+                #self.key_list.append(key)
+        
+        if pckl.endswith('.pckl'):
+            self.pckl_head = pckl[:-5]
+        else:
+            self.pckl_head = pckl 
+        
+        # In Case of Restart the BCM,
+        # Read the saved pickled model data 
+        used_pckl_id = []
+        self.pckl_id = 1
+        pckl_dir = self.pckl_head + '_{}'.format(self.pckl_id) + '.pckl'
+        
+        while os.path.isdir(pckl_dir):
+            used_pckl_id.append (self.pckl_id)
+            self.pckl_id += 1
+            pckl_dir = self.pckl_head + '_{}'.format(self.pckl_id) + '.pckl'
+            
+        
+        if len(used_pckl_id) > 0:
+            for pckl_id in used_pckl_id[:-1]:
+                pckl_dir = self.pckl_head + '_{}'.format(pckl_id) + '.pckl'
+                key = pckl_dir[:-5]
+                my_distrib = Distributer (world_size)
+                self.model_dict[key] = PosteriorPotentialFromFolder(
+                    pckl_dir,
+                    load_data=True,
+                    update_data=False,
+                    group=self.process_group,
+                    distrib=my_distrib,
+                )
+            self.pckl_id = used_pckl_id[-1]
+
+        #print ('used_pckl_id', used_pckl_id)
+        
+        self.distrib = Distributer (world_size)
+        self.pckl = self.pckl_head + '_{}'.format(self.pckl_id) + '.pckl'
+        tape = self.pckl[:-5] + '.sgpr'
+        self.tape = SgprIO(tape)
+        self.get_model(model='pckl', kernel_kw=self.kernel_kw)
+        self.l_bcm_update = False
+
         self.ediff = ediff
         self.ediff_lb = ediff_lb or ediff
         self.ediff_ub = ediff_ub or ediff
@@ -302,19 +310,13 @@ class ActiveCalculator(Calculator):
         self._ioptim = 0
         self.max_data = max_data
         self.max_inducing = max_inducing
-        self.meta = meta
         self.logfile = logfile
         self._logpref = ""
         self.stdout = stdout
         self.step = 0
         self.log("active calculator says Hello!", mode="w")
-        self.log(f"kernel: {self.model.descriptors}")
-        self.log_settings()
-        self.log("model size: {} {}".format(*self.size))
-        self.tape = None if tape is None else SgprIO(tape)
-        # if self.active and self.tape:
-        #    self.tape.write_params(ediff=self.ediff, ediff_tot=self.ediff_tot,
-        #                           fdiff=self.fdiff)
+        self.log (f"used_pckl_id: {used_pckl_id}")
+
         self.test = test
         self._last_test = 0
         self._ktest = 0
@@ -333,6 +335,37 @@ class ActiveCalculator(Calculator):
         self.nbeads = nbeads
         if self.nbeads > 1:
             self.log(f"You are going quantum (PIMD)! Number of beads: {self.nbeads}")
+
+
+    def initiate_bcm (self):
+        
+        world_size = 1
+        if distrib.is_initialized():
+            world_size = distrib.get_world_size()
+
+        if os.path.isdir(self.pckl):
+            my_distrib = Distributer(world_size)
+            key = self.pckl[:-5]
+            self.model_dict[key] = \
+                PosteriorPotentialFromFolder(
+                    self.pckl,
+                    load_data=True,
+                    update_data=False,
+                    group=self.process_group,
+                    distrib=my_distrib
+                    )
+            
+            self.pckl_id += 1
+            self.pckl = self.pckl_head + '_{}'.format(self.pckl_id) + '.pckl'
+        
+        tape = self.pckl[:-5] + '.sgpr'
+        self.tape = SgprIO(tape)
+        self.distrib = Distributer(world_size)
+        self.get_model(model="pckl", kernel_kw=self.kernel_kw)
+        
+        self.log(f"kernel: {self.model.descriptors}")
+        self.log_settings()
+        self.log("model size: {} {}".format(*self.size))
 
     @property
     def active(self):
@@ -425,9 +458,22 @@ class ActiveCalculator(Calculator):
     def calculate(self, _atoms=None, properties=["energy"], system_changes=all_changes):
 
         timings = [time.time()]  # node 0: start
+        
+        if self.active:
+
+            if not self.l_bcm_update:
+                if self.size[0] >= self.max_data:
+                    self.l_bcm_update = True 
+                if self.size[1] >= self.max_inducing:
+                    self.l_bcm_update = True 
+        
+            if self.l_bcm_update:
+                self.initiate_bcm ()
+                self.l_bcm_update = False 
 
         if self.size[1] == 0 and not self.active:
             raise RuntimeError("you forgot to assign a DFT calculator!")
+        
 
         if type(_atoms) == ase.atoms.Atoms:
             atoms = TorchAtoms(ase_atoms=_atoms, ranks=self.distrib)
@@ -440,6 +486,7 @@ class ActiveCalculator(Calculator):
             atoms = _atoms
             uargs = {}
             self.to_ase = False
+        
         if _atoms is not None and self.process_group is not None:
             atoms.attach_process_group(self.process_group)
         Calculator.calculate(self, atoms, properties, system_changes)
@@ -455,42 +502,44 @@ class ActiveCalculator(Calculator):
         self.maximum_force = inf
 
         # build a model
-        if self.step == 0:
-            if self.active and self.model.ndata == 0:
-                self.initiate_model()
-                self._update_args = dict(data=False)
+        #if self.step == 0:
+        if self.active and self.model.ndata == 0:
+            self.initiate_model()
+            self._update_args = dict(data=False)
 
         # kernel
         self.cov = self.model.gp.kern(self.atoms, self.model.X)
+        # kernel: covariance values between configuration(atoms) and inducing (LCE)
+        for key in self.model_dict:
+            self.K_sm[key] = self.model_dict[key].gp.kern (self.atoms,
+                                                           self.model_dict[key].X)
 
         timings.append(time.time())  # node 2: kernel
 
         # energy/forces
-        self.update_results(self.active or (self.meta is not None))
+        energy, covloss_max = self.update_results(retain_graph=self.active)
 
         timings.append(time.time())  # node 3: results
 
         # active learning
-        self.deltas = None
+        
         self.covlog = ""
         # in case of PIMD, we only sample the first bead
         if self.active and not self.veto():
+            
             if (self.step + 1) % self.nbeads == 1 or self.nbeads == 1:
                 pre = self.results.copy()
                 m, n = self.update(**self._update_args)
                 if n > 0 or m > 0:
-                    self.update_results(self.meta is not None)
-                    if self.step > 0:
-                        self.deltas = {}
-                        for quant in ["energy", "forces", "stress"]:
-                            self.deltas[quant] = self.results[quant] - pre[quant]
+                    _, _ = self.update_results(retain_graph=False)
                 if self.size[0] == dat1:
                     self.distrib.unload(atoms)
             else:
                 if self.size[0] == dat1:
                     self.distrib.unload(atoms)
+            
         else:
-            covloss_max = float(self.get_covloss().max())
+            #covloss_max = float(self.get_covloss().max())
             self.covlog = f"{covloss_max}"
             if covloss_max > self.ediff:
                 tmp = self.atoms.as_ase()
@@ -498,27 +547,19 @@ class ActiveCalculator(Calculator):
                 if self.rank == 0:
                     ase.io.Trajectory("active_uncertain.traj", "a").write(tmp)
 
+        
         timings.append(time.time())  # node 4: active
         self.post_calculate(timings)
 
     def post_calculate(self, timings):
         energy = self.results["energy"]
         # test
-        if self.active and self.test and self.step - self._last_test > self.test:
+        if self.active and self.test and ((self.step+1 - self._last_test)%self.test == 0):
             self._test()
-
-        # meta terms
-        meta = ""
-        if self.meta is not None:
-            energies, kwargs = self.meta(self)
-            if energies is not None:
-                meta_energy = self.reduce(energies, **kwargs)
-                meta = f"meta: {meta_energy}"
-
         # step
         self.log(
-            "{} {} {} {}".format(
-                energy, self.atoms.get_temperature(), self.covlog, meta
+            "{} {} {}".format(
+                energy, self.atoms.get_temperature(), self.covlog
             )
         )
         self.step += 1
@@ -546,38 +587,50 @@ class ActiveCalculator(Calculator):
         return c1
 
     def update_results(self, retain_graph=False):
-        energies = self.cov @ self.model.mu
-        energy = self.reduce(energies, retain_graph=retain_graph)
-        # ... or
-        # self.allcov = self.gather(self.cov)
-        # energies = self.allcov@self.model.mu
-        # retain_graph = self.active or (self.meta is not None)
-        # energy = self.reduce(energies, retain_graph=retain_graph, reduced=True)
+        energy = 0.0
+        mean = 0.0
+        covloss_inv = 0.0
+        covloss_max = float('inf')
+        
+        
+        for key in self.model_dict:
+            covloss = self.get_covloss_with_model (key, self.K_sm[key])
+            covmax = covloss.max()
+            beta = -np.log(covmax) if covmax < 1.0 else 0.0
+            scale = beta/covmax
+            covloss_inv += scale
+            enr_key = self.K_sm[key] @ self.model_dict[key].mu 
+            mean_key = self.model_dict[key].mean(self.atoms)
+            energy += scale*(enr_key.sum())
+            mean   += scale*(mean_key)
+            covloss_max = min (covmax, covloss_max)
+        
+        covloss = self.get_covloss ()
+        covmax = covloss.max()
+        beta = -np.log(covmax) if covmax < 1.0 else 0.0
+        scale = beta/covmax
+        covloss_inv += scale
+        enr_key = self.cov @ self.model.mu 
+        mean_key = self.model.mean(self.atoms)
+        energy += scale*(enr_key.sum())
+        mean   += scale*(mean_key) 
+        covloss_max = min (covmax, covloss_max)
+        
+        energy = energy/covloss_inv 
+        mean   = mean/covloss_inv 
+        if self.atoms.is_distributed:
+            distrib.all_reduce (energy)
+        energy += mean     
 
-    def reduce(
-        self, local_energies, op="=", retain_graph=False, reduced=False, is_meta=False
-    ):
-        energy = local_energies.sum()
-        if self.atoms.is_distributed and not reduced:
-            distrib.all_reduce(energy)
         forces, stress = self.grads(energy, retain_graph=retain_graph)
-        if is_meta:
-            forces = nan_to_num(forces, 0.0)
-        else:
-            mean = self.model.mean(self.atoms)
-            if mean.grad_fn:  # only constant mean
-                raise RuntimeError("mean has grad_fn!")
-            energy = energy + mean
-        if op == "=":
-            self.results["energy"] = energy.detach().numpy()
-            self.results["forces"] = forces.detach().numpy()
-            self.results["stress"] = stress.flat[[0, 4, 8, 5, 2, 1]]
-        elif op == "+=":
-            self.results["energy"] += energy.detach().numpy()
-            self.results["forces"] += forces.detach().numpy()
-            self.results["stress"] += stress.flat[[0, 4, 8, 5, 2, 1]]
+        
+        self.results["energy"] = energy.detach().numpy()
+        self.results["forces"] = forces.detach().numpy()
+        self.results["stress"] = stress.flat[[0, 4, 8, 5, 2, 1]]
+        
         self.maximum_force = abs(self.results["forces"]).max()
-        return float(energy)
+        
+        return float(energy), covloss_max
 
     def zero(self):
         self.results["energy"] = 0.0
@@ -612,7 +665,7 @@ class ActiveCalculator(Calculator):
 
     def initiate_model(self):
         data = AtomsData([self.snapshot()])
-        # i = self.atoms.first_of_each_atom_type()
+        
         i = self.get_unique_lces()
         inducing = LocalsData([self.atoms.local(j, detach=True) for j in i])
         self.model.set_data(data, inducing)
@@ -628,6 +681,7 @@ class ActiveCalculator(Calculator):
         if self.tune_for_md:
             self.sample_rand_lces(indices=i, repeat=1)
         self.optimize()
+        self.save_model ()
 
     def get_unique_lces(self, thresh=0.95):
         tmp = (self.atoms.as_ase() if self.to_ase else self.atoms).copy()
@@ -696,12 +750,13 @@ class ActiveCalculator(Calculator):
             ase.io.Trajectory("active_ML.traj", mode).write(tmp)
         # log
         self.log("testing energy: {}".format(energy))
-        dE = self.results["energy"] - energy
+        natoms = self.atoms.natoms
+        dE = (self.results["energy"] - energy)/natoms
         df = abs(self.results["forces"] - forces)
-        d_str = abs(self.results["stress"] - stress)
+        dstress = abs(self.results["stress"] - stress)
         self.log(
-            "errors (test):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g} mean|del-P|: {:.2g}".format(
-                dE, df.max(), df.mean(), np.mean(d_str[:3])
+                "errors (test):  per-atom del-E: {:.3g}  max|del-F|: {:.3g}  mean|del-F|: {:.3g} mean|del-P|: {:.3g}".format(
+                    dE, df.max(), df.mean(), np.mean(dstress[:3])
             )
         )
         self._last_test = self.step
@@ -717,24 +772,30 @@ class ActiveCalculator(Calculator):
             # self.tape.write(tmp)
             self._saved_for_tape = tmp
         self.log("exact energy: {}".format(energy))
-        self.log("exact stress[GPa]: {}  {}  {}".format(stress[0]/units.GPa, stress[1]/units.GPa, stress[2]/units.GPa))
+        self.log("exact stress: {}  {}  {} ".format(stress[0], stress[1], stress[2]))
+        self.log("exact stress[GPa]: {}  {}  {} ".format(stress[0]/units.GPa, stress[1]/units.GPa, stress[2]/units.GPa))
+        natoms = self.atoms.natoms
         #
         if self.model.ndata > 0:
             if task is None:
                 dE = self.results["energy"] - energy
                 df = abs(self.results["forces"] - forces)
-                p_str = self.results["stress"]
-                dstr = p_str - stress 
-                self.log ("predicted stress[GPa]: {}  {}  {}".format(p_str[0]/units.GPa, p_str[1]/units.GPa, p_str[2]/units.GPa))
             else:
                 dE = self.results["energy"][task] - energy
                 df = abs(self.results["forces"][..., task] - forces)
+            dE = dE/natoms 
+            dstress = self.results["stress"] - stress
             self.log(
-                "errors (pre):  del-E: {:.2g}  max|del-F|: {:.2g}  mean|del-F|: {:.2g}".format(
-                    dE, df.max(), df.mean()
+                    "errors (pre):  per-atom del-E: {:.3g}  max|del-F|: {:.3g}  mean|del-F|: {:.3g} mean|del-P|: {:.3g}".format(
+                    dE, df.max(), df.mean(), np.mean(abs(dstress)[:3])
                 )
             )
+            p_stress = self.results["stress"]
+            self.log ("predicted stress[GPa] {} {} {}".format(p_stress[0]/units.GPa, p_stress[1]/units.GPa, p_stress[2]/units.GPa))
+            self.log ("differencestress[GPa] {} {} {}".format(dstress[0]/units.GPa, dstress[1]/units.GPa, dstress[2]/units.GPa))
+
         self._last_test = self.step
+
         return energy, forces, stress
 
     def snapshot(self, fake=False, copy=None):
@@ -778,6 +839,24 @@ class ActiveCalculator(Calculator):
         else:
             return x
 
+    def get_covloss_with_model(self, model_key, K_sm):
+        b = self.model_dict[model_key].choli @ K_sm.detach().t()
+        c = (b * b).sum(dim=0)
+        
+        if c.size(0) > 0:
+            beta = (1 - c).clamp(min=0.0).sqrt()
+        else:
+            beta = c
+        beta = self.gather(beta)
+        vscale = []
+        for z in self.atoms.numbers:
+            if z in self.model_dict[model_key]._vscale:
+                vscale.append(self.model_dict[model_key]._vscale[z])
+            else:
+                vscale.append(float("inf"))
+        vscale = torch.tensor(vscale).sqrt()
+        return beta * vscale
+
     def get_covloss(self):
         b = self.model.choli @ self.cov.detach().t()
         c = (b * b).sum(dim=0)
@@ -803,6 +882,17 @@ class ActiveCalculator(Calculator):
         vscale = torch.tensor(vscale).sqrt()
         return beta * vscale
 
+    def get_covloss_total (self):
+        nsize = len (self.K_sm) + 1
+        beta_list = torch.zeros ( (nsize, self.atoms.natoms) )
+        beta_list[0] = self.get_covloss()
+        ik = 1
+        for key in self.K_sm:
+            beta_list[ik] = self.get_covloss_with_model (key, self.K_sm[key])
+            ik += 1
+            
+        return beta_list.min(axis=0).values
+        
     def update_lce(self, loc, beta=None):
         k = None
         if beta is None:
@@ -847,7 +937,8 @@ class ActiveCalculator(Calculator):
         while True:
             if len(added_indices) == self.atoms.natoms:
                 break
-            beta = self.get_covloss()
+            beta = self.get_covloss_total()
+            
             q = torch.argsort(beta, descending=True)
             for k in q.tolist():
                 if k not in added_indices and k not in self.ignore:
@@ -931,6 +1022,7 @@ class ActiveCalculator(Calculator):
     def sanity_check(self):
         counts1 = self.model.data.counts(total=False)
         counts2 = {k: self.distrib.loads[k][self.rank] for k in counts1.keys()}
+        
         if counts1 != counts2:
             raise RuntimeError(f"at rank {self.rank}, {counts1} != {counts2}")
 
@@ -945,7 +1037,7 @@ class ActiveCalculator(Calculator):
         try_real = self.blind or type(self._calc) == SinglePointCalculator
         update_data = (m > 0 and data) or not inducing
         if update_data and not inducing:  # for include_tape
-            update_data = self.get_covloss().max() > self.ediff
+            update_data = self.get_covloss_total().max() > self.ediff
         if update_data:
             n = self.update_data(try_fake=not try_real, internal=True, save_model=False)
         else:
@@ -960,13 +1052,13 @@ class ActiveCalculator(Calculator):
 
         if m > 0 or n > 0:
             # TODO: if threshold is reached -> downsizes every time! fix this!
-            ch1, ch2 = self.model.downsize(
-                self.max_data, self.max_inducing, first=True, lii=True
-            )
-            if ch1 or ch2:
-                self.log("downsized -> size: {} {}".format(*self.size))
-            if ch2:
-                self.cov = self.cov.index_select(1, torch.as_tensor(ch2))
+            #ch1, ch2 = self.model.downsize(
+            #    self.max_data, self.max_inducing, first=True, lii=True
+            #)
+            #if ch1 or ch2:
+            #    self.log("downsized -> size: {} {}".format(*self.size))
+            #if ch2:
+            #    self.cov = self.cov.index_select(1, torch.as_tensor(ch2))
             if self.ioptim == 1:
                 self.optimize()
             self.log(
@@ -1119,12 +1211,12 @@ class ActiveCalculator(Calculator):
         else:
             return 0
 
-    @property
-    def world_size(self):
-        if distrib.is_initialized():
-            return distrib.get_world_size()
-        else:
-            return 1
+    #@property
+    #def world_size(self):
+    #    if distrib.is_initialized():
+    #        return distrib.get_world_size()
+    #    else:
+    #        return 1
 
     def log(self, mssge, mode="a"):
         if self.logfile and self.rank == 0:
@@ -1149,41 +1241,6 @@ class ActiveCalculator(Calculator):
         self.log(f"settings: {s}")
 
 
-class Meta:
-    def __init__(self, scale=1e-2):
-        self.scale = scale
-        self.pot = None
-
-    def __call__(self, calc):
-        if self.pot is None:
-            self.pot = torch.zeros(calc.cov.size(1))
-        cov = calc.gather(calc.cov)
-        nu = calc.model.Mi @ cov.t()
-        norm = (cov @ nu).sum().sqrt()
-        mu = nu.detach().sum(dim=1) / norm.detach()
-        self.pot = padded(self.pot, mu.size()) + self.scale * mu
-        energies = (cov @ self.pot).sum() / norm
-        kwargs = {"op": "+=", "reduced": True, "is_meta": True}
-        return energies, kwargs
-
-
-class ActiveMeta:
-    def __init__(self, scale=1e-2):
-        self.scale = scale
-
-    def __call__(self, calc):
-        cov = calc.gather(calc.cov)
-        b = calc.model.choli @ cov.t()
-        c = (b * b).sum(dim=0)
-        beta = (1 - c).clamp(min=0.0).sqrt()
-        vscale = [calc.model._vscale[z] for z in calc.atoms.numbers]
-        vscale = torch.tensor(vscale).sqrt()
-        pot = -(beta * vscale).sum() * self.scale
-        kwargs = {"op": "+=", "reduced": True, "is_meta": True}
-        return pot, kwargs
-
-    def update(self):
-        pass
 
 
 def parse_logfile(file="active.log", window=(None, None)):
@@ -1200,7 +1257,7 @@ def parse_logfile(file="active.log", window=(None, None)):
     errors = []
     test_errors = []
     fit = []
-    meta = []
+
     for line in open(file):
 
         if line.startswith("#"):
@@ -1242,9 +1299,6 @@ def parse_logfile(file="active.log", window=(None, None)):
         except:
             pass
 
-        if "meta:" in split:
-            meta += [(step, float(split[split.index("meta:") + 1]))]
-
         if "exact energy" in line:
             exact_energies += [(step, float(split[3]))]
 
@@ -1273,7 +1327,6 @@ def parse_logfile(file="active.log", window=(None, None)):
         test_energies,
         temperatures,
         covloss,
-        meta,
         indu,
         fit,
         elapsed,
@@ -1284,7 +1337,7 @@ def parse_logfile(file="active.log", window=(None, None)):
 
 
 def log_to_figure(
-    file, figsize=(10, 5), window=(None, None), meta_ax=True, plot_test=True
+    file, figsize=(10, 5), window=(None, None), plot_test=True
 ):
     import pylab as plt
 
@@ -1294,7 +1347,6 @@ def log_to_figure(
         test,
         tem,
         covloss,
-        meta,
         indu,
         fit,
         elapsed,
@@ -1315,10 +1367,7 @@ def log_to_figure(
         axes[0].scatter(r, s, color="g", label="test", zorder=2)
     axes[0].set_ylabel("potential")
     axes[0].legend()
-    if len(meta) > 0 and meta_ax:
-        ax_meta = axes[0].twinx()
-        ax_meta.plot(*zip(*meta), color="goldenrod", lw=0.5)
-        ax_meta.set_ylabel("meta")
+    
     # 1
     axes[1].plot(*zip(*tem))
     axes[1].set_ylabel("temperature")
