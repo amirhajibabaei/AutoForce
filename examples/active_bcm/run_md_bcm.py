@@ -36,7 +36,7 @@ bcm_calc = BCMActiveCalculator (
 )
 
 atoms = bulk("Au", cubic=True).repeat(3 * [3])
-atoms.set_calculator(bcm_calc)
+atoms.calc = bcm_calc
 atoms.rattle(0.1)
 
 if False:

@@ -74,7 +74,7 @@ def calculate(file, calc):
     try:
         reserve_ofile(o)
         atoms = read(i)
-        atoms.set_calculator(calc)
+        atoms.calc = calc
         if "preprocess_atoms" in scope:
             scope["preprocess_atoms"](atoms)
         atoms.get_potential_energy()

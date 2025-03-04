@@ -4,6 +4,6 @@ from theforce.calculator.socketcalc import SocketCalculator
 
 calc = SocketCalculator(script="calc.py")
 atoms = bulk("Au")
-atoms.set_calculator(calc)
+atoms.calc = calc
 e = atoms.get_potential_energy()
 print(f"potential energy = {e}")

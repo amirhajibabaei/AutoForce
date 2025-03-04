@@ -44,7 +44,7 @@ calc = ActiveCalculator(
 
 # C. define the system and set its calculator
 atoms = bulk("Au", cubic=True).repeat(3 * [3])
-atoms.set_calculator(calc)
+atoms.calc = calc
 
 # D. intitial state with all-forces=0 is problematic
 #    with an empty model at the beginning.

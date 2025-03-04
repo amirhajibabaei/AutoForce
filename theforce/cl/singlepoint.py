@@ -7,7 +7,7 @@ import theforce.cl as cline
 def single_point(i, o):
     atoms = read(i)
     calc = cline.gen_active_calc()
-    atoms.set_calculator(calc)
+    atoms.calc = calc
     atoms.get_forces()
     if calc.rank == 0:
         atoms.write(o)

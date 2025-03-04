@@ -39,7 +39,7 @@ def relax(
     load1 = calc.size[0]
     master = calc.rank == 0
     atoms.rattle(rattle, rng=np.random)
-    atoms.set_calculator(calc)
+    atoms.calc = calc
 
     # define and run relaxation dynamics
     if cell:

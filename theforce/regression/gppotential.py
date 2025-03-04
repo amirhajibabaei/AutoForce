@@ -1345,11 +1345,11 @@ def PosteriorPotentialFromFolder(
     from theforce.descriptor.atoms import AtomsData
     from theforce.util.caching import strip_uid
 
-    self = torch.load(os.path.join(folder, "model"))
+    self = torch.load(os.path.join(folder, "model"), weights_only=False)
     strip_uid(self.X)
     if load_data:
         if os.path.isfile(os.path.join(folder, "data.pckl")):
-            self.data = torch.load(os.path.join(folder, "data.pckl"))
+            self.data = torch.load(os.path.join(folder, "data.pckl"), weights_only=False)
             strip_uid(self.data)
             if group:
                 self.data.distribute_(group)

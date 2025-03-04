@@ -36,7 +36,7 @@ calc = ActiveCalculator(
     tape="Au.sgpr",
 )
 atoms = bulk("Au", cubic=True).repeat(3 * [2])
-atoms.set_calculator(calc)
+atoms.calc = calc
 atoms.rattle(0.2)
 
 # md
