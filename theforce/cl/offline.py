@@ -14,7 +14,7 @@ def offline(*args, r=None, o="offline.traj"):
     for arg in args:
         data = [read(arg)] if (r is None or ":" not in r) else read(arg, r)
         for atoms in data:
-            atoms.set_calculator(calc)
+            atoms.calc = calc
             atoms.get_forces()
             if calc.rank == 0:
                 traj.write(atoms)

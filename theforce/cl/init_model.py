@@ -22,7 +22,7 @@ def init_model(atoms, samples=5, rattle=0.05, trajectory="init.traj"):
     for _ in range(samples):
         tmp = atoms.copy()
         tmp.rattle(rattle, rng=np.random)
-        tmp.set_calculator(calc)
+        tmp.calc = calc
         tmp.get_potential_energy()
         if master:
             traj.write(tmp)

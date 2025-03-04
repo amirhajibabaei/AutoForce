@@ -54,7 +54,7 @@ def md(
     """
 
     calc = cline.gen_active_calc()
-    atoms.set_calculator(calc)
+    atoms.calc = calc
     if calc.active:
         manual_steps(atoms, eps_pos, eps_cell, npt=bulk_modulus)
     atoms.rattle(rattle, rng=np.random)

@@ -27,7 +27,7 @@ def single_point(self):
             results[q] = self.calc.results[q]
         except KeyError:
             pass
-    self.set_calculator(SinglePointCalculator(self, **results))
+    self.calc = SinglePointCalculator(self, **results)
 
 
 def downsize_traj(file, l, outfile):

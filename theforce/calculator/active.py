@@ -683,7 +683,7 @@ class ActiveCalculator(Calculator):
 
     def _test(self):
         tmp = self.atoms.as_ase() if self.to_ase else self.atoms
-        tmp.set_calculator(self._calc)
+        tmp.calc = self._calc
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
         stress = tmp.get_stress()
@@ -692,7 +692,7 @@ class ActiveCalculator(Calculator):
         mode = "a" if self._ktest > 1 else "w"
         if self.rank == 0:
             ase.io.Trajectory("active_FP.traj", mode).write(tmp)
-            tmp.set_calculator(SinglePointCalculator(tmp, **self.results))
+            tmp.calc = SinglePointCalculator(tmp, **self.results)
             ase.io.Trajectory("active_ML.traj", mode).write(tmp)
         # log
         self.log("testing energy: {}".format(energy))
@@ -709,7 +709,7 @@ class ActiveCalculator(Calculator):
 
     def _exact(self, copy, _calc=None, task=None):
         tmp = copy.as_ase() if self.to_ase else copy
-        tmp.set_calculator(_calc or self._calc)
+        tmp.calc = _calc or self._calc
         energy = tmp.get_potential_energy()
         forces = tmp.get_forces()
         stress = tmp.get_stress()
@@ -746,7 +746,7 @@ class ActiveCalculator(Calculator):
             stress = self.results["stress"]
         else:
             energy, forces, stress = self._exact(copy)
-        copy.set_calculator(SinglePointCalculator(copy, energy=energy, forces=forces, stress=stress))
+        copy.calc = SinglePointCalculator(copy, energy=energy, forces=forces, stress=stress)
         copy.set_targets()
         return copy
 
@@ -998,9 +998,9 @@ class ActiveCalculator(Calculator):
             if abs(atoms.get_forces()).max() > self.include_params["fmax"]:
                 continue
             self._calc = atoms.calc
-            atoms.set_calculator(self)
+            atoms.calc = self
             atoms.get_potential_energy()
-            atoms.set_calculator(self._calc)
+            atoms.calc = self._calc
         self._calc = _calc
         # self.tune_for_md = tune_for_md
 
@@ -1044,9 +1044,9 @@ class ActiveCalculator(Calculator):
                 _save()
                 self._update_args = dict(inducing=False)
                 self._calc = obj.calc
-                obj.set_calculator(self)
+                obj.calc = self
                 obj.get_potential_energy()
-                obj.set_calculator(self._calc)
+                obj.calc = self._calc
                 cdata += 1
                 if ndata and cdata >= ndata:
                     break

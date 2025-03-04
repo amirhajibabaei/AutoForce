@@ -143,9 +143,7 @@ class Local:
             numbers=self._b.detach().numpy(), positions=self._r.detach().numpy()
         )
         if "target_energy" in self.__dict__:
-            atoms.set_calculator(
-                SinglePointCalculator(atoms, energy=self.target_energy)
-            )
+            atoms.calc = SinglePointCalculator(atoms, energy=self.target_energy)
         return atoms
 
     def detach(self, keepids=False):
@@ -561,7 +559,7 @@ class TorchAtoms(Atoms):
                 results[q] = self.calc.results[q]
             except KeyError:
                 pass
-        self.set_calculator(SinglePointCalculator(self, **results))
+        self.calc = SinglePointCalculator(self, **results)
 
     def detached(self, set_targets=True):
         results = {}
@@ -571,7 +569,7 @@ class TorchAtoms(Atoms):
             except KeyError:
                 pass
         new = self.copy()
-        new.set_calculator(SinglePointCalculator(new, **results))
+        new.calc = SinglePointCalculator(new, **results)
         if set_targets:
             new.set_targets()
         return new
@@ -584,7 +582,7 @@ class TorchAtoms(Atoms):
 
     def pickles(self, folder="atoms"):
         return [
-            torch.load(os.path.join(folder, f"loc_{i}.pckl"))
+            torch.load(os.path.join(folder, f"loc_{i}.pckl"), weights_only=False)
             for i in range(self.natoms)
         ]
 
