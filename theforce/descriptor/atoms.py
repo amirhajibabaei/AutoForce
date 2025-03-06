@@ -300,7 +300,7 @@ class TorchAtoms(Atoms):
             self.target_forces = as_tensor(forces)
             self.target_stress = as_tensor(stress)
         else:
-            if ase_atoms is not None and ase_atoms.get_calculator() is not None:
+            if ase_atoms is not None and ase_atoms.calc is not None:
                 if "energy" in ase_atoms.calc.results:
                     self.target_energy = as_tensor(ase_atoms.get_potential_energy())
                 if "forces" in ase_atoms.calc.results:
