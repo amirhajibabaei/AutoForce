@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from ase.calculators.calculator import Calculator, all_changes
 from ase.calculators.singlepoint import SinglePointCalculator
-from ase.constraints import Filter
+from ase.filters import Filter
 import ase.units as units
 from torch.autograd import grad
 
